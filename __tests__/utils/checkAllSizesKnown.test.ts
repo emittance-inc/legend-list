@@ -3,6 +3,7 @@ import "../setup";
 
 import {
     checkAllSizesKnown,
+    checkMountedSizesKnownInRange,
     getMountedBufferedIndices,
     getMountedNoBufferIndices,
 } from "../../src/utils/checkAllSizesKnown";
@@ -129,6 +130,34 @@ describe("checkAllSizesKnown", () => {
         });
 
         expect(checkAllSizesKnown(state, getMountedBufferedIndices(state))).toBe(true);
+    });
+
+    it("checks mounted size readiness in range without requiring caller allocated indices", () => {
+        const data = Array.from({ length: 10 }, (_, index) => ({ id: `item-${index}` }));
+        const state = createMockState({
+            containerItemKeys: new Map([
+                ["item-3", 0],
+                ["item-4", 1],
+                ["item-8", 2],
+            ]),
+            indexByKey: new Map([
+                ["item-3", 3],
+                ["item-4", 4],
+                ["item-8", 8],
+            ]),
+            props: {
+                data,
+                keyExtractor: (item: { id: string }) => item.id,
+            },
+            sizesKnown: new Map([
+                ["item-3", 100],
+                ["item-4", 100],
+            ]),
+        });
+
+        expect(checkMountedSizesKnownInRange(state, 3, 4)).toBe(true);
+        expect(checkMountedSizesKnownInRange(state, 3, 8)).toBe(false);
+        expect(checkMountedSizesKnownInRange(state, 0, 2)).toBe(false);
     });
 
     it("accepts an explicit index list when callers already resolved the mounted window", () => {

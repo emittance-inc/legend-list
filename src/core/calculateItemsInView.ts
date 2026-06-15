@@ -12,7 +12,7 @@ import { Platform } from "@/platform/Platform";
 import { getContentSize } from "@/state/getContentSize";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { InternalState } from "@/types.internal";
-import { checkAllSizesKnown, getMountedBufferedIndices, getMountedNoBufferIndices } from "@/utils/checkAllSizesKnown";
+import { checkMountedSizesKnownInRange } from "@/utils/checkAllSizesKnown";
 import { getExpandedContainerPoolSize } from "@/utils/containerPool";
 import { findAvailableContainers } from "@/utils/findAvailableContainers";
 import { getId } from "@/utils/getId";
@@ -782,14 +782,11 @@ export function calculateItemsInView(
             return;
         }
 
-        const mountedBufferedIndices = getMountedBufferedIndices(state);
-        const mountedNoBufferIndices = getMountedNoBufferIndices(state);
-        const readinessIndices = hasActiveInitialScroll(state)
-            ? mountedBufferedIndices
-            : mountedNoBufferIndices.length > 0
-              ? mountedNoBufferIndices
-              : mountedBufferedIndices;
-        if (!queuedInitialLayout && readinessIndices.length > 0 && checkAllSizesKnown(state, readinessIndices)) {
+        const isInitialLayoutReady = hasActiveInitialScroll(state)
+            ? checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered)
+            : checkMountedSizesKnownInRange(state, state.startNoBuffer, state.endNoBuffer) ||
+              checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered);
+        if (!queuedInitialLayout && isInitialLayoutReady) {
             setDidLayout(ctx);
             handleInitialScrollLayoutReady(ctx);
         }
