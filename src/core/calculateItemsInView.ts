@@ -640,19 +640,18 @@ export function calculateItemsInView(
                       })
                     : undefined;
 
-                const availableContainers = findAvailableContainers(
+                const availableContainerAllocations = findAvailableContainers(
                     ctx,
-                    needNewContainers.length,
+                    needNewContainers,
                     startBuffered,
                     endBuffered,
                     pendingRemoval,
                     requiredItemTypes,
-                    needNewContainers,
                     protectedContainerKeys,
                 );
-                for (let idx = 0; idx < needNewContainers.length; idx++) {
-                    const i = needNewContainers[idx];
-                    const containerIndex = availableContainers[idx];
+                for (const allocation of availableContainerAllocations) {
+                    const i = allocation.itemIndex;
+                    const containerIndex = allocation.containerIndex;
                     const id = idCache[i] ?? getId(state, i);
 
                     // Remove old key from cache
@@ -665,8 +664,8 @@ export function calculateItemsInView(
                     set$(ctx, `containerItemData${containerIndex}`, data[i]);
 
                     // Store item type for type-safe container reuse
-                    if (requiredItemTypes) {
-                        state.containerItemTypes.set(containerIndex, requiredItemTypes[idx]);
+                    if (allocation.itemType !== undefined) {
+                        state.containerItemTypes.set(containerIndex, allocation.itemType);
                     }
 
                     // Update cache when adding new item
