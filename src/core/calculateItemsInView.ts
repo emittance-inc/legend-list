@@ -37,12 +37,16 @@ function findCurrentStickyIndex(stickyArray: number[], scroll: number, state: In
 
 function getActiveStickyIndices(ctx: StateContext, stickyHeaderIndices: Set<number>): Set<number> {
     const state = ctx.state;
-    return new Set(
-        Array.from(state.stickyContainerPool)
-            .map((i) => peek$(ctx, `containerItemKey${i}`))
-            .map((key) => (key ? state.indexByKey.get(key) : undefined))
-            .filter((idx): idx is number => idx !== undefined && stickyHeaderIndices.has(idx)),
-    );
+    const activeIndices = new Set<number>();
+    for (const containerIndex of state.stickyContainerPool) {
+        const key = peek$(ctx, `containerItemKey${containerIndex}`);
+        const itemIndex = key ? state.indexByKey.get(key) : undefined;
+        if (itemIndex !== undefined && stickyHeaderIndices.has(itemIndex)) {
+            activeIndices.add(itemIndex);
+        }
+    }
+
+    return activeIndices;
 }
 
 function handleStickyActivation(

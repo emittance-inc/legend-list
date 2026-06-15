@@ -1428,6 +1428,27 @@ describe("calculateItemsInView", () => {
 
             expect(onStickyHeaderChange).not.toHaveBeenCalled();
         });
+
+        it("finds the active sticky header among many configured sticky indices", () => {
+            const onStickyHeaderChange = mock();
+            setupFixedSizeItems(200, 20);
+
+            const stickyHeaderIndices = Array.from({ length: 100 }, (_, index) => index * 2);
+            mockState.props.stickyHeaderIndicesArr = stickyHeaderIndices;
+            mockState.props.stickyHeaderIndicesSet = new Set(stickyHeaderIndices);
+            mockState.props.onStickyHeaderChange = onStickyHeaderChange;
+            mockCtx.values.set("activeStickyIndex", 148);
+            mockState.scroll = 3010;
+
+            calculateItemsInView(mockCtx);
+
+            expect(onStickyHeaderChange).toHaveBeenCalledTimes(1);
+            expect(onStickyHeaderChange).toHaveBeenCalledWith({
+                index: 150,
+                item: mockState.props.data[150],
+            });
+            expect(mockCtx.values.get("activeStickyIndex")).toBe(150);
+        });
     });
 
     describe("minIndexSizeChanged optimization", () => {
