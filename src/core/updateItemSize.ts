@@ -68,6 +68,13 @@ function updateOtherAxisSizeIfNeeded(
     }
 }
 
+interface ResolvedMeasurementItem {
+    didResolveFixedItemSize?: boolean;
+    fixedItemSize?: number;
+    itemData?: any;
+    itemType?: string;
+}
+
 export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: number; height: number }) {
     const state = ctx.state;
     const userScrollAnchorReset = state.userScrollAnchorReset;
@@ -80,6 +87,7 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
     if (!data) return;
 
     const index = state.indexByKey.get(itemKey)!;
+    let resolvedMeasurementItem: ResolvedMeasurementItem | undefined;
 
     if (getFixedItemSize) {
         if (index === undefined) {
@@ -91,6 +99,12 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
         }
         const type = getItemType ? (getItemType(itemData, index) ?? "") : "";
         const size = getFixedItemSize(itemData, index, type);
+        resolvedMeasurementItem = {
+            didResolveFixedItemSize: true,
+            fixedItemSize: size,
+            itemData,
+            itemType: type,
+        };
         if (size !== undefined && size === sizesKnown.get(itemKey)) {
             updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
             return;
@@ -104,7 +118,7 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
 
     const prevSizeKnown = state.sizesKnown.get(itemKey);
 
-    const diff = updateOneItemSize(ctx, itemKey, sizeObj);
+    const diff = updateOneItemSize(ctx, itemKey, sizeObj, resolvedMeasurementItem);
     const size = roundSize(horizontal ? sizeObj.width : sizeObj.height);
 
     if (diff !== 0) {
@@ -159,7 +173,12 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
     }
 }
 
-export function updateOneItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: number; height: number }) {
+export function updateOneItemSize(
+    ctx: StateContext,
+    itemKey: string,
+    sizeObj: { width: number; height: number },
+    resolvedMeasurementItem?: ResolvedMeasurementItem,
+) {
     const state = ctx.state;
     const {
         indexByKey,
@@ -171,14 +190,22 @@ export function updateOneItemSize(ctx: StateContext, itemKey: string, sizeObj: {
 
     const index = indexByKey.get(itemKey)!;
 
-    const itemData = data[index];
-    let itemType: string | undefined;
-    let fixedItemSize: number | undefined;
-    if (getFixedItemSize) {
+    const itemData = resolvedMeasurementItem?.itemData ?? data[index];
+    let itemType = resolvedMeasurementItem?.itemType;
+    let fixedItemSize = resolvedMeasurementItem?.fixedItemSize;
+    if (getFixedItemSize && !resolvedMeasurementItem?.didResolveFixedItemSize) {
         itemType = getItemType ? (getItemType(itemData, index) ?? "") : "";
         fixedItemSize = getFixedItemSize(itemData, index, itemType);
     }
-    const prevSize = getItemSize(ctx, itemKey, index, itemData);
+    const resolvedItemSize =
+        resolvedMeasurementItem?.didResolveFixedItemSize || itemType !== undefined || fixedItemSize !== undefined
+            ? {
+                  didResolveFixedItemSize: resolvedMeasurementItem?.didResolveFixedItemSize,
+                  fixedItemSize,
+                  itemType,
+              }
+            : undefined;
+    const prevSize = getItemSize(ctx, itemKey, index, itemData, undefined, undefined, undefined, resolvedItemSize);
     const rawSize = horizontal ? sizeObj.width : sizeObj.height;
     const prevSizeKnown = sizesKnown.get(itemKey);
     if (Platform.OS !== "web" && prevSizeKnown !== undefined && isNativeLayoutNoise(rawSize - prevSizeKnown)) {
