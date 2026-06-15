@@ -12,7 +12,7 @@ import { Platform } from "@/platform/Platform";
 import { getContentSize } from "@/state/getContentSize";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { InternalState } from "@/types.internal";
-import { checkMountedSizesKnownInRange } from "@/utils/checkAllSizesKnown";
+import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
 import { getExpandedContainerPoolSize } from "@/utils/containerPool";
 import { findAvailableContainers } from "@/utils/findAvailableContainers";
 import { getId } from "@/utils/getId";
@@ -786,9 +786,9 @@ export function calculateItemsInView(
 
         if (!queuedInitialLayout && !state.didContainersLayout) {
             const isInitialLayoutReady = hasActiveInitialScroll(state)
-                ? checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered)
-                : checkMountedSizesKnownInRange(state, state.startNoBuffer, state.endNoBuffer) ||
-                  checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered);
+                ? checkAllSizesKnown(state, state.startBuffered, state.endBuffered)
+                : checkAllSizesKnown(state, state.startNoBuffer, state.endNoBuffer) ||
+                  checkAllSizesKnown(state, state.startBuffered, state.endBuffered);
             if (isInitialLayoutReady) {
                 setDidLayout(ctx);
                 handleInitialScrollLayoutReady(ctx);

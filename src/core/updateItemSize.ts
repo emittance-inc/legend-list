@@ -4,7 +4,7 @@ import { setSize } from "@/core/setSize";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { Platform } from "@/platform/Platform";
 import { peek$, type StateContext, set$ } from "@/state/state";
-import { checkMountedSizesKnownInRange } from "@/utils/checkAllSizesKnown";
+import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
 import { getItemSize } from "@/utils/getItemSize";
 import { roundSize } from "@/utils/helpers";
 import { isNativeLayoutNoise } from "@/utils/layoutMeasurement";
@@ -158,7 +158,7 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
 
     updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
 
-    if (didContainersLayout || checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered)) {
+    if (didContainersLayout || checkAllSizesKnown(state, state.startBuffered, state.endBuffered)) {
         if (needsRecalculate) {
             state.scrollForNextCalculateItemsInView = undefined;
             runOrScheduleMVCPRecalculate(ctx);
