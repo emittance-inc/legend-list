@@ -1077,7 +1077,7 @@ describe("LegendList props behavior", () => {
             rendered.rerender(renderList(() => {}));
         });
 
-        expect(state.enableScrollForNextCalculateItemsInView).toBe(false);
+        expect(state.enableScrollForNextCalculateItemsInView).toBe(true);
         expect(state.scrollForNextCalculateItemsInView).toBeUndefined();
 
         rendered.unmount();

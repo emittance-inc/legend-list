@@ -695,7 +695,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             viewabilityConfigCallbackPairs,
         });
         state.viewabilityConfigCallbackPairs = viewability;
-        state.enableScrollForNextCalculateItemsInView = !viewability;
+        state.enableScrollForNextCalculateItemsInView = true;
         if (viewability) {
             state.scrollForNextCalculateItemsInView = undefined;
         }
