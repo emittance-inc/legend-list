@@ -146,6 +146,23 @@ describe("findAvailableContainers", () => {
 
             expect(result).toEqual([2, 3, 4]); // Creates new container indices 2, 3, 4
         });
+
+        it("should not duplicate new container indices after allocating a new sticky container", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 10);
+            ctx.values.set("containerItemKey0", "item0");
+            ctx.values.set("containerItemKey1", "item1");
+
+            mockState.indexByKey.set("item0", 0);
+            mockState.indexByKey.set("item1", 1);
+            mockState.props.stickyHeaderIndicesSet = new Set([5]);
+
+            const result = findAvailableContainers(ctx, 3, 0, 10, [], undefined, [5, 6, 7]);
+
+            expect(result).toEqual([2, 3, 4]);
+            expect(new Set(result).size).toBe(result.length);
+            expect(mockState.stickyContainerPool.has(2)).toBe(true);
+        });
     });
 
     describe("mixed scenarios", () => {

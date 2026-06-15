@@ -733,13 +733,14 @@ export function calculateItemsInView(
             );
         }
 
+        const pendingRemovalSet = pendingRemoval.length > 0 ? new Set(pendingRemoval) : undefined;
         let didChangePositions = false;
         // Update top positions of all containers
         for (let i = 0; i < numContainers; i++) {
             const itemKey = peek$(ctx, `containerItemKey${i}`);
 
             // If it's pending removal, then it's not in view anymore
-            if (pendingRemoval.includes(i)) {
+            if (pendingRemovalSet?.has(i)) {
                 // Update cache when removing item
                 if (itemKey !== undefined) {
                     containerItemKeys!.delete(itemKey);
