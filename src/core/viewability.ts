@@ -114,8 +114,22 @@ function updateViewableItemsWithConfig(
     const viewabilityState = ensureViewabilityState(ctx, configId);
     const { viewableItems: previousViewableItems, start, end, startBuffered, endBuffered } = viewabilityState;
 
+    let staleViewabilityAmountIds: number[] | undefined;
     for (const [containerId, value] of ctx.mapViewabilityAmountValues) {
-        computeViewability(state, ctx, viewabilityConfig, containerId, value.key, scrollSize, value.item, value.index);
+        const nextValue = computeViewability(
+            state,
+            ctx,
+            viewabilityConfig,
+            containerId,
+            value.key,
+            scrollSize,
+            value.item,
+            value.index,
+        );
+        if (nextValue.sizeVisible < 0) {
+            staleViewabilityAmountIds ??= [];
+            staleViewabilityAmountIds.push(containerId);
+        }
     }
     const changed: ViewToken[] = [];
     const previousViewableKeys = new Set<string>();
@@ -183,9 +197,12 @@ function updateViewableItemsWithConfig(
         }
     }
 
-    for (const [containerId, value] of ctx.mapViewabilityAmountValues) {
-        if (value.sizeVisible < 0) {
-            ctx.mapViewabilityAmountValues.delete(containerId);
+    if (staleViewabilityAmountIds) {
+        for (const containerId of staleViewabilityAmountIds) {
+            const value = ctx.mapViewabilityAmountValues.get(containerId);
+            if (value && value.sizeVisible < 0) {
+                ctx.mapViewabilityAmountValues.delete(containerId);
+            }
         }
     }
 }
