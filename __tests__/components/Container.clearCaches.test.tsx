@@ -135,4 +135,77 @@ describe("Container clearCaches measurement", () => {
             renderer!.unmount();
         });
     });
+
+    it("removes the mounted container layout trigger when the container unmounts", async () => {
+        const data: TestItem[] = [{ id: "a", label: "Alpha" }];
+        let ctxReady: StateContext | undefined;
+        const { Container } = await import("../../src/components/Container?clear-caches-trigger-cleanup");
+
+        function Harness() {
+            const ctx = useStateContext();
+            const didInitialize = React.useRef(false);
+
+            if (!didInitialize.current) {
+                ctx.state = createMockState({
+                    didContainersLayout: true,
+                    endBuffered: 0,
+                    idCache: ["a"],
+                    indexByKey: new Map([["a", 0]]),
+                    positions: [0],
+                    props: {
+                        data,
+                        keyExtractor: (item: TestItem) => item.id,
+                    },
+                    sizes: new Map([["a", 80]]),
+                    sizesKnown: new Map([["a", 80]]),
+                    startBuffered: 0,
+                    totalSize: 80,
+                });
+                set$(ctx, "containerColumn0", 1);
+                set$(ctx, "containerSpan0", 1);
+                set$(ctx, "containerItemData0", data[0]);
+                set$(ctx, "containerItemKey0", "a");
+                set$(ctx, "containerPosition0", 0);
+                set$(ctx, "numColumns", 1);
+                set$(ctx, "totalSize", 80);
+                didInitialize.current = true;
+            }
+
+            React.useLayoutEffect(() => {
+                ctxReady = ctx;
+            }, [ctx]);
+
+            return (
+                <Container
+                    getRenderedItem={() => ({
+                        index: 0,
+                        item: data[0],
+                        renderedItem: <Text>{data[0].label}</Text>,
+                    })}
+                    horizontal={false}
+                    id={0}
+                    itemKey="a"
+                    recycleItems={false}
+                    updateItemSize={(itemKey, size) => updateItemSize(ctx, itemKey, size)}
+                />
+            );
+        }
+
+        let renderer: TestRenderer.ReactTestRenderer;
+        await act(async () => {
+            renderer = TestRenderer.create(
+                <StateProvider>
+                    <Harness />
+                </StateProvider>,
+            );
+        });
+
+        expect(ctxReady?.containerLayoutTriggers.size).toBe(1);
+
+        await act(async () => {
+            renderer!.unmount();
+        });
+
+        expect(ctxReady?.containerLayoutTriggers.size).toBe(0);
+    });
 });

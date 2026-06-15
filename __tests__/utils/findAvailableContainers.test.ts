@@ -207,6 +207,24 @@ describe("findAvailableContainers", () => {
             ]);
         });
 
+        it("creates a new sticky container when sticky pool types do not match", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 5);
+            ctx.values.set("containerItemKey0", undefined);
+            ctx.values.set("containerItemKey1", undefined);
+
+            mockState.props.stickyHeaderIndicesSet = new Set([5]);
+            mockState.stickyContainerPool = new Set([0]);
+            mockState.containerItemTypes.set(0, "section");
+            mockState.containerItemTypes.set(1, "row");
+
+            const result = findAvailableContainers(ctx, [5], 0, 10, [], () => "header");
+
+            expect(result).toEqual([{ containerIndex: 2, itemIndex: 5, itemType: "header" }]);
+            expect(mockState.stickyContainerPool.has(0)).toBe(true);
+            expect(mockState.stickyContainerPool.has(2)).toBe(true);
+        });
+
         it("keeps allocation results in needed item order with mixed sticky items", () => {
             ctx.values.set("numContainers", 3);
             ctx.values.set("containerItemKey0", undefined);

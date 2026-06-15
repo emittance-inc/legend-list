@@ -592,6 +592,55 @@ describe("calculateItemsInView", () => {
             });
         });
 
+        it("clears stale viewability amount values during a cached range pass", () => {
+            setupFixedSizeItems(5, 100);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 0;
+            mockState.scrollLength = 300;
+            mockState.startBuffered = 0;
+            mockState.endBuffered = 2;
+            mockState.startNoBuffer = 0;
+            mockState.endNoBuffer = 2;
+            mockState.scrollForNextCalculateItemsInView = {
+                bottom: 1000,
+                top: -100,
+            };
+            mockState.viewabilityConfigCallbackPairs = [
+                {
+                    onViewableItemsChanged: mock(() => {}),
+                    viewabilityConfig: { id: "default", viewAreaCoveragePercentThreshold: 0 },
+                },
+            ];
+
+            for (let i = 0; i <= 2; i++) {
+                const id = `item_${i}`;
+                mockState.containerItemKeys.set(id, i);
+                mockCtx.values.set(`containerItemKey${i}`, id);
+                mockCtx.values.set(`containerItemData${i}`, mockState.props.data[i]);
+            }
+
+            clearLayoutValues(mockState, "positions");
+            setLayoutValue(mockState, "positions", "item_0", 0);
+            setLayoutValue(mockState, "positions", "item_2", 200);
+            mockCtx.mapViewabilityAmountValues.set(1, {
+                containerId: 1,
+                index: 1,
+                isViewable: true,
+                item: mockState.props.data[1],
+                key: "item_1",
+                percentOfScroller: 33.33333333333333,
+                percentVisible: 100,
+                scrollSize: 300,
+                size: 100,
+                sizeVisible: 100,
+            });
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockCtx.mapViewabilityAmountValues.has(1)).toBe(false);
+            expect(mockState.idsInView).toEqual(["item_0"]);
+        });
+
         it("clears visible ids on a cached range hit when no buffered item intersects the viewport", () => {
             setupFixedSizeItems(10, 100);
             mockState.props.drawDistance = 100;
@@ -1171,6 +1220,42 @@ describe("calculateItemsInView", () => {
 
             expect(mockState.stickyContainerPool.has(0)).toBe(false);
             expect(mockCtx.values.get("containerSticky0")).toBe(false);
+        });
+
+        it("keeps current and adjacent sticky containers while recycling distant sticky containers", () => {
+            setupFixedSizeItems(20, 100);
+            mockCtx.values.set("numContainers", 4);
+            mockState.props.drawDistance = 0;
+            mockState.props.stickyHeaderIndicesArr = [0, 5, 10, 15];
+            mockState.props.stickyHeaderIndicesSet = new Set<number>([0, 5, 10, 15]);
+            mockState.scroll = 1200;
+            mockState.scrollLength = 200;
+            mockState.stickyContainerPool = new Set([0, 1, 2, 3]);
+
+            for (const [containerIndex, itemIndex] of [
+                [0, 0],
+                [1, 5],
+                [2, 10],
+                [3, 15],
+            ]) {
+                const id = `item_${itemIndex}`;
+                mockState.containerItemKeys.set(id, containerIndex);
+                mockCtx.values.set(`containerItemKey${containerIndex}`, id);
+                mockCtx.values.set(`containerItemData${containerIndex}`, mockState.props.data[itemIndex]);
+                mockCtx.values.set(`containerSticky${containerIndex}`, true);
+            }
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.stickyContainerPool.has(0)).toBe(false);
+            expect(mockState.containerItemKeys.has("item_0")).toBe(false);
+            expect(mockCtx.values.get("containerSticky0")).toBe(false);
+            expect(mockState.stickyContainerPool.has(1)).toBe(true);
+            expect(mockState.stickyContainerPool.has(2)).toBe(true);
+            expect(mockState.stickyContainerPool.has(3)).toBe(true);
+            expect(mockState.containerItemKeys.get("item_5")).toBe(1);
+            expect(mockState.containerItemKeys.get("item_10")).toBe(2);
+            expect(mockState.containerItemKeys.get("item_15")).toBe(3);
         });
     });
 
