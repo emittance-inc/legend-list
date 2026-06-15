@@ -18,8 +18,8 @@ export function updateScroll(
     if (options?.markHasScrolled !== false) {
         state.hasScrolled = true;
     }
-    state.lastBatchingAction = Date.now();
     const currentTime = Date.now();
+    state.lastBatchingAction = currentTime;
 
     const adjust = scrollAdjustHandler.getAdjust();
     const adjustChanged =
