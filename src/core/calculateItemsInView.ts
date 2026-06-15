@@ -423,6 +423,7 @@ export function calculateItemsInView(
             forceFullUpdate: !!forceFullItemPositions,
             optimizeForVisibleWindow,
             scrollBottomBuffered,
+            scrollVelocity: speed,
             startIndex,
         });
 

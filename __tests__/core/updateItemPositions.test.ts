@@ -709,6 +709,21 @@ describe("updateItemPositions", () => {
             expect(countLayoutValues(mockState.positions)).toBe(5);
         });
 
+        it("uses provided scroll velocity for visible-window optimization", () => {
+            mockState.props.data = Array.from({ length: 1000 }, (_, index) => ({ id: `item${index}` }));
+            mockState.props.estimatedItemSize = 10;
+            mockState.scrollHistory = [];
+
+            updateItemPositions(mockCtx, false, {
+                doMVCP: false,
+                scrollBottomBuffered: 100,
+                scrollVelocity: 1,
+                startIndex: 0,
+            });
+
+            expect(countLayoutValues(mockState.positions)).toBeLessThan(mockState.props.data.length);
+        });
+
         it("should handle rapid consecutive calls", () => {
             const start = Date.now();
 
