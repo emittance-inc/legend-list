@@ -195,7 +195,11 @@ describe("findAvailableContainers", () => {
             mockState.containerItemTypes.set(0, "header");
             mockState.containerItemTypes.set(1, "row");
 
-            const result = findAvailableContainers(ctx, [2, 5], 0, 10, [], ["row", "header"]);
+            const itemTypes = new Map([
+                [2, "row"],
+                [5, "header"],
+            ]);
+            const result = findAvailableContainers(ctx, [2, 5], 0, 10, [], (index) => itemTypes.get(index));
 
             expect(result).toEqual([
                 { containerIndex: 1, itemIndex: 2, itemType: "row" },
@@ -229,7 +233,11 @@ describe("findAvailableContainers", () => {
             mockState.containerItemTypes.set(0, "header");
             mockState.containerItemTypes.set(1, "footer");
 
-            const result = findAvailableContainers(ctx, [20, 21], 10, 15, [], ["row", "footer"]);
+            const itemTypes = new Map([
+                [20, "row"],
+                [21, "footer"],
+            ]);
+            const result = findAvailableContainers(ctx, [20, 21], 10, 15, [], (index) => itemTypes.get(index));
 
             expect(result).toEqual([
                 { containerIndex: 2, itemIndex: 20, itemType: "row" },

@@ -631,12 +631,11 @@ export function calculateItemsInView(
             }
 
             if (needNewContainers.length > 0) {
-                // Calculate required item types for type-safe container reuse
-                const requiredItemTypes = getItemType
-                    ? needNewContainers.map((i) => {
+                const getRequiredItemType = getItemType
+                    ? (i: number) => {
                           const itemType = getItemType(data[i], i);
                           return itemType !== undefined ? String(itemType) : "";
-                      })
+                      }
                     : undefined;
 
                 const availableContainerAllocations = findAvailableContainers(
@@ -645,7 +644,7 @@ export function calculateItemsInView(
                     startBuffered,
                     endBuffered,
                     pendingRemoval,
-                    requiredItemTypes,
+                    getRequiredItemType,
                     protectedContainerKeys,
                 );
                 for (const allocation of availableContainerAllocations) {
