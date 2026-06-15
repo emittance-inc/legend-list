@@ -1088,6 +1088,31 @@ describe("calculateItemsInView", () => {
             expect(setDidLayoutSpy).toHaveBeenCalledTimes(1);
         });
 
+        it("does not re-run readiness after container layout is settled", () => {
+            const setDidLayoutSpy = spyOn(setDidLayoutModule, "setDidLayout");
+
+            mockState.props.data = Array.from({ length: 4 }, (_, i) => ({ id: i }));
+            mockState.scrollLength = 60;
+            mockState.didContainersLayout = true;
+            mockState.queuedInitialLayout = false;
+
+            for (let i = 0; i < 4; i++) {
+                const id = `item_${i}`;
+                mockState.idCache[i] = id;
+                mockState.indexByKey.set(id, i);
+                mockState.containerItemKeys.set(id, i);
+                setLayoutValue(mockState, "positions", id, i * 50);
+                mockState.sizes.set(id, 50);
+                mockState.sizesKnown.set(id, 50);
+            }
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(0);
+            expect(mockState.endNoBuffer).toBe(1);
+            expect(setDidLayoutSpy).not.toHaveBeenCalled();
+        });
+
         it("still waits for mounted buffered items while initial scroll is active", () => {
             const setDidLayoutSpy = spyOn(setDidLayoutModule, "setDidLayout");
 

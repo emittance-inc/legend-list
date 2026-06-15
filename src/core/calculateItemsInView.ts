@@ -786,13 +786,15 @@ export function calculateItemsInView(
             return;
         }
 
-        const isInitialLayoutReady = hasActiveInitialScroll(state)
-            ? checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered)
-            : checkMountedSizesKnownInRange(state, state.startNoBuffer, state.endNoBuffer) ||
-              checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered);
-        if (!queuedInitialLayout && isInitialLayoutReady) {
-            setDidLayout(ctx);
-            handleInitialScrollLayoutReady(ctx);
+        if (!queuedInitialLayout && !state.didContainersLayout) {
+            const isInitialLayoutReady = hasActiveInitialScroll(state)
+                ? checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered)
+                : checkMountedSizesKnownInRange(state, state.startNoBuffer, state.endNoBuffer) ||
+                  checkMountedSizesKnownInRange(state, state.startBuffered, state.endBuffered);
+            if (isInitialLayoutReady) {
+                setDidLayout(ctx);
+                handleInitialScrollLayoutReady(ctx);
+            }
         }
 
         if (
