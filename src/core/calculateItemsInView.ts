@@ -35,23 +35,23 @@ function findCurrentStickyIndex(stickyArray: number[], scroll: number, state: In
     return -1;
 }
 
-function getActiveStickyIndices(ctx: StateContext, stickyHeaderIndices: Set<number>): Set<number> {
+function isStickyIndexActive(ctx: StateContext, targetIndex: number): boolean {
     const state = ctx.state;
-    const activeIndices = new Set<number>();
+    let isActive = false;
     for (const containerIndex of state.stickyContainerPool) {
         const key = peek$(ctx, `containerItemKey${containerIndex}`);
         const itemIndex = key ? state.indexByKey.get(key) : undefined;
-        if (itemIndex !== undefined && stickyHeaderIndices.has(itemIndex)) {
-            activeIndices.add(itemIndex);
+        if (itemIndex === targetIndex) {
+            isActive = true;
+            break;
         }
     }
 
-    return activeIndices;
+    return isActive;
 }
 
 function handleStickyActivation(
     ctx: StateContext,
-    stickyHeaderIndices: Set<number>,
     stickyArray: number[],
     currentStickyIdx: number,
     needNewContainers: number[],
@@ -60,7 +60,6 @@ function handleStickyActivation(
     endBuffered: number,
 ): void {
     const state = ctx.state;
-    const activeIndices = getActiveStickyIndices(ctx, stickyHeaderIndices);
 
     // Update activeStickyIndex to the actual data index (not array position)
     set$(ctx, "activeStickyIndex", currentStickyIdx >= 0 ? stickyArray[currentStickyIdx] : -1);
@@ -68,9 +67,10 @@ function handleStickyActivation(
     // Activate current and previous sticky items, but only if they're not already covered by regular buffered range
     for (let offset = 0; offset <= 1; offset++) {
         const idx = currentStickyIdx - offset;
-        if (idx < 0 || activeIndices.has(stickyArray[idx])) continue;
+        if (idx < 0) continue;
 
         const stickyIndex = stickyArray[idx];
+        if (isStickyIndexActive(ctx, stickyIndex)) continue;
         const stickyId = state.idCache[stickyIndex] ?? getId(state, stickyIndex);
 
         // Only add if it's not already in the regular buffered range and not already in containers
@@ -618,7 +618,6 @@ export function calculateItemsInView(
             if (stickyHeaderIndicesArr.length > 0) {
                 handleStickyActivation(
                     ctx,
-                    stickyHeaderIndicesSet,
                     stickyHeaderIndicesArr,
                     currentStickyIdx,
                     needNewContainers,
