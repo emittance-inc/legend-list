@@ -203,6 +203,21 @@ describe("findAvailableContainers", () => {
             ]);
         });
 
+        it("keeps allocation results in needed item order with mixed sticky items", () => {
+            ctx.values.set("numContainers", 3);
+            ctx.values.set("containerItemKey0", undefined);
+            ctx.values.set("containerItemKey1", undefined);
+            ctx.values.set("containerItemKey2", undefined);
+
+            mockState.props.stickyHeaderIndicesSet = new Set([5]);
+            mockState.stickyContainerPool = new Set([1]);
+
+            const result = findAvailableContainers(ctx, [2, 5, 6], 0, 10, []);
+
+            expect(result.map((allocation) => allocation.itemIndex)).toEqual([2, 5, 6]);
+            expect(result.map((allocation) => allocation.containerIndex)).toEqual([0, 1, 2]);
+        });
+
         it("creates a new container for an unmatched type before reusing a later compatible container", () => {
             ctx.values.set("numContainers", 2);
             ctx.values.set("numContainersPooled", 5);
