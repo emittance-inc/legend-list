@@ -37,6 +37,12 @@ function getAverageItemSizes(state: StateContext["state"]): Record<string, Legen
     return averageItemSizes;
 }
 
+function triggerMountedContainerLayouts(ctx: StateContext) {
+    for (const triggerLayout of ctx.containerLayoutTriggers.values()) {
+        triggerLayout();
+    }
+}
+
 export function createImperativeHandle(ctx: StateContext, scheduleImperativeScrollCommit?: () => void): LegendListRef {
     const state = ctx.state;
     const IMPERATIVE_SCROLL_SETTLE_MAX_WAIT_MS = 800;
@@ -190,6 +196,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
             state.columnSpans.length = 0;
         }
 
+        triggerMountedContainerLayouts(ctx);
         state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
     };
 
