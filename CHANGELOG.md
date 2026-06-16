@@ -1,3 +1,7 @@
+## 3.0.6
+
+- Fix: KeyboardAwareLegendList now accounts for bottom insets when alignItemsAtEnd is used, so short chat-style lists stay pinned above the keyboard or safe area instead of being pushed too low or leaving extra scroll space.
+
 ## 3.0.5
 
 - Fix: clearCaches now rechecks the rows that are already on screen, so resetting the size cache does not leave items stuck in old positions.
