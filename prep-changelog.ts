@@ -8,7 +8,13 @@ import { createInterface } from "node:readline";
 const packageJson = JSON.parse(readFileSync("./package.json", "utf-8"));
 const currentVersion = packageJson.version;
 const changelog = readFileSync("./CHANGELOG.md", "utf-8");
-const prompt = "update the changelog with the changes in the latest version. See changelog.mdc for more details.";
+const prompt = [
+    "Update CHANGELOG.md with the changes in the latest version.",
+    "Write entries in plain, human language that explains what users should notice.",
+    "Avoid buzzwords and vague release-note phrasing like optimized, enhanced, improved, streamlined, or robust unless the sentence says what actually changed.",
+    "Keep useful implementation details only when they make the behavior clearer.",
+    "Use the existing changelog format and see changelog.mdc for more details.",
+].join(" ");
 
 type AgentCli = {
     name: string;
