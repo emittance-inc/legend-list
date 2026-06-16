@@ -1,3 +1,10 @@
+## 3.0.5
+
+- Fix: clearCaches now rechecks the rows that are already on screen, so resetting the size cache does not leave items stuck in old positions.
+- Perf: Scrolling through content that is already rendered now updates viewability with less work.
+- Perf: Trimmed repeated work during scrolls, especially around recycled containers, sticky headers, size checks, and viewability.
+- Perf: Large and fast scrolls now reuse more of the same scroll state instead of recalculating it in multiple places.
+
 ## 3.0.4
 
 - Fix: scrollToEnd now waits for newly committed data before targeting the final item, improving chat-style append-and-scroll flows.
