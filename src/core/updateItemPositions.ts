@@ -9,17 +9,25 @@ import { getScrollVelocity } from "@/utils/getScrollVelocity";
 import { updateSnapToOffsets } from "@/utils/updateSnapToOffsets";
 
 interface Options {
-    startIndex: number;
-    scrollBottomBuffered: number;
-    forceFullUpdate?: boolean;
     doMVCP: boolean | undefined;
+    forceFullUpdate?: boolean;
     optimizeForVisibleWindow?: boolean;
+    scrollBottomBuffered: number;
+    scrollVelocity?: number;
+    startIndex: number;
 }
 
 export function updateItemPositions(
     ctx: StateContext,
     dataChanged: boolean | undefined,
-    { startIndex, scrollBottomBuffered, forceFullUpdate = false, doMVCP, optimizeForVisibleWindow = false }: Options = {
+    {
+        doMVCP,
+        forceFullUpdate = false,
+        optimizeForVisibleWindow = false,
+        scrollBottomBuffered,
+        scrollVelocity,
+        startIndex,
+    }: Options = {
         doMVCP: false,
         forceFullUpdate: false,
         optimizeForVisibleWindow: false,
@@ -50,7 +58,7 @@ export function updateItemPositions(
     // is non-zero or a large scroll delta indicates a jump, cap position calculations to the visible window plus buffer
     // instead of walking the full list
     const lastScrollDelta = state.lastScrollDelta;
-    const velocity = getScrollVelocity(state);
+    const velocity = scrollVelocity ?? getScrollVelocity(state);
     const shouldOptimize =
         !forceFullUpdate &&
         !dataChanged &&

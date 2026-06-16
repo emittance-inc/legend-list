@@ -1,6 +1,6 @@
 // biome-ignore lint/style/useImportType: Leaving this out makes it crash in some environments
 import * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { PositionView, PositionViewSticky } from "@/components/PositionView";
 import { Separator } from "@/components/Separator";
@@ -167,19 +167,6 @@ export const Container = typedMemo(function Container<ItemT>({
     );
     const { index, renderedItem } = renderedItemInfo || {};
 
-    const contextValue = useMemo<ContextContainerType>(() => {
-        ctx.viewRefs.set(id, ref);
-        return {
-            containerId: id,
-            index: index!,
-            itemKey,
-            triggerLayout: () => {
-                forceLayoutRender((v) => v + 1);
-            },
-            value: data,
-        };
-    }, [id, itemKey, index, data]);
-
     const onLayoutChange = useCallback((rectangle: LayoutRectangle) => {
         const {
             horizontal: currentHorizontal,
@@ -243,6 +230,30 @@ export const Container = typedMemo(function Container<ItemT>({
             });
         }
     }, []);
+
+    const triggerLayout = useCallback(() => {
+        forceLayoutRender((v) => v + 1);
+    }, []);
+
+    const contextValue = useMemo<ContextContainerType>(() => {
+        ctx.viewRefs.set(id, ref);
+        return {
+            containerId: id,
+            index: index!,
+            itemKey,
+            triggerLayout,
+            value: data,
+        };
+    }, [id, itemKey, index, data, triggerLayout]);
+
+    useLayoutEffect(() => {
+        ctx.containerLayoutTriggers.set(id, triggerLayout);
+        return () => {
+            if (ctx.containerLayoutTriggers.get(id) === triggerLayout) {
+                ctx.containerLayoutTriggers.delete(id);
+            }
+        };
+    }, [ctx, id, triggerLayout]);
 
     const { onLayout } = useOnLayoutSync(
         {

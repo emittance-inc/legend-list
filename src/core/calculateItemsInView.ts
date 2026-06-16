@@ -12,7 +12,7 @@ import { Platform } from "@/platform/Platform";
 import { getContentSize } from "@/state/getContentSize";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { InternalState } from "@/types.internal";
-import { checkAllSizesKnown, getMountedBufferedIndices, getMountedNoBufferIndices } from "@/utils/checkAllSizesKnown";
+import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
 import { getExpandedContainerPoolSize } from "@/utils/containerPool";
 import { findAvailableContainers } from "@/utils/findAvailableContainers";
 import { getId } from "@/utils/getId";
@@ -35,19 +35,23 @@ function findCurrentStickyIndex(stickyArray: number[], scroll: number, state: In
     return -1;
 }
 
-function getActiveStickyIndices(ctx: StateContext, stickyHeaderIndices: Set<number>): Set<number> {
+function isStickyIndexActive(ctx: StateContext, targetIndex: number): boolean {
     const state = ctx.state;
-    return new Set(
-        Array.from(state.stickyContainerPool)
-            .map((i) => peek$(ctx, `containerItemKey${i}`))
-            .map((key) => (key ? state.indexByKey.get(key) : undefined))
-            .filter((idx): idx is number => idx !== undefined && stickyHeaderIndices.has(idx)),
-    );
+    let isActive = false;
+    for (const containerIndex of state.stickyContainerPool) {
+        const key = peek$(ctx, `containerItemKey${containerIndex}`);
+        const itemIndex = key ? state.indexByKey.get(key) : undefined;
+        if (itemIndex === targetIndex) {
+            isActive = true;
+            break;
+        }
+    }
+
+    return isActive;
 }
 
 function handleStickyActivation(
     ctx: StateContext,
-    stickyHeaderIndices: Set<number>,
     stickyArray: number[],
     currentStickyIdx: number,
     needNewContainers: number[],
@@ -56,7 +60,6 @@ function handleStickyActivation(
     endBuffered: number,
 ): void {
     const state = ctx.state;
-    const activeIndices = getActiveStickyIndices(ctx, stickyHeaderIndices);
 
     // Update activeStickyIndex to the actual data index (not array position)
     set$(ctx, "activeStickyIndex", currentStickyIdx >= 0 ? stickyArray[currentStickyIdx] : -1);
@@ -64,9 +67,10 @@ function handleStickyActivation(
     // Activate current and previous sticky items, but only if they're not already covered by regular buffered range
     for (let offset = 0; offset <= 1; offset++) {
         const idx = currentStickyIdx - offset;
-        if (idx < 0 || activeIndices.has(stickyArray[idx])) continue;
+        if (idx < 0) continue;
 
         const stickyIndex = stickyArray[idx];
+        if (isStickyIndexActive(ctx, stickyIndex)) continue;
         const stickyId = state.idCache[stickyIndex] ?? getId(state, stickyIndex);
 
         // Only add if it's not already in the regular buffered range and not already in containers
@@ -128,6 +132,112 @@ function handleStickyRecycling(
         if (shouldRecycle) {
             pendingRemoval.push(containerIndex);
         }
+    }
+}
+
+interface VisibleRangeState {
+    endNoBuffer: number | null;
+    firstFullyOnScreenIndex: number | undefined;
+    startNoBuffer: number | null;
+}
+
+function trackVisibleRange(
+    range: VisibleRangeState,
+    i: number,
+    top: number,
+    size: number,
+    scroll: number,
+    scrollBottom: number,
+) {
+    let didPassVisibleEnd = false;
+    if (range.startNoBuffer === null && top + size > scroll) {
+        range.startNoBuffer = i;
+    }
+    // Subtract 10px for a little buffer so it can be slightly off screen, but still
+    // require the row to begin within the visible window so we don't anchor to the
+    // next item below an oversized partially visible row.
+    if (range.firstFullyOnScreenIndex === undefined && top >= scroll - 10 && top <= scrollBottom) {
+        range.firstFullyOnScreenIndex = i;
+    }
+    if (range.startNoBuffer !== null) {
+        if (top <= scrollBottom) {
+            range.endNoBuffer = i;
+        } else {
+            didPassVisibleEnd = true;
+        }
+    }
+
+    return didPassVisibleEnd;
+}
+
+function getIdsInVisibleRange(state: InternalState, range: VisibleRangeState) {
+    const idsInView: string[] = [];
+    const firstVisibleAnchorIndex = range.firstFullyOnScreenIndex ?? range.startNoBuffer;
+    if (firstVisibleAnchorIndex !== null && firstVisibleAnchorIndex !== undefined && range.endNoBuffer !== null) {
+        for (let i = firstVisibleAnchorIndex; i <= range.endNoBuffer; i++) {
+            const id = state.idCache[i] ?? getId(state, i);
+            idsInView.push(id);
+        }
+    }
+
+    return idsInView;
+}
+
+function updateViewabilityForCachedRange(
+    ctx: StateContext,
+    viewabilityConfigCallbackPairs: NonNullable<InternalState["viewabilityConfigCallbackPairs"]>,
+    scrollLength: number,
+    scroll: number,
+    scrollBottom: number,
+) {
+    const state = ctx.state;
+    const {
+        endBuffered,
+        idCache,
+        positions,
+        props: { data },
+        sizes,
+        startBuffered,
+    } = state;
+
+    if (startBuffered === null || endBuffered === null || startBuffered < 0 || endBuffered < startBuffered) {
+        return;
+    }
+
+    const visibleRange: VisibleRangeState = {
+        endNoBuffer: null,
+        firstFullyOnScreenIndex: undefined,
+        startNoBuffer: null,
+    };
+
+    for (let i = startBuffered; i <= endBuffered && i < data.length; i++) {
+        const id = idCache[i] ?? getId(state, i);
+        const size = sizes.get(id) ?? getItemSize(ctx, id, i, data[i]);
+        const top = positions[i]!;
+        const didPassVisibleEnd = trackVisibleRange(visibleRange, i, top, size, scroll, scrollBottom);
+        if (didPassVisibleEnd) {
+            break;
+        }
+    }
+
+    Object.assign(state, {
+        endNoBuffer: visibleRange.endNoBuffer,
+        firstFullyOnScreenIndex: visibleRange.firstFullyOnScreenIndex,
+        idsInView: getIdsInVisibleRange(state, visibleRange),
+        startNoBuffer: visibleRange.startNoBuffer,
+    });
+
+    if (visibleRange.startNoBuffer !== null && visibleRange.endNoBuffer !== null) {
+        updateViewableItems(
+            state,
+            ctx,
+            viewabilityConfigCallbackPairs,
+            scrollLength,
+            visibleRange.startNoBuffer,
+            visibleRange.endNoBuffer,
+            startBuffered,
+            endBuffered,
+        );
     }
 }
 
@@ -278,6 +388,15 @@ export function calculateItemsInView(
             ) {
                 // On web, MVCP anchor lock still needs a pass even inside the cached range window.
                 if (Platform.OS !== "web" || !isInMVCPActiveMode(state)) {
+                    if (viewabilityConfigCallbackPairs) {
+                        updateViewabilityForCachedRange(
+                            ctx,
+                            viewabilityConfigCallbackPairs,
+                            scrollLength,
+                            scroll,
+                            scrollBottom,
+                        );
+                    }
                     finishCalculateItemsInView?.();
                     return;
                 }
@@ -304,6 +423,7 @@ export function calculateItemsInView(
             forceFullUpdate: !!forceFullItemPositions,
             optimizeForVisibleWindow,
             scrollBottomBuffered,
+            scrollVelocity: speed,
             startIndex,
         });
 
@@ -347,10 +467,8 @@ export function calculateItemsInView(
         }
 
         ////// Prepare for loop
-        let startNoBuffer: number | null = null;
         let startBuffered: number | null = null;
         let startBufferedId: string | null = null;
-        let endNoBuffer: number | null = null;
         let endBuffered: number | null = null;
 
         let loopStart: number =
@@ -398,7 +516,11 @@ export function calculateItemsInView(
             }
         }
 
-        let firstFullyOnScreenIndex: number | undefined;
+        const visibleRange: VisibleRangeState = {
+            endNoBuffer: null,
+            firstFullyOnScreenIndex: undefined,
+            startNoBuffer: null,
+        };
 
         // Continue until we've found the end and we've calculated start/end indices of all items in view
         const dataLength = data!.length;
@@ -408,15 +530,7 @@ export function calculateItemsInView(
             const top = positions[i]!;
 
             if (!foundEnd) {
-                if (startNoBuffer === null && top + size > scroll) {
-                    startNoBuffer = i;
-                }
-                // Subtract 10px for a little buffer so it can be slightly off screen, but still
-                // require the row to begin within the visible window so we don't anchor to the
-                // next item below an oversized partially visible row.
-                if (firstFullyOnScreenIndex === undefined && top >= scroll - 10 && top <= scrollBottom) {
-                    firstFullyOnScreenIndex = i;
-                }
+                trackVisibleRange(visibleRange, i, top, size, scroll, scrollBottom);
 
                 if (startBuffered === null && top + size > scrollTopBuffered) {
                     startBuffered = i;
@@ -427,10 +541,7 @@ export function calculateItemsInView(
                         nextTop = top;
                     }
                 }
-                if (startNoBuffer !== null) {
-                    if (top <= scrollBottom) {
-                        endNoBuffer = i;
-                    }
+                if (visibleRange.startNoBuffer !== null) {
                     if (top <= scrollBottomBuffered) {
                         endBuffered = i;
                         if (scrollBottomBuffered > totalSize) {
@@ -445,26 +556,14 @@ export function calculateItemsInView(
             }
         }
 
-        const idsInView: string[] = [];
-        // MVCP needs at least one intersecting anchor even when the viewport sits inside an oversized item
-        // whose top edge is already above the viewport. So fall back to the first intersecting item for
-        // idsInView so prepend anchoring stays stable.
-        const firstVisibleAnchorIndex = firstFullyOnScreenIndex ?? startNoBuffer;
-        if (firstVisibleAnchorIndex !== null && firstVisibleAnchorIndex !== undefined && endNoBuffer !== null) {
-            for (let i = firstVisibleAnchorIndex; i <= endNoBuffer; i++) {
-                const id = idCache[i] ?? getId(state, i);
-                idsInView.push(id);
-            }
-        }
-
         Object.assign(state, {
             endBuffered,
-            endNoBuffer,
-            firstFullyOnScreenIndex,
-            idsInView,
+            endNoBuffer: visibleRange.endNoBuffer,
+            firstFullyOnScreenIndex: visibleRange.firstFullyOnScreenIndex,
+            idsInView: getIdsInVisibleRange(state, visibleRange),
             startBuffered,
             startBufferedId,
-            startNoBuffer,
+            startNoBuffer: visibleRange.startNoBuffer,
         });
 
         // Precompute the scroll that will be needed for the range to change
@@ -519,7 +618,6 @@ export function calculateItemsInView(
             if (stickyHeaderIndicesArr.length > 0) {
                 handleStickyActivation(
                     ctx,
-                    stickyHeaderIndicesSet,
                     stickyHeaderIndicesArr,
                     currentStickyIdx,
                     needNewContainers,
@@ -533,27 +631,25 @@ export function calculateItemsInView(
             }
 
             if (needNewContainers.length > 0) {
-                // Calculate required item types for type-safe container reuse
-                const requiredItemTypes = getItemType
-                    ? needNewContainers.map((i) => {
+                const getRequiredItemType = getItemType
+                    ? (i: number) => {
                           const itemType = getItemType(data[i], i);
                           return itemType !== undefined ? String(itemType) : "";
-                      })
+                      }
                     : undefined;
 
-                const availableContainers = findAvailableContainers(
+                const availableContainerAllocations = findAvailableContainers(
                     ctx,
-                    needNewContainers.length,
+                    needNewContainers,
                     startBuffered,
                     endBuffered,
                     pendingRemoval,
-                    requiredItemTypes,
-                    needNewContainers,
+                    getRequiredItemType,
                     protectedContainerKeys,
                 );
-                for (let idx = 0; idx < needNewContainers.length; idx++) {
-                    const i = needNewContainers[idx];
-                    const containerIndex = availableContainers[idx];
+                for (const allocation of availableContainerAllocations) {
+                    const i = allocation.itemIndex;
+                    const containerIndex = allocation.containerIndex;
                     const id = idCache[i] ?? getId(state, i);
 
                     // Remove old key from cache
@@ -566,8 +662,8 @@ export function calculateItemsInView(
                     set$(ctx, `containerItemData${containerIndex}`, data[i]);
 
                     // Store item type for type-safe container reuse
-                    if (requiredItemTypes) {
-                        state.containerItemTypes.set(containerIndex, requiredItemTypes[idx]);
+                    if (allocation.itemType !== undefined) {
+                        state.containerItemTypes.set(containerIndex, allocation.itemType);
                     }
 
                     // Update cache when adding new item
@@ -639,13 +735,14 @@ export function calculateItemsInView(
             );
         }
 
+        const pendingRemovalSet = pendingRemoval.length > 0 ? new Set(pendingRemoval) : undefined;
         let didChangePositions = false;
         // Update top positions of all containers
         for (let i = 0; i < numContainers; i++) {
             const itemKey = peek$(ctx, `containerItemKey${i}`);
 
             // If it's pending removal, then it's not in view anymore
-            if (pendingRemoval.includes(i)) {
+            if (pendingRemovalSet?.has(i)) {
                 // Update cache when removing item
                 if (itemKey !== undefined) {
                     containerItemKeys!.delete(itemKey);
@@ -687,29 +784,32 @@ export function calculateItemsInView(
             return;
         }
 
-        const mountedBufferedIndices = getMountedBufferedIndices(state);
-        const mountedNoBufferIndices = getMountedNoBufferIndices(state);
-        const readinessIndices = hasActiveInitialScroll(state)
-            ? mountedBufferedIndices
-            : mountedNoBufferIndices.length > 0
-              ? mountedNoBufferIndices
-              : mountedBufferedIndices;
-        if (!queuedInitialLayout && readinessIndices.length > 0 && checkAllSizesKnown(state, readinessIndices)) {
-            setDidLayout(ctx);
-            handleInitialScrollLayoutReady(ctx);
+        if (!queuedInitialLayout && !state.didContainersLayout) {
+            const isInitialLayoutReady = hasActiveInitialScroll(state)
+                ? checkAllSizesKnown(state, state.startBuffered, state.endBuffered)
+                : checkAllSizesKnown(state, state.startNoBuffer, state.endNoBuffer) ||
+                  checkAllSizesKnown(state, state.startBuffered, state.endBuffered);
+            if (isInitialLayoutReady) {
+                setDidLayout(ctx);
+                handleInitialScrollLayoutReady(ctx);
+            }
         }
 
-        if (viewabilityConfigCallbackPairs && startNoBuffer !== null && endNoBuffer !== null) {
+        if (
+            viewabilityConfigCallbackPairs &&
+            visibleRange.startNoBuffer !== null &&
+            visibleRange.endNoBuffer !== null
+        ) {
             if (!didMVCPAdjustScroll) {
                 updateViewableItems(
                     ctx.state,
                     ctx,
                     viewabilityConfigCallbackPairs,
                     scrollLength,
-                    startNoBuffer,
-                    endNoBuffer,
-                    startBuffered ?? startNoBuffer,
-                    endBuffered ?? endNoBuffer,
+                    visibleRange.startNoBuffer,
+                    visibleRange.endNoBuffer,
+                    startBuffered ?? visibleRange.startNoBuffer,
+                    endBuffered ?? visibleRange.endNoBuffer,
                 );
             }
         }

@@ -368,6 +368,30 @@ describe("updateItemSize functions", () => {
             expect(onItemSizeChangedCalls.length).toBe(0);
         });
 
+        it("reuses resolved item type and fixed size while measuring", () => {
+            let getItemTypeCalls = 0;
+            let getFixedItemSizeCalls = 0;
+            mockState.startBuffered = 2;
+            mockState.endBuffered = 4;
+            mockState.props.getItemType = (item) => {
+                getItemTypeCalls++;
+                return item.name;
+            };
+            mockState.props.getFixedItemSize = () => {
+                getFixedItemSizeCalls++;
+                return undefined;
+            };
+
+            updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+
+            expect(getItemTypeCalls).toBe(1);
+            expect(getFixedItemSizeCalls).toBe(1);
+            expect(mockState.averageSizes.First).toEqual({
+                avg: 150,
+                num: 1,
+            });
+        });
+
         it("schedules a single mvcp recalculate per frame while anchor lock is active", () => {
             const prevPlatform = Platform.OS;
             Platform.OS = "web";

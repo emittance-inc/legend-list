@@ -3,14 +3,26 @@ import type { StateContext } from "@/state/state";
 import { roundSize } from "@/utils/helpers";
 import { getId } from "./getId";
 
-function getKnownOrFixedSize(ctx: StateContext, key: string | undefined, index: number, data: any) {
+interface ResolvedItemSize {
+    didResolveFixedItemSize?: boolean;
+    fixedItemSize?: number;
+    itemType?: string;
+}
+
+function getKnownOrFixedSize(
+    ctx: StateContext,
+    key: string | undefined,
+    index: number,
+    data: any,
+    resolved?: ResolvedItemSize,
+) {
     const state = ctx.state;
     const { getFixedItemSize, getItemType } = state.props;
     let size = key ? state.sizesKnown.get(key) : undefined;
 
     if (size === undefined && key && getFixedItemSize) {
-        const itemType = getItemType ? (getItemType(data, index) ?? "") : "";
-        size = getFixedItemSize(data, index, itemType);
+        const itemType = resolved?.itemType ?? (getItemType ? (getItemType(data, index) ?? "") : "");
+        size = resolved?.didResolveFixedItemSize ? resolved.fixedItemSize : getFixedItemSize(data, index, itemType);
         if (size !== undefined) {
             state.sizesKnown.set(key, size);
         }
@@ -41,6 +53,7 @@ export function getItemSize(
     useAverageSize?: boolean,
     preferCachedSize?: boolean,
     notifyTotalSize?: boolean,
+    resolved?: ResolvedItemSize,
 ) {
     const state = ctx.state;
     const {
@@ -64,13 +77,13 @@ export function getItemSize(
         }
     }
 
-    size = getKnownOrFixedSize(ctx, key, index, data);
+    size = getKnownOrFixedSize(ctx, key, index, data, resolved);
     if (size !== undefined) {
         setSize(ctx, key, size, notifyTotalSize);
         return size;
     }
 
-    const itemType = getItemType ? (getItemType(data, index) ?? "") : "";
+    const itemType = resolved?.itemType ?? (getItemType ? (getItemType(data, index) ?? "") : "");
 
     if (useAverageSize && !scrollingTo) {
         // Use item type specific average if available

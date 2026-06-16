@@ -19,12 +19,6 @@ interface LargeListNotificationMetrics {
     sizeLookupCalls: number;
 }
 
-function registerOldArchMock() {
-    mock.module("@/constants-platform", () => ({
-        IsNewArchitecture: false,
-    }));
-}
-
 function ListComponentWithTotalSizeListener(props: any) {
     useValue$("totalSize");
 
@@ -128,7 +122,6 @@ describe("LegendList large-list totalSize notifications", () => {
     beforeEach(() => {
         mock.restore();
         registerBaseModuleMocks();
-        registerOldArchMock();
         registerListComponentMock();
         installAnimatedSetValueCounter();
         getItemSizeCallCount = 0;

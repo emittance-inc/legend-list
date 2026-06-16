@@ -189,7 +189,10 @@ describe("createImperativeHandle.scrollToEnd", () => {
     });
 
     it("clearCaches clears size caches and recalculates positions", () => {
-        const triggerCalculateItemsInView = mock(() => undefined);
+        const calls: string[] = [];
+        const triggerCalculateItemsInView = mock(() => {
+            calls.push("calculate");
+        });
         const ctx = createMockContext(
             { totalSize: 420 },
             {
@@ -211,6 +214,14 @@ describe("createImperativeHandle.scrollToEnd", () => {
                 triggerCalculateItemsInView,
             },
         );
+        const triggerFirstLayout = mock(() => {
+            calls.push("layout:0");
+        });
+        const triggerSecondLayout = mock(() => {
+            calls.push("layout:1");
+        });
+        ctx.containerLayoutTriggers.set(0, triggerFirstLayout);
+        ctx.containerLayoutTriggers.set(1, triggerSecondLayout);
 
         const handle = createImperativeHandle(ctx);
         handle.clearCaches();
@@ -223,6 +234,9 @@ describe("createImperativeHandle.scrollToEnd", () => {
         expect(ctx.state.totalSize).toBe(0);
         expect(ctx.state.pendingTotalSize).toBeUndefined();
         expect(ctx.values.get("totalSize")).toBe(0);
+        expect(triggerFirstLayout).toHaveBeenCalledTimes(1);
+        expect(triggerSecondLayout).toHaveBeenCalledTimes(1);
+        expect(calls).toEqual(["layout:0", "layout:1", "calculate"]);
         expect(triggerCalculateItemsInView).toHaveBeenCalledWith({ forceFullItemPositions: true });
     });
 
