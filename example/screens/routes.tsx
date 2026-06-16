@@ -30,6 +30,7 @@ import ChatExampleFixture from "~/screens/fixtures/chat-example";
 import ChatInfiniteFixture from "~/screens/fixtures/chat-infinite";
 import ChatKeyboardFixture from "~/screens/fixtures/chat-keyboard";
 import ChatKeyboardBigFixture from "~/screens/fixtures/chat-keyboard-big";
+import ChatKeyboardSingleMessageFixture from "~/screens/fixtures/chat-keyboard-single-message";
 import ChatResizeOuterFixture from "~/screens/fixtures/chat-resize-outer";
 import ColumnsFixture from "~/screens/fixtures/columns";
 import CountriesFixture from "~/screens/fixtures/countries";
@@ -270,6 +271,15 @@ export const FIXTURE_ROUTES: FixtureRouteDefinition[] = [
         kind: "fixture",
         slug: "chat-keyboard-big",
         title: "Chat Keyboard Big",
+    },
+    {
+        component: ChatKeyboardSingleMessageFixture,
+        description: "Reproduces keyboard inset behavior with one aligned-at-end chat message.",
+        groupKey: "chat",
+        groupTitle: "Chat & Keyboard",
+        kind: "fixture",
+        slug: "chat-keyboard-single-message",
+        title: "Chat Keyboard Single Message",
     },
     {
         component: ChatResizeOuterFixture,

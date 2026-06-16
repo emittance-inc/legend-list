@@ -32,6 +32,7 @@ import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataC
 import { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { updateContentInsetEndAdjustment } from "@/core/updateContentInsetEndAdjustment";
+import { updateContentMetrics } from "@/core/updateContentMetrics";
 import { updateItemPositions } from "@/core/updateItemPositions";
 import { updateItemSize } from "@/core/updateItemSize";
 import { updateScroll } from "@/core/updateScroll";
@@ -191,12 +192,15 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     } = rest as any;
 
     const contentContainerStyleBase = StyleSheet.flatten(contentContainerStyleProp) as ViewStyle | undefined;
+    const useAlignItemsAtEndPadding =
+        alignItemsAtEnd && !horizontal && contentContainerStyleBase?.minHeight == null && dataProp.length > 0;
     const shouldFlexGrow =
         alignItemsAtEnd &&
+        !useAlignItemsAtEndPadding &&
         (horizontal ? contentContainerStyleBase?.minWidth == null : contentContainerStyleBase?.minHeight == null);
     const contentContainerStyle: ViewStyle = {
         ...contentContainerStyleBase,
-        ...(alignItemsAtEnd
+        ...(alignItemsAtEnd && !useAlignItemsAtEndPadding
             ? {
                   display: "flex",
                   flexDirection: horizontal ? "row" : "column",
@@ -411,6 +415,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     state.props = {
         alignItemsAtEnd,
+        alignItemsAtEndPaddingEnabled: useAlignItemsAtEndPadding,
         alwaysRender,
         alwaysRenderIndicesArr: alwaysRenderIndices.arr,
         alwaysRenderIndicesSet: alwaysRenderIndices.set,
@@ -474,6 +479,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         const prevPaddingTop = peek$(ctx, "stylePaddingTop");
         setPaddingTop(ctx, { stylePaddingTop: stylePaddingTopState });
         refState.current!.props.stylePaddingBottom = stylePaddingBottomState;
+        updateContentMetrics(ctx);
 
         let paddingDiff = stylePaddingTopState - prevPaddingTop;
         // If the style padding has changed then adjust the paddingTop and update scroll to compensate
@@ -620,7 +626,14 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     }, [snapToIndices]);
     useLayoutEffect(
         () => initializeStateVars(true),
-        [dataVersion, memoizedLastItemKeys.join(","), numColumnsProp, stylePaddingBottomState, stylePaddingTopState],
+        [
+            dataVersion,
+            memoizedLastItemKeys.join(","),
+            numColumnsProp,
+            stylePaddingBottomState,
+            stylePaddingTopState,
+            useAlignItemsAtEndPadding,
+        ],
     );
 
     useLayoutEffect(() => {

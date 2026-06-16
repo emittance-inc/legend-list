@@ -284,7 +284,7 @@ export function calculateItemsInView(
         }
 
         let totalSize = getContentSize(ctx);
-        const topPad = peek$(ctx, "stylePaddingTop") + peek$(ctx, "headerSize");
+        const topPad = peek$(ctx, "stylePaddingTop") + peek$(ctx, "alignItemsAtEndPadding") + peek$(ctx, "headerSize");
         const numColumns = peek$(ctx, "numColumns");
         const speed = getScrollVelocity(state);
 

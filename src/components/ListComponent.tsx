@@ -11,6 +11,7 @@ import { SnapWrapper } from "@/components/SnapWrapper";
 import { WebAnchoredEndSpace } from "@/components/WebAnchoredEndSpace";
 import { ENABLE_DEVMODE } from "@/constants";
 import type { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
+import { setFooterSize, setHeaderSize } from "@/core/updateContentMetrics";
 import { useStableRenderComponent } from "@/hooks/useStableRenderComponent";
 import { LayoutView } from "@/platform/LayoutView";
 import { Platform } from "@/platform/Platform";
@@ -23,7 +24,8 @@ import type {
     NativeSyntheticEvent,
     ViewStyle,
 } from "@/platform/scrollview-types";
-import { set$, useArr$, useStateContext } from "@/state/state";
+import { View } from "@/platform/ViewComponents";
+import { useArr$, useStateContext } from "@/state/state";
 import { type GetRenderedItem, type LegendListPropsBase, typedMemo } from "@/types.internal";
 import { IS_DEV } from "@/utils/devEnvironment";
 import { getComponent } from "@/utils/getComponent";
@@ -89,7 +91,7 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
 }: ListComponentProps<ItemT>) {
     const ctx = useStateContext();
     const maintainVisibleContentPosition = ctx.state.props.maintainVisibleContentPosition;
-    const [otherAxisSize = 0] = useArr$(["otherAxisSize"]);
+    const [alignItemsAtEndPadding = 0, otherAxisSize = 0] = useArr$(["alignItemsAtEndPadding", "otherAxisSize"]);
     const autoOtherAxisStyle = getAutoOtherAxisStyle({
         horizontal,
         needsOtherAxisSize: ctx.state.needsOtherAxisSize,
@@ -111,17 +113,17 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
     useLayoutEffect(() => {
         // Handle header/footer getting toggled on and off, remove header/footer size when they are not present
         if (!ListHeaderComponent) {
-            set$(ctx, "headerSize", 0);
+            setHeaderSize(ctx, 0);
         }
         if (!ListFooterComponent) {
-            set$(ctx, "footerSize", 0);
+            setFooterSize(ctx, 0);
         }
     }, [ListHeaderComponent, ListFooterComponent, ctx]);
 
     const onLayoutHeader = useCallback(
         (rect: LayoutRectangle) => {
             const size = rect[horizontal ? "width" : "height"];
-            set$(ctx, "headerSize", size);
+            setHeaderSize(ctx, size);
         },
         [ctx, horizontal],
     );
@@ -129,7 +131,7 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
     const onLayoutFooterInternal = useCallback(
         (rect: LayoutRectangle, fromLayoutEffect: boolean) => {
             const size = rect[horizontal ? "width" : "height"];
-            set$(ctx, "footerSize", size);
+            setFooterSize(ctx, size);
             onLayoutFooter?.(rect, fromLayoutEffect);
         },
         [ctx, horizontal, onLayoutFooter],
@@ -173,6 +175,17 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
                 </LayoutView>
             )}
             {ListEmptyComponent && getComponent(ListEmptyComponent)}
+            {alignItemsAtEndPadding > 0 && (
+                <View
+                    style={
+                        horizontal
+                            ? { flexShrink: 0, width: alignItemsAtEndPadding }
+                            : { flexShrink: 0, height: alignItemsAtEndPadding }
+                    }
+                >
+                    {null}
+                </View>
+            )}
 
             {canRender && !ListEmptyComponent && (
                 <Containers

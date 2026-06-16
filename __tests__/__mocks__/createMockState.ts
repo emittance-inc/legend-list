@@ -104,6 +104,7 @@ export function createMockState(
         ...overrides,
         props: {
             alignItemsAtEnd: false,
+            alignItemsAtEndPaddingEnabled: false,
             alwaysRender: undefined,
             alwaysRenderIndicesArr: [],
             alwaysRenderIndicesSet: new Set<number>(),

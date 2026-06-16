@@ -22,6 +22,7 @@ import type { InternalState, MaintainVisibleContentPositionNormalized } from "@/
 
 export type ListenerType =
     | "activeStickyIndex"
+    | "alignItemsAtEndPadding"
     | "anchoredEndSpaceSize"
     | "debugComputedScroll"
     | "debugRawScroll"
@@ -78,6 +79,7 @@ export type LegendListListenerType = Extract<
 
 export type ListenerTypeValueMap = {
     activeStickyIndex: number;
+    alignItemsAtEndPadding: number;
     anchoredEndSpaceSize: number;
     animatedScrollY: any;
     debugComputedScroll: number;
@@ -166,6 +168,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         positionListeners: new Map(),
         state: undefined as any,
         values: new Map<ListenerType, any>([
+            ["alignItemsAtEndPadding", 0],
             ["stylePaddingTop", 0],
             ["headerSize", 0],
             ["numContainers", 0],

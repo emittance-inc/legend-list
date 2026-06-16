@@ -250,6 +250,7 @@ export interface InternalState {
     viewabilityConfigCallbackPairs: ViewabilityConfigCallbackPairs<any> | undefined;
     props: {
         alignItemsAtEnd: boolean;
+        alignItemsAtEndPaddingEnabled: boolean;
         animatedProps: StylesAsSharedValue<Record<string, any>>;
         anchoredEndSpace: AnchoredEndSpaceConfig | undefined;
         alwaysRender: AlwaysRenderConfig | undefined;

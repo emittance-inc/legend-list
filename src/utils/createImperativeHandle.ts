@@ -2,6 +2,7 @@ import { retargetActiveInitialScrollAtEnd } from "@/core/initialScrollLifecycle"
 import { scrollTo } from "@/core/scrollTo";
 import { scrollToEnd } from "@/core/scrollToEnd";
 import { scrollToIndex } from "@/core/scrollToIndex";
+import { setContentInsetOverride } from "@/core/updateContentMetrics";
 import { updateScroll } from "@/core/updateScroll";
 import { getContentSize } from "@/state/getContentSize";
 import {
@@ -238,13 +239,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
             startBuffered: state.startBuffered,
         }),
         reportContentInset: (inset) => {
-            const previousInset = state.contentInsetOverride;
-            state.contentInsetOverride = inset ?? undefined;
-            const didChange =
-                (previousInset?.top ?? 0) !== (state.contentInsetOverride?.top ?? 0) ||
-                (previousInset?.bottom ?? 0) !== (state.contentInsetOverride?.bottom ?? 0) ||
-                (previousInset?.left ?? 0) !== (state.contentInsetOverride?.left ?? 0) ||
-                (previousInset?.right ?? 0) !== (state.contentInsetOverride?.right ?? 0);
+            const didChange = setContentInsetOverride(ctx, inset);
             updateScroll(ctx, state.scroll, true, { markHasScrolled: false });
             if (didChange) {
                 retargetActiveInitialScrollAtEnd(ctx);

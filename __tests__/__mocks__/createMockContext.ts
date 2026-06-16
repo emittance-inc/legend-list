@@ -19,6 +19,7 @@ export function createMockContext(
     };
     const defaults: Record<string, any> = {
         activeStickyIndex: state.activeStickyIndex ?? -1,
+        alignItemsAtEndPadding: 0,
         contentInset: DEFAULT_CONTENT_INSET,
         isAtEnd: state.isAtEnd ?? false,
         isAtStart: state.isAtStart ?? false,
@@ -29,6 +30,7 @@ export function createMockContext(
         scrollAdjustPending: 0,
         scrollAdjustUserOffset: 0,
         scrollingTo: undefined,
+        totalSize: state.totalSize ?? 0,
     };
     const values = new Map(Object.entries({ ...defaults, ...initialValues })) as StateContext["values"];
     const listeners = new Map() as StateContext["listeners"];

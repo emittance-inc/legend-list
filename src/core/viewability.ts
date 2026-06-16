@@ -234,7 +234,10 @@ function computeViewability(
     index: number,
 ): ViewAmountToken {
     const { sizes, scroll: scrollState } = state;
-    const topPad = (peek$(ctx, "stylePaddingTop") || 0) + (peek$(ctx, "headerSize") || 0);
+    const topPad =
+        (peek$(ctx, "stylePaddingTop") || 0) +
+        (peek$(ctx, "alignItemsAtEndPadding") || 0) +
+        (peek$(ctx, "headerSize") || 0);
     const { itemVisiblePercentThreshold, viewAreaCoveragePercentThreshold } = viewabilityConfig;
     const viewAreaMode = viewAreaCoveragePercentThreshold != null;
     const viewablePercentThreshold = viewAreaMode ? viewAreaCoveragePercentThreshold : itemVisiblePercentThreshold;
