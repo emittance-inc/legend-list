@@ -2,7 +2,7 @@ import * as React from "react";
 import { Text, View } from "react-native";
 
 import { describe, expect, it } from "bun:test";
-import { StateProvider, useStateContext } from "../../src/state/state";
+import { type StateContext, StateProvider, set$, useStateContext } from "../../src/state/state";
 import { createMockState } from "../__mocks__/createMockState";
 import TestRenderer, { act } from "../helpers/testRenderer";
 import "../setup";
@@ -43,17 +43,26 @@ function Header({ events }: { events: string[] }) {
 }
 
 function ListComponentHarness({
+    alignItemsAtEndPaddingEnabled,
     events,
     label,
     ListComponent,
+    onContext,
+    onRenderScrollComponent,
 }: {
+    alignItemsAtEndPaddingEnabled?: boolean;
     events: string[];
     label: string;
     ListComponent: React.ComponentType<any>;
+    onContext?: (ctx: StateContext) => void;
+    onRenderScrollComponent?: () => void;
 }) {
     const ctx = useStateContext();
     const state = React.useMemo(() => createMockState(), []);
+    state.props.alignItemsAtEnd = !!alignItemsAtEndPaddingEnabled;
+    state.props.alignItemsAtEndPaddingEnabled = !!alignItemsAtEndPaddingEnabled;
     ctx.state = state;
+    onContext?.(ctx);
 
     return (
         <ListComponent
@@ -69,6 +78,7 @@ function ListComponentHarness({
             recycleItems={false}
             refScrollView={{ current: null }}
             renderScrollComponent={(scrollProps) => {
+                onRenderScrollComponent?.();
                 const { children, ...rest } = scrollProps as any;
                 return (
                     <View {...rest}>
@@ -114,6 +124,46 @@ describe("ListComponent renderScrollComponent", () => {
 
         expect(collectTextFromTree(renderer.toJSON())).toContain("second");
         expect(events).toEqual(["mount:header"]);
+
+        act(() => {
+            renderer.unmount();
+        });
+    });
+
+    it("does not rerender the custom scroll wrapper when alignItemsAtEnd padding changes", async () => {
+        const { ListComponent } = await import("../../src/components/ListComponent?align-items-at-end-spacer");
+        const events: string[] = [];
+        let renderScrollComponentCount = 0;
+        let ctx!: StateContext;
+        let renderer!: TestRenderer.ReactTestRenderer;
+
+        act(() => {
+            renderer = TestRenderer.create(
+                <StateProvider>
+                    <ListComponentHarness
+                        alignItemsAtEndPaddingEnabled
+                        events={events}
+                        ListComponent={ListComponent}
+                        label="first"
+                        onContext={(nextCtx) => {
+                            ctx = nextCtx;
+                        }}
+                        onRenderScrollComponent={() => {
+                            renderScrollComponentCount++;
+                        }}
+                    />
+                </StateProvider>,
+            );
+        });
+
+        expect(renderScrollComponentCount).toBe(1);
+
+        act(() => {
+            set$(ctx, "alignItemsAtEndPadding", 200);
+        });
+
+        expect(renderScrollComponentCount).toBe(1);
+        expect(collectTextFromTree(renderer.toJSON())).toContain("first");
 
         act(() => {
             renderer.unmount();

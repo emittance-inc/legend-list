@@ -61,6 +61,27 @@ interface ListComponentProps<ItemT>
 }
 
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
+const AlignItemsAtEndSpacer = typedMemo(function AlignItemsAtEndSpacer({ horizontal }: { horizontal: boolean }) {
+    const [alignItemsAtEndPadding = 0] = useArr$(["alignItemsAtEndPadding"]);
+
+    if (alignItemsAtEndPadding <= 0) {
+        return null;
+    }
+
+    return (
+        <View
+            style={
+                horizontal
+                    ? { flexShrink: 0, width: alignItemsAtEndPadding }
+                    : { flexShrink: 0, height: alignItemsAtEndPadding }
+            }
+        >
+            {null}
+        </View>
+    );
+});
+
+// biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
 export const ListComponent = typedMemo(function ListComponent<ItemT>({
     canRender,
     style,
@@ -91,7 +112,8 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
 }: ListComponentProps<ItemT>) {
     const ctx = useStateContext();
     const maintainVisibleContentPosition = ctx.state.props.maintainVisibleContentPosition;
-    const [alignItemsAtEndPadding = 0, otherAxisSize = 0] = useArr$(["alignItemsAtEndPadding", "otherAxisSize"]);
+    const [otherAxisSize = 0] = useArr$(["otherAxisSize"]);
+    const shouldRenderAlignItemsAtEndSpacer = ctx.state.props.alignItemsAtEndPaddingEnabled;
     const autoOtherAxisStyle = getAutoOtherAxisStyle({
         horizontal,
         needsOtherAxisSize: ctx.state.needsOtherAxisSize,
@@ -175,17 +197,7 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
                 </LayoutView>
             )}
             {ListEmptyComponent && getComponent(ListEmptyComponent)}
-            {alignItemsAtEndPadding > 0 && (
-                <View
-                    style={
-                        horizontal
-                            ? { flexShrink: 0, width: alignItemsAtEndPadding }
-                            : { flexShrink: 0, height: alignItemsAtEndPadding }
-                    }
-                >
-                    {null}
-                </View>
-            )}
+            {shouldRenderAlignItemsAtEndSpacer && <AlignItemsAtEndSpacer horizontal={horizontal} />}
 
             {canRender && !ListEmptyComponent && (
                 <Containers

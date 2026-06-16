@@ -25,8 +25,9 @@ function getAlignItemsAtEndPadding(ctx: StateContext) {
 }
 
 export function updateContentMetrics(ctx: StateContext) {
+    const previousPadding = peek$(ctx, "alignItemsAtEndPadding") || 0;
     const nextPadding = getAlignItemsAtEndPadding(ctx);
-    if (peek$(ctx, "alignItemsAtEndPadding") !== nextPadding) {
+    if (previousPadding !== nextPadding) {
         set$(ctx, "alignItemsAtEndPadding", nextPadding);
     }
 }
