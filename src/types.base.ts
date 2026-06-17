@@ -529,6 +529,13 @@ export type LegendListState = {
 
 export type LegendListRef = {
     /**
+     * Clears internal virtualization caches.
+     * @param options - Cache clearing options.
+     * @param options.mode - `sizes` clears measurement caches. `full` also clears key/position caches.
+     */
+    clearCaches(options?: { mode?: "sizes" | "full" }): void;
+
+    /**
      * Displays the scroll indicators momentarily.
      */
     flashScrollIndicators(): void;
@@ -552,6 +559,12 @@ export type LegendListRef = {
      * Returns the internal state of the scroll virtualization.
      */
     getState(): LegendListState;
+
+    /**
+     * Reports an externally measured content inset. Pass null/undefined to clear.
+     * Values are merged on top of props/animated/native insets.
+     */
+    reportContentInset(inset?: Partial<Insets> | null): void;
 
     /**
      * Scrolls a specific index into view.
@@ -616,11 +629,11 @@ export type LegendListRef = {
     scrollToOffset(params: { offset: number; animated?: boolean | undefined }): Promise<void>;
 
     /**
-     * Sets or adds to the offset of the visible content anchor.
-     * @param value - The offset to set or add.
-     * @param animated - If true, uses Animated to animate the change.
+     * Sets a measured item size and recalculates list positions as needed.
+     * @param itemKey - The key of the item whose size changed.
+     * @param size - The measured item size.
      */
-    setVisibleContentAnchorOffset(value: number | ((val: number) => number)): void;
+    setItemSize(itemKey: string, size: Pick<LayoutRectangle, "height" | "width">): void;
 
     /**
      * Sets whether scroll processing is enabled.
@@ -629,17 +642,11 @@ export type LegendListRef = {
     setScrollProcessingEnabled(enabled: boolean): void;
 
     /**
-     * Clears internal virtualization caches.
-     * @param options - Cache clearing options.
-     * @param options.mode - `sizes` clears measurement caches. `full` also clears key/position caches.
+     * Sets or adds to the offset of the visible content anchor.
+     * @param value - The offset to set or add.
+     * @param animated - If true, uses Animated to animate the change.
      */
-    clearCaches(options?: { mode?: "sizes" | "full" }): void;
-
-    /**
-     * Reports an externally measured content inset. Pass null/undefined to clear.
-     * Values are merged on top of props/animated/native insets.
-     */
-    reportContentInset(inset?: Partial<Insets> | null): void;
+    setVisibleContentAnchorOffset(value: number | ((val: number) => number)): void;
 };
 
 export interface ViewToken<ItemT = any> {

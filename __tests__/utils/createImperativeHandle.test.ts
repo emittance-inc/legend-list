@@ -240,6 +240,41 @@ describe("createImperativeHandle.scrollToEnd", () => {
         expect(triggerCalculateItemsInView).toHaveBeenCalledWith({ forceFullItemPositions: true });
     });
 
+    it("setItemSize updates item measurement through the public ref", () => {
+        const onItemSizeChanged = mock(() => {});
+        const ctx = createMockContext(
+            {},
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                endBuffered: 1,
+                indexByKey: new Map([["item_0", 0]]),
+                props: {
+                    data: [{ id: "a" }],
+                    onItemSizeChanged,
+                },
+                sizes: new Map([["item_0", 40]]),
+                sizesKnown: new Map([["item_0", 40]]),
+                startBuffered: 0,
+                totalSize: 40,
+            },
+        );
+
+        const handle = createImperativeHandle(ctx);
+        handle.setItemSize("item_0", { height: 72, width: 320 });
+
+        expect(ctx.state.sizesKnown.get("item_0")).toBe(72);
+        expect(ctx.state.totalSize).toBe(72);
+        expect(ctx.values.get("totalSize")).toBe(72);
+        expect(onItemSizeChanged).toHaveBeenCalledWith({
+            index: 0,
+            itemData: { id: "a" },
+            itemKey: "item_0",
+            previous: 40,
+            size: 72,
+        });
+    });
+
     it("clearCaches full mode also clears key and position caches", () => {
         const ctx = createMockContext(
             {},
