@@ -33,6 +33,18 @@ export function createMockContext(
         totalSize: state.totalSize ?? 0,
     };
     const values = new Map(Object.entries({ ...defaults, ...initialValues })) as StateContext["values"];
+    const hasInitialTotalSize = Object.hasOwn(initialValues, "totalSize");
+    if (hasInitialTotalSize) {
+        state.totalSize = initialValues.totalSize;
+    }
+    let currentState: InternalState | null | undefined = state;
+    const setValue = values.set.bind(values);
+    values.set = ((key, value) => {
+        if (key === "totalSize" && currentState) {
+            currentState.totalSize = value;
+        }
+        return setValue(key, value);
+    }) as StateContext["values"]["set"];
     const listeners = new Map() as StateContext["listeners"];
     const animatedScrollY = { setValue: () => undefined } as unknown as StateContext["animatedScrollY"];
 
@@ -97,7 +109,15 @@ export function createMockContext(
         mapViewabilityConfigStates: new Map() as StateContext["mapViewabilityConfigStates"],
         mapViewabilityValues: new Map() as StateContext["mapViewabilityValues"],
         positionListeners: new Map(),
-        state,
+        get state() {
+            return currentState as InternalState;
+        },
+        set state(nextState: InternalState) {
+            currentState = nextState;
+            if (nextState && values.has("totalSize")) {
+                nextState.totalSize = values.get("totalSize");
+            }
+        },
         values,
         viewRefs: new Map() as StateContext["viewRefs"],
     };
