@@ -27,6 +27,7 @@ describe("calculateItemsInView", () => {
         mockState.scrollLength = 1000;
         mockCtx.values.set("numContainers", count);
         mockCtx.values.set("totalSize", count * itemSize);
+        mockState.totalSize = count * itemSize;
 
         for (let i = 0; i < count; i++) {
             const id = `item_${i}`;
@@ -1558,6 +1559,38 @@ describe("calculateItemsInView", () => {
                 item: mockState.props.data[150],
             });
             expect(mockCtx.values.get("activeStickyIndex")).toBe(150);
+        });
+
+        it("uses recomputed positions when a data change shifts sticky header indices", () => {
+            const onStickyHeaderChange = mock();
+            mockState.props.data = [
+                { id: "section-a:header" },
+                { id: "section-a:item" },
+                { id: "section-b:header" },
+                { id: "section-b:item" },
+            ];
+            mockState.props.drawDistance = 0;
+            mockState.props.getFixedItemSize = () => 50;
+            mockState.props.keyExtractor = (item: { id: string }) => item.id;
+            mockState.props.onStickyHeaderChange = onStickyHeaderChange;
+            mockState.props.stickyHeaderIndicesArr = [0, 2];
+            mockState.props.stickyHeaderIndicesSet = new Set([0, 2]);
+            mockState.scroll = 120;
+            mockState.scrollLength = 100;
+            mockCtx.values.set("activeStickyIndex", 0);
+            mockCtx.values.set("numContainers", 4);
+            mockCtx.values.set("totalSize", 200);
+            mockState.totalSize = 200;
+
+            mockState.positions = [0, 80, 160, 210];
+
+            calculateItemsInView(mockCtx, { dataChanged: true });
+
+            expect(mockCtx.values.get("activeStickyIndex")).toBe(2);
+            expect(onStickyHeaderChange).toHaveBeenCalledWith({
+                index: 2,
+                item: mockState.props.data[2],
+            });
         });
     });
 

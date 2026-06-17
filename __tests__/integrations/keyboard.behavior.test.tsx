@@ -153,11 +153,12 @@ describe("KeyboardAwareLegendList", () => {
         const onReady = mock(() => {});
 
         await renderKeyboardAwareLegendList({
-            anchoredEndSpace: { anchorIndex: 0, anchorOffset: 12, onReady, onSizeChanged },
+            anchoredEndSpace: { anchorIndex: 0, anchorMaxSize: 44, anchorOffset: 12, onReady, onSizeChanged },
             contentInsetEndAdjustment: createSharedValue(24),
         });
 
         expect(lastAnimatedLegendListProps.anchoredEndSpace.anchorIndex).toBe(0);
+        expect(lastAnimatedLegendListProps.anchoredEndSpace.anchorMaxSize).toBe(44);
         expect(lastAnimatedLegendListProps.anchoredEndSpace.anchorOffset).toBe(12);
         expect(lastAnimatedLegendListProps.anchoredEndSpace.includeInEndInset).toBe(true);
 

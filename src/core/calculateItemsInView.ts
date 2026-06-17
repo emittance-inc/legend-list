@@ -330,23 +330,29 @@ export function calculateItemsInView(
         }
 
         const previousStickyIndex = peek$(ctx, "activeStickyIndex");
-        const currentStickyIdx =
-            stickyHeaderIndicesArr.length > 0 ? findCurrentStickyIndex(stickyHeaderIndicesArr, scroll, state) : -1;
-        const nextActiveStickyIndex = currentStickyIdx >= 0 ? stickyHeaderIndicesArr[currentStickyIdx] : -1;
-        const stickyIndexDidChange = previousStickyIndex !== nextActiveStickyIndex;
-        if (currentStickyIdx >= 0 || previousStickyIndex >= 0) {
-            set$(ctx, "activeStickyIndex", nextActiveStickyIndex);
-        }
-        const shouldNotifyStickyHeaderChange =
-            !!onStickyHeaderChange && stickyHeaderIndicesArr.length > 0 && stickyIndexDidChange;
-        const finishCalculateItemsInView = shouldNotifyStickyHeaderChange
-            ? () => {
-                  const item = data[nextActiveStickyIndex];
-                  if (item !== undefined) {
-                      onStickyHeaderChange?.({ index: nextActiveStickyIndex, item });
-                  }
-              }
-            : undefined;
+        const resolveStickyState = () => {
+            const currentStickyIdx =
+                stickyHeaderIndicesArr.length > 0 ? findCurrentStickyIndex(stickyHeaderIndicesArr, scroll, state) : -1;
+            const nextActiveStickyIndex = currentStickyIdx >= 0 ? stickyHeaderIndicesArr[currentStickyIdx] : -1;
+            const stickyIndexDidChange = previousStickyIndex !== nextActiveStickyIndex;
+            if (currentStickyIdx >= 0 || previousStickyIndex >= 0) {
+                set$(ctx, "activeStickyIndex", nextActiveStickyIndex);
+            }
+            const shouldNotifyStickyHeaderChange =
+                !!onStickyHeaderChange && stickyHeaderIndicesArr.length > 0 && stickyIndexDidChange;
+            return {
+                currentStickyIdx,
+                finishCalculateItemsInView: shouldNotifyStickyHeaderChange
+                    ? () => {
+                          const item = data[nextActiveStickyIndex];
+                          if (item !== undefined) {
+                              onStickyHeaderChange?.({ index: nextActiveStickyIndex, item });
+                          }
+                      }
+                    : undefined,
+            };
+        };
+        let stickyState = dataChanged ? undefined : resolveStickyState();
 
         let scrollBufferTop = drawDistance;
         let scrollBufferBottom = drawDistance;
@@ -397,7 +403,7 @@ export function calculateItemsInView(
                             scrollBottom,
                         );
                     }
-                    finishCalculateItemsInView?.();
+                    stickyState?.finishCalculateItemsInView?.();
                     return;
                 }
             }
@@ -464,6 +470,10 @@ export function calculateItemsInView(
         if (didMVCPAdjustScroll && initialScroll) {
             updateScroll(state.scroll);
             updateScrollRange();
+        }
+
+        if (dataChanged) {
+            stickyState = resolveStickyState();
         }
 
         ////// Prepare for loop
@@ -619,7 +629,7 @@ export function calculateItemsInView(
                 handleStickyActivation(
                     ctx,
                     stickyHeaderIndicesArr,
-                    currentStickyIdx,
+                    stickyState?.currentStickyIdx ?? -1,
                     needNewContainers,
                     needNewContainersSet,
                     startBuffered,
@@ -729,7 +739,7 @@ export function calculateItemsInView(
                 stickyHeaderIndicesArr,
                 scroll,
                 drawDistance,
-                currentStickyIdx,
+                stickyState?.currentStickyIdx ?? -1,
                 pendingRemoval,
                 alwaysRenderSet,
             );
@@ -814,6 +824,6 @@ export function calculateItemsInView(
             }
         }
 
-        finishCalculateItemsInView?.();
+        stickyState?.finishCalculateItemsInView?.();
     });
 }

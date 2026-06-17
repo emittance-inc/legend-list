@@ -97,6 +97,7 @@ const AIResponse = ({
 };
 
 const LIFT_BEHAVIORS = ["always", "whenAtEnd", "persistent", "never"] as const;
+const USER_ANCHOR_MAX_SIZE = 120;
 
 type LiftBehavior = (typeof LIFT_BEHAVIORS)[number];
 
@@ -242,7 +243,9 @@ const AILegendListChat = () => {
                 <KeyboardGestureArea interpolator="ios" offset={60} style={styles.container}>
                     <KeyboardAwareLegendList
                         anchoredEndSpace={
-                            anchorAtStartIndex !== undefined ? { anchorIndex: anchorAtStartIndex } : undefined
+                            anchorAtStartIndex !== undefined
+                                ? { anchorIndex: anchorAtStartIndex, anchorMaxSize: USER_ANCHOR_MAX_SIZE }
+                                : undefined
                         }
                         contentContainerStyle={styles.contentContainer}
                         contentInsetEndAdjustment={contentInsetEndAdjustment}
