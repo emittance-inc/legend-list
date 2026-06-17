@@ -145,6 +145,7 @@ export interface StateContext {
     >;
     positionListeners: Map<string, Set<(value: any) => void>>;
     state: InternalState;
+    scrollAxisGap: number;
     values: Map<ListenerType, any>;
     viewRefs: Map<number, React.RefObject<LooseView | null>>;
 }
@@ -166,6 +167,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         mapViewabilityConfigStates: new Map(),
         mapViewabilityValues: new Map<string, ViewToken>(),
         positionListeners: new Map(),
+        scrollAxisGap: 0,
         state: undefined as any,
         values: new Map<ListenerType, any>([
             ["alignItemsAtEndPadding", 0],

@@ -123,6 +123,34 @@ beforeEach(() => {
 });
 
 describe("LegendList props behavior", () => {
+    it("stores the derived scroll-axis gap on context", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const { LegendList } = await import("../../src/components/LegendList?props-test-scroll-axis-gap");
+        const renderList = (horizontal?: boolean) => (
+            <LegendList
+                contentContainerStyle={{ columnGap: 16, gap: 10, rowGap: 12 }}
+                data={data}
+                estimatedItemSize={100}
+                horizontal={horizontal}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={renderItem}
+            />
+        );
+
+        const rendered = render(renderList(true));
+        const ctx = await getContextFromRender();
+
+        expect(ctx.scrollAxisGap).toBe(16);
+
+        rendered.rerender(renderList());
+
+        expect(ctx.scrollAxisGap).toBe(12);
+
+        rendered.unmount();
+    });
+
     it("calls warnDevOnce when recycleItems is omitted", async () => {
         const consoleWarnSpy = mock(() => {});
         const originalWarn = console.warn;

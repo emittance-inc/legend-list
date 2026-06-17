@@ -267,6 +267,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const ctx = useStateContext();
     ctx.columnWrapperStyle =
         columnWrapperStyle || (contentContainerStyle ? createColumnWrapperStyle(contentContainerStyle) : undefined);
+    const scrollAxisGap = horizontal
+        ? (ctx.columnWrapperStyle?.columnGap ?? ctx.columnWrapperStyle?.gap)
+        : (ctx.columnWrapperStyle?.rowGap ?? ctx.columnWrapperStyle?.gap);
+    ctx.scrollAxisGap = typeof scrollAxisGap === "number" && Number.isFinite(scrollAxisGap) ? scrollAxisGap : 0;
 
     const refScroller = useRef<LooseScrollView>(null);
     const combinedRef = useCombinedRef(refScroller, refScrollView);

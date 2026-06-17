@@ -23,12 +23,12 @@ export function doInitialAllocateContainers(ctx: StateContext): boolean | undefi
                 const item = data[i];
                 if (item !== undefined) {
                     const itemType = getItemType?.(item, i) ?? "";
-                    totalSize += getFixedItemSize(item, i, itemType) ?? estimatedItemSize!;
+                    totalSize += (getFixedItemSize(item, i, itemType) ?? estimatedItemSize)! + ctx.scrollAxisGap;
                 }
             }
             averageItemSize = totalSize / num;
         } else {
-            averageItemSize = estimatedItemSize!;
+            averageItemSize = estimatedItemSize! + ctx.scrollAxisGap;
         }
         const numContainers = Math.max(
             1,

@@ -109,6 +109,7 @@ export function createMockContext(
         mapViewabilityConfigStates: new Map() as StateContext["mapViewabilityConfigStates"],
         mapViewabilityValues: new Map() as StateContext["mapViewabilityValues"],
         positionListeners: new Map(),
+        scrollAxisGap: 0,
         get state() {
             return currentState as InternalState;
         },

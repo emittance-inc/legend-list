@@ -22,8 +22,11 @@ function getKnownOrFixedSize(
 
     if (size === undefined && key && getFixedItemSize) {
         const itemType = resolved?.itemType ?? (getItemType ? (getItemType(data, index) ?? "") : "");
-        size = resolved?.didResolveFixedItemSize ? resolved.fixedItemSize : getFixedItemSize(data, index, itemType);
-        if (size !== undefined) {
+        const fixedSize = resolved?.didResolveFixedItemSize
+            ? resolved.fixedItemSize
+            : getFixedItemSize(data, index, itemType);
+        if (fixedSize !== undefined) {
+            size = fixedSize + ctx.scrollAxisGap;
             state.sizesKnown.set(key, size);
         }
     }
@@ -108,7 +111,7 @@ export function getItemSize(
 
     // Last fallback: static estimatedItemSize prop.
     if (size === undefined) {
-        size = estimatedItemSize!;
+        size = estimatedItemSize! + ctx.scrollAxisGap;
     }
 
     setSize(ctx, key, size, notifyTotalSize);

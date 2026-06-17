@@ -40,7 +40,8 @@ describe("getItemSize", () => {
         expect(mockState.sizes.has("item_0")).toBe(false);
     });
 
-    it("returns cached rendered size before falling back to estimatedItemSize", () => {
+    it("returns cached rendered size without adding scroll-axis gap", () => {
+        mockCtx.scrollAxisGap = 16;
         mockState.sizes.set("item_0", 65);
 
         const result = callGetItemSize("item_0", 0, { id: 0 });
@@ -69,6 +70,38 @@ describe("getItemSize", () => {
         expect(mockState.sizes.get("item_0")).toBe(150);
     });
 
+    it("adds scroll-axis gap to fixed item sizes", () => {
+        mockCtx.scrollAxisGap = 16;
+        mockState.props.horizontal = true;
+        mockState.props.getFixedItemSize = () => 50;
+
+        const result = callGetItemSize("item_0", 0, { id: 0 });
+
+        expect(result).toBe(66);
+        expect(mockState.sizesKnown.get("item_0")).toBe(66);
+        expect(mockState.sizes.get("item_0")).toBe(66);
+    });
+
+    it("adds scroll-axis gap to estimated item sizes", () => {
+        mockCtx.scrollAxisGap = 12;
+
+        const result = callGetItemSize("item_0", 0, { id: 0 });
+
+        expect(result).toBe(62);
+        expect(mockState.sizes.get("item_0")).toBe(62);
+    });
+
+    it("does not add gap to already measured known sizes", () => {
+        mockCtx.scrollAxisGap = 16;
+        mockState.props.horizontal = true;
+        mockState.sizesKnown.set("item_0", 66);
+
+        const result = callGetItemSize("item_0", 0, { id: 0 });
+
+        expect(result).toBe(66);
+        expect(mockState.sizes.has("item_0")).toBe(false);
+    });
+
     it("falls back to cached rendered size when fixed size returns undefined", () => {
         mockState.sizes.set("item_0", 90);
         mockState.props.getFixedItemSize = () => undefined;
@@ -78,7 +111,8 @@ describe("getItemSize", () => {
         expect(result).toBe(90);
     });
 
-    it("uses type-specific average size when requested", () => {
+    it("uses type-specific average size without adding scroll-axis gap", () => {
+        mockCtx.scrollAxisGap = 16;
         mockState.props.getItemType = (item: { type?: string }) => item.type ?? "";
         mockState.averageSizes = {
             "": { avg: 80, num: 1 },
@@ -91,7 +125,8 @@ describe("getItemSize", () => {
         expect(mockState.sizes.get("item_0")).toBe(120);
     });
 
-    it("uses frozen average size snapshot while scrolling to a target", () => {
+    it("uses frozen average size snapshot without adding scroll-axis gap", () => {
+        mockCtx.scrollAxisGap = 16;
         mockState.scrollingTo = { averageSizeSnapshot: { "": 72 }, index: 0, offset: 0 } as any;
 
         const result = callGetItemSize("item_0", 0, { id: 0 }, true);
