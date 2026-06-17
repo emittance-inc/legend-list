@@ -421,6 +421,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         alwaysRenderIndicesSet: alwaysRenderIndices.set,
         anchoredEndSpace: anchoredEndSpaceResolved,
         animatedProps: animatedPropsInternal,
+        contentContainerAlignItems: contentContainerStyle.alignItems,
         contentInset,
         contentInsetEndAdjustment: contentInsetEndAdjustmentResolved,
         data: dataProp,

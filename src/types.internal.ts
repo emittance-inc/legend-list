@@ -14,6 +14,7 @@ import type {
     ScrollIndexWithOffsetAndContentOffset,
     ScrollToEndOptions,
     ViewabilityConfigCallbackPairs,
+    ViewStyle,
 } from "@/types.base";
 import type { StylesAsSharedValue } from "@/typesInternal";
 
@@ -254,6 +255,7 @@ export interface InternalState {
         animatedProps: StylesAsSharedValue<Record<string, any>>;
         anchoredEndSpace: AnchoredEndSpaceConfig | undefined;
         alwaysRender: AlwaysRenderConfig | undefined;
+        contentContainerAlignItems: ViewStyle["alignItems"] | undefined;
         alwaysRenderIndicesArr: number[];
         alwaysRenderIndicesSet: Set<number>;
         contentInset: Insets | undefined;

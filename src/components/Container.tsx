@@ -18,6 +18,7 @@ import { isHorizontalRTL } from "@/utils/rtl";
 
 export function getContainerPositionStyle({
     columnWrapperStyle,
+    contentContainerAlignItems,
     horizontal,
     hasItemSeparator,
     isHorizontalRTLList,
@@ -26,6 +27,7 @@ export function getContainerPositionStyle({
     otherAxisSize,
 }: {
     columnWrapperStyle: ColumnWrapperStyle | undefined;
+    contentContainerAlignItems: ViewStyle["alignItems"] | undefined;
     horizontal: boolean;
     hasItemSeparator: boolean;
     isHorizontalRTLList: boolean;
@@ -56,13 +58,14 @@ export function getContainerPositionStyle({
 
     return horizontal
         ? {
+              bottom: contentContainerAlignItems === "flex-end" && numColumns === 1 ? 0 : undefined,
               boxSizing: paddingStyles ? "border-box" : undefined,
               direction: isHorizontalRTLList && Platform.OS === "web" ? "ltr" : undefined,
               flexDirection: hasItemSeparator ? "row" : undefined,
               height: otherAxisSize,
               left: 0,
               position: "absolute",
-              top: otherAxisPos,
+              top: contentContainerAlignItems === "flex-end" && numColumns === 1 ? undefined : otherAxisPos,
               ...(paddingStyles || {}),
           }
         : {
@@ -143,6 +146,7 @@ export const Container = typedMemo(function Container<ItemT>({
         () =>
             getContainerPositionStyle({
                 columnWrapperStyle,
+                contentContainerAlignItems: ctx.state.props.contentContainerAlignItems,
                 hasItemSeparator: !!ItemSeparatorComponent,
                 horizontal,
                 isHorizontalRTLList,
@@ -156,6 +160,7 @@ export const Container = typedMemo(function Container<ItemT>({
             otherAxisPos,
             otherAxisSize,
             columnWrapperStyle,
+            ctx.state.props.contentContainerAlignItems,
             numColumns,
             ItemSeparatorComponent,
         ],

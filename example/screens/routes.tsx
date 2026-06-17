@@ -41,6 +41,7 @@ import CountriesWithHeadersFixedFixture from "~/screens/fixtures/countries-with-
 import CountriesWithHeadersStickyFixture from "~/screens/fixtures/countries-with-headers-sticky";
 import ExtraDataFixture from "~/screens/fixtures/extra-data";
 import FilterElementsFixture from "~/screens/fixtures/filter-elements";
+import HorizontalAlignItemsFixture from "~/screens/fixtures/horizontal-align-items";
 import HorizontalCrossAxisFixture from "~/screens/fixtures/horizontal-cross-axis";
 import InitialScrollAtEndEmptyFixture from "~/screens/fixtures/initial-scroll-at-end-empty";
 import InitialScrollIndexFixture from "~/screens/fixtures/initial-scroll-index";
@@ -235,6 +236,15 @@ export const FIXTURE_ROUTES: FixtureRouteDefinition[] = [
         kind: "fixture",
         slug: "horizontal-cross-axis",
         title: "Horizontal Cross Axis",
+    },
+    {
+        component: HorizontalAlignItemsFixture,
+        description: "Compares horizontal bottom alignment against FlatList with variable-height items.",
+        groupKey: "scroll",
+        groupTitle: "Scroll & Position",
+        kind: "fixture",
+        slug: "horizontal-align-items",
+        title: "Horizontal Align Items",
     },
     {
         component: ChatExampleFixture,
