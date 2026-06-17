@@ -1,7 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { clampScrollOffset } from "../../src/core/clampScrollOffset";
 import { setContentInsetOverride, setHeaderSize, updateContentMetrics } from "../../src/core/updateContentMetrics";
+import { Platform } from "../../src/platform/Platform";
 import { getContentSize } from "../../src/state/getContentSize";
+import * as requestAdjustModule from "../../src/utils/requestAdjust";
 import { createMockContext } from "../__mocks__/createMockContext";
 
 describe("updateContentMetrics", () => {
@@ -122,5 +124,177 @@ describe("updateContentMetrics", () => {
         expect(setContentInsetOverride(ctx, { bottom: 301 })).toBe(true);
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(279);
         expect(setContentInsetOverride(ctx, { bottom: 301 })).toBe(false);
+    });
+
+    it("compensates web MVCP when a measured header changes above the viewport", () => {
+        const prevPlatform = Platform.OS;
+        Platform.OS = "web";
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const ctx = createMockContext(
+            {
+                headerSize: 60,
+                readyToRender: true,
+                totalSize: 1000,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                props: {
+                    data: [1],
+                    maintainVisibleContentPosition: { data: false, size: true },
+                },
+                scroll: 200,
+                scrollLength: 500,
+                totalSize: 1000,
+            },
+        );
+
+        try {
+            setHeaderSize(ctx, 60);
+            expect(requestAdjustSpy).not.toHaveBeenCalled();
+
+            requestAdjustSpy.mockClear();
+            setHeaderSize(ctx, 120);
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(ctx, 60);
+        } finally {
+            requestAdjustSpy.mockRestore();
+            Platform.OS = prevPlatform;
+        }
+    });
+
+    it("does not compensate the initial web MVCP header measurement", () => {
+        const prevPlatform = Platform.OS;
+        Platform.OS = "web";
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const ctx = createMockContext(
+            {
+                readyToRender: true,
+                totalSize: 1000,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                props: {
+                    data: [1],
+                    maintainVisibleContentPosition: { data: false, size: true },
+                },
+                scroll: 200,
+                scrollLength: 500,
+                totalSize: 1000,
+            },
+        );
+
+        try {
+            setHeaderSize(ctx, 60);
+
+            expect(requestAdjustSpy).not.toHaveBeenCalled();
+        } finally {
+            requestAdjustSpy.mockRestore();
+            Platform.OS = prevPlatform;
+        }
+    });
+
+    it("compensates the first non-zero web MVCP header measurement after a known absent header", () => {
+        const prevPlatform = Platform.OS;
+        Platform.OS = "web";
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const ctx = createMockContext(
+            {
+                readyToRender: true,
+                totalSize: 1000,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                props: {
+                    data: [1],
+                    maintainVisibleContentPosition: { data: false, size: true },
+                },
+                scroll: 200,
+                scrollLength: 500,
+                totalSize: 1000,
+            },
+        );
+
+        try {
+            setHeaderSize(ctx, 0);
+            expect(requestAdjustSpy).not.toHaveBeenCalled();
+
+            requestAdjustSpy.mockClear();
+            setHeaderSize(ctx, 60);
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(ctx, 60);
+        } finally {
+            requestAdjustSpy.mockRestore();
+            Platform.OS = prevPlatform;
+        }
+    });
+
+    it("compensates the first measured web MVCP header size when replacing an estimate", () => {
+        const prevPlatform = Platform.OS;
+        Platform.OS = "web";
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const ctx = createMockContext(
+            {
+                headerSize: 40,
+                readyToRender: true,
+                totalSize: 1000,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                props: {
+                    data: [1],
+                    maintainVisibleContentPosition: { data: false, size: true },
+                },
+                scroll: 200,
+                scrollLength: 500,
+                totalSize: 1000,
+            },
+        );
+
+        try {
+            setHeaderSize(ctx, 60);
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(ctx, 20);
+        } finally {
+            requestAdjustSpy.mockRestore();
+            Platform.OS = prevPlatform;
+        }
+    });
+
+    it("does not compensate web MVCP header changes while the header is visible", () => {
+        const prevPlatform = Platform.OS;
+        Platform.OS = "web";
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const ctx = createMockContext(
+            {
+                headerSize: 60,
+                readyToRender: true,
+                totalSize: 1000,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                didMeasureHeader: true,
+                props: {
+                    data: [1],
+                    maintainVisibleContentPosition: { data: false, size: true },
+                },
+                scroll: 20,
+                scrollLength: 500,
+                totalSize: 1000,
+            },
+        );
+
+        try {
+            setHeaderSize(ctx, 120);
+
+            expect(requestAdjustSpy).not.toHaveBeenCalled();
+        } finally {
+            requestAdjustSpy.mockRestore();
+            Platform.OS = prevPlatform;
+        }
     });
 });

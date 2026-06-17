@@ -14,6 +14,7 @@ import CountriesExample from "./CountriesExample";
 import CountriesWithHeadersStickyExample from "./CountriesWithHeadersStickyExample";
 import ExtraDataExample from "./ExtraDataExample";
 import FixedSizeItemsExample from "./FixedSizeItemsExample";
+import HeaderMvcpExample from "./HeaderMvcpExample";
 import InitialScrollAtEndExample from "./InitialScrollAtEndExample";
 import InitialScrollIndexExample from "./InitialScrollIndexExample";
 import LazyListExample from "./LazyListExample";
@@ -102,6 +103,13 @@ export const FIXTURE_ROUTES: FixtureRoute[] = [
         group: "Scroll & Position",
         path: "fixed-size-items",
         title: "Fixed Size Items",
+    },
+    {
+        description: "Preserves visible rows when a measured header changes above the viewport.",
+        element: () => <HeaderMvcpExample />,
+        group: "Scroll & Position",
+        path: "header-mvcp",
+        title: "Header MVCP",
     },
     {
         description: "Starts the list at a target index and checks landing accuracy.",

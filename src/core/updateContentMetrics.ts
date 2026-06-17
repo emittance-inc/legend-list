@@ -1,6 +1,10 @@
+import { Platform } from "@/platform/Platform";
 import { getContentInsetEnd } from "@/state/getContentInsetEnd";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { Insets } from "@/types.base";
+import { requestAdjust } from "@/utils/requestAdjust";
+
+const SCROLL_ADJUST_EPSILON = 0.1;
 
 function getRawContentLength(ctx: StateContext) {
     const { state, values } = ctx;
@@ -39,8 +43,42 @@ function setContentLengthSignal(ctx: StateContext, signalName: "footerSize" | "h
     }
 }
 
+function shouldAdjustForHeaderSizeChange(ctx: StateContext, previousHeaderSize: number, nextHeaderSize: number) {
+    const { didContainersLayout, didFinishInitialScroll, props, scroll, scrollingTo } = ctx.state;
+    const sizeDiff = nextHeaderSize - previousHeaderSize;
+    const leadingPadding = props.horizontal ? props.stylePaddingLeft : props.stylePaddingTop;
+    const previousHeaderEnd = (leadingPadding || 0) + previousHeaderSize;
+
+    return (
+        Platform.OS === "web" &&
+        props.maintainVisibleContentPosition.size &&
+        didContainersLayout &&
+        didFinishInitialScroll &&
+        !scrollingTo &&
+        scroll >= previousHeaderEnd - SCROLL_ADJUST_EPSILON &&
+        Math.abs(sizeDiff) > SCROLL_ADJUST_EPSILON
+    );
+}
+
 export function setHeaderSize(ctx: StateContext, size: number) {
-    setContentLengthSignal(ctx, "headerSize", size);
+    const { state } = ctx;
+    const previousHeaderSize = peek$(ctx, "headerSize") || 0;
+    const didChange = previousHeaderSize !== size;
+    const hasMeasuredOrEstimatedHeaderBaseline = state.didMeasureHeader || previousHeaderSize > SCROLL_ADJUST_EPSILON;
+
+    if (didChange) {
+        set$(ctx, "headerSize", size);
+        updateContentMetrics(ctx);
+
+        // Do not compensate the initial measurement from no known header.
+        // If a zero/estimated header was already recorded, this layout change
+        // is a real content shift above the viewport and should preserve MVCP.
+        if (hasMeasuredOrEstimatedHeaderBaseline && shouldAdjustForHeaderSizeChange(ctx, previousHeaderSize, size)) {
+            requestAdjust(ctx, size - previousHeaderSize);
+        }
+    }
+
+    state.didMeasureHeader = true;
 }
 
 export function setFooterSize(ctx: StateContext, size: number) {

@@ -70,6 +70,11 @@ export const FIXTURE_SECTIONS: CatalogSection[] = [
                 title: "Fixed Size Items",
             },
             {
+                description: "Preserves visible rows when a measured header changes above the viewport.",
+                slug: "header-mvcp",
+                title: "Header MVCP",
+            },
+            {
                 description: "Starts the list at a target index and checks landing accuracy.",
                 slug: "initial-scroll-index",
                 title: "Initial Scroll Index",
