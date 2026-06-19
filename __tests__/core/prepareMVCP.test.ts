@@ -107,9 +107,9 @@ describe("prepareMVCP", () => {
             expect(requestAdjustSpy).toHaveBeenCalledWith(mockCtx, 50, undefined);
         });
 
-        it("should not adjust while maintainScrollAtEnd is already holding the end", () => {
+        it("should not adjust while an animated maintainScrollAtEnd is holding the end", () => {
             mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(undefined);
-            mockState.maintainingScrollAtEnd = true;
+            mockState.maintainingScrollAtEnd = "animated";
             mockCtx.values.set("isWithinMaintainScrollAtEndThreshold", true);
 
             const adjustFunction = expectAdjustFunction(prepareMVCP(mockCtx));
@@ -121,9 +121,51 @@ describe("prepareMVCP", () => {
             expect(requestAdjustSpy).not.toHaveBeenCalled();
         });
 
+        it("should not adjust while an animated maintainScrollAtEnd is pending at the end", () => {
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(undefined);
+            mockState.maintainingScrollAtEnd = "pending-animated";
+            mockCtx.values.set("isWithinMaintainScrollAtEndThreshold", true);
+
+            const adjustFunction = expectAdjustFunction(prepareMVCP(mockCtx));
+
+            setLayoutValue(mockState, "positions", "item-1", 150);
+
+            adjustFunction();
+
+            expect(requestAdjustSpy).not.toHaveBeenCalled();
+        });
+
+        it("should still adjust while an instant maintainScrollAtEnd is pending at the end", () => {
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(undefined);
+            mockState.maintainingScrollAtEnd = "pending-instant";
+            mockCtx.values.set("isWithinMaintainScrollAtEndThreshold", true);
+
+            const adjustFunction = expectAdjustFunction(prepareMVCP(mockCtx));
+
+            setLayoutValue(mockState, "positions", "item-1", 150);
+
+            adjustFunction();
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(mockCtx, 50, undefined);
+        });
+
+        it("should still adjust while an instant maintainScrollAtEnd is holding the end", () => {
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(undefined);
+            mockState.maintainingScrollAtEnd = "instant";
+            mockCtx.values.set("isWithinMaintainScrollAtEndThreshold", true);
+
+            const adjustFunction = expectAdjustFunction(prepareMVCP(mockCtx));
+
+            setLayoutValue(mockState, "positions", "item-1", 150);
+
+            adjustFunction();
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(mockCtx, 50, undefined);
+        });
+
         it("should still adjust while maintainScrollAtEnd is outside the end threshold", () => {
             mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(undefined);
-            mockState.maintainingScrollAtEnd = true;
+            mockState.maintainingScrollAtEnd = "animated";
             mockCtx.values.set("isWithinMaintainScrollAtEndThreshold", false);
 
             const adjustFunction = expectAdjustFunction(prepareMVCP(mockCtx));

@@ -421,7 +421,9 @@ export function prepareMVCP(ctx: StateContext, dataChanged?: boolean): (() => vo
 
             if (Math.abs(positionDiff) > MVCP_POSITION_EPSILON) {
                 const shouldSkipAdjustForMaintainedEnd =
-                    state.maintainingScrollAtEnd && peek$(ctx, "isWithinMaintainScrollAtEndThreshold");
+                    (state.maintainingScrollAtEnd === "pending-animated" ||
+                        state.maintainingScrollAtEnd === "animated") &&
+                    peek$(ctx, "isWithinMaintainScrollAtEndThreshold");
 
                 if (!shouldSkipAdjustForMaintainedEnd) {
                     requestAdjust(ctx, positionDiff, dataChanged && mvcpData);

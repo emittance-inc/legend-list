@@ -60,6 +60,8 @@ export interface ThresholdSnapshot {
     atThreshold: boolean;
 }
 
+export type MaintainingScrollAtEndState = "pending-instant" | "pending-animated" | "instant" | "animated";
+
 export interface ScrollTarget {
     averageSizeSnapshot?: Record<string, number>;
     animated?: boolean;
@@ -178,7 +180,7 @@ export interface InternalState {
     lastScrollAdjustForHistory?: number;
     lastScrollDelta: number;
     loadStartTime: number;
-    maintainingScrollAtEnd?: boolean;
+    maintainingScrollAtEnd?: MaintainingScrollAtEndState;
     minIndexSizeChanged: number | undefined;
     mvcpAnchorLock?: {
         id: string;

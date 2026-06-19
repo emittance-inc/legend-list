@@ -57,7 +57,7 @@ export function createMockState(
         lastLayout: undefined,
         // Required by CheckAtBottom and SetDidLayout
         loadStartTime: Date.now(),
-        maintainingScrollAtEnd: false,
+        maintainingScrollAtEnd: undefined,
         minIndexSizeChanged: undefined,
         nativeContentInset: undefined,
         nativeMarginTop: 0,
