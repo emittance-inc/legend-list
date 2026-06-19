@@ -1,5 +1,5 @@
 import { IsNewArchitecture } from "@/constants-platform";
-import { updateContentMetrics } from "@/core/updateContentMetrics";
+import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { type StateContext, set$ } from "@/state/state";
 
 export function addTotalSize(ctx: StateContext, key: string | null, add: number, notifyTotalSize = true) {
@@ -33,7 +33,7 @@ export function addTotalSize(ctx: StateContext, key: string | null, add: number,
             if (notifyTotalSize) {
                 set$(ctx, "totalSize", totalSize);
             }
-            updateContentMetrics(ctx);
+            updateContentMetricsState(ctx);
         }
     } else if (notifyTotalSize && ctx.values.get("totalSize") !== totalSize) {
         set$(ctx, "totalSize", totalSize);

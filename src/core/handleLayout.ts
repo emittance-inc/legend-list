@@ -1,7 +1,7 @@
 import { calculateItemsInView } from "@/core/calculateItemsInView";
 import { doInitialAllocateContainers } from "@/core/doInitialAllocateContainers";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
-import { updateContentMetrics } from "@/core/updateContentMetrics";
+import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { getWindowSize } from "@/platform/getWindowSize";
 import type { LayoutRectangle } from "@/platform/scrollview-types";
 import { type StateContext, set$ } from "@/state/state";
@@ -50,7 +50,7 @@ export function handleLayout(
     if (didChange) {
         state.scrollLength = scrollLength;
         state.otherAxisSize = otherAxisSize;
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
         state.lastBatchingAction = Date.now();
         state.scrollForNextCalculateItemsInView = undefined;
 

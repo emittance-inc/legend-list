@@ -1,6 +1,7 @@
 import { describe, expect, it, spyOn } from "bun:test";
 import { clampScrollOffset } from "../../src/core/clampScrollOffset";
-import { setContentInsetOverride, setHeaderSize, updateContentMetrics } from "../../src/core/updateContentMetrics";
+import { setContentInsetOverride, setHeaderSize } from "../../src/core/updateContentMetrics";
+import { updateContentMetricsState } from "../../src/core/updateContentMetricsState";
 import { Platform } from "../../src/platform/Platform";
 import { getContentSize } from "../../src/state/getContentSize";
 import * as requestAdjustModule from "../../src/utils/requestAdjust";
@@ -24,7 +25,7 @@ describe("updateContentMetrics", () => {
             },
         );
 
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
 
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(279);
         expect(getContentSize(ctx)).toBe(664);
@@ -48,7 +49,7 @@ describe("updateContentMetrics", () => {
             },
         );
 
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
 
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(0);
         expect(getContentSize(ctx)).toBe(801);
@@ -71,7 +72,7 @@ describe("updateContentMetrics", () => {
             },
         );
 
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
 
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(0);
     });
@@ -94,7 +95,7 @@ describe("updateContentMetrics", () => {
             },
         );
 
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(259);
 
         setHeaderSize(ctx, 0);
@@ -118,7 +119,7 @@ describe("updateContentMetrics", () => {
             },
         );
 
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(580);
 
         expect(setContentInsetOverride(ctx, { bottom: 301 })).toBe(true);

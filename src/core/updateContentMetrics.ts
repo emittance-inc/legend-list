@@ -1,45 +1,15 @@
 import { Platform } from "@/platform/Platform";
-import { getContentInsetEnd } from "@/state/getContentInsetEnd";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { Insets } from "@/types.base";
 import { requestAdjust } from "@/utils/requestAdjust";
+import { updateContentMetricsState } from "./updateContentMetricsState";
 
 const SCROLL_ADJUST_EPSILON = 0.1;
-
-function getRawContentLength(ctx: StateContext) {
-    const { state, values } = ctx;
-    return (
-        (values.get("headerSize") || 0) +
-        (values.get("footerSize") || 0) +
-        (state.pendingTotalSize ?? state.totalSize ?? values.get("totalSize") ?? 0) +
-        (state.props.stylePaddingTop || 0) +
-        (state.props.stylePaddingBottom || 0)
-    );
-}
-
-function getAlignItemsAtEndPadding(ctx: StateContext) {
-    const { state } = ctx;
-    const shouldPad =
-        !!state.props.alignItemsAtEndPaddingEnabled &&
-        !state.props.horizontal &&
-        state.props.data.length > 0 &&
-        state.scrollLength > 0;
-
-    return shouldPad ? Math.max(0, state.scrollLength - getRawContentLength(ctx) - getContentInsetEnd(ctx)) : 0;
-}
-
-export function updateContentMetrics(ctx: StateContext) {
-    const previousPadding = peek$(ctx, "alignItemsAtEndPadding") || 0;
-    const nextPadding = getAlignItemsAtEndPadding(ctx);
-    if (previousPadding !== nextPadding) {
-        set$(ctx, "alignItemsAtEndPadding", nextPadding);
-    }
-}
 
 function setContentLengthSignal(ctx: StateContext, signalName: "footerSize" | "headerSize", size: number) {
     if (peek$(ctx, signalName) !== size) {
         set$(ctx, signalName, size);
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
     }
 }
 
@@ -68,7 +38,7 @@ export function setHeaderSize(ctx: StateContext, size: number) {
 
     if (didChange) {
         set$(ctx, "headerSize", size);
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
 
         // Do not compensate the initial measurement from no known header.
         // If a zero/estimated header was already recorded, this layout change
@@ -102,7 +72,7 @@ export function setContentInsetOverride(ctx: StateContext, inset: Partial<Insets
     state.contentInsetOverride = nextInset;
 
     if (didChange) {
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
     }
 
     return didChange;

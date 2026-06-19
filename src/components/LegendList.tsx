@@ -32,7 +32,7 @@ import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataC
 import { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { updateContentInsetEndAdjustment } from "@/core/updateContentInsetEndAdjustment";
-import { updateContentMetrics } from "@/core/updateContentMetrics";
+import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { updateItemPositions } from "@/core/updateItemPositions";
 import { updateItemSize } from "@/core/updateItemSize";
 import { updateScroll } from "@/core/updateScroll";
@@ -484,7 +484,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         const prevPaddingTop = peek$(ctx, "stylePaddingTop");
         setPaddingTop(ctx, { stylePaddingTop: stylePaddingTopState });
         refState.current!.props.stylePaddingBottom = stylePaddingBottomState;
-        updateContentMetrics(ctx);
+        updateContentMetricsState(ctx);
 
         let paddingDiff = stylePaddingTopState - prevPaddingTop;
         // If the style padding has changed then adjust the paddingTop and update scroll to compensate
