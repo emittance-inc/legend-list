@@ -60,7 +60,6 @@ describe("updateScroll large user jumps", () => {
             expect(mockCtx.state.mvcpAnchorLock).toBeUndefined();
             expect(mockCtx.state.pendingNativeMVCPAdjust).toBeUndefined();
             expect(mockCtx.state.userScrollAnchorReset?.keys).toEqual(new Set());
-            expect(mockCtx.state.userScrollAnchorReset?.batchSize).toBeUndefined();
             expect(mockCtx.state.queuedMVCPRecalculate).toBeUndefined();
             expect(cancelCalls).toEqual([7]);
         } finally {

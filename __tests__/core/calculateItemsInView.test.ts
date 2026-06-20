@@ -181,7 +181,6 @@ describe("calculateItemsInView", () => {
                 expect(mockState.startNoBuffer).toBe(10);
                 expect(mockState.endNoBuffer).toBe(12);
                 expect(mockState.userScrollAnchorReset?.keys).toEqual(new Set(["item_10", "item_11", "item_12"]));
-                expect(mockState.userScrollAnchorReset?.batchSize).toBe(3);
             } finally {
                 Platform.OS = prevPlatform;
             }
@@ -216,7 +215,6 @@ describe("calculateItemsInView", () => {
                 expect(mockState.startNoBuffer).toBe(10);
                 expect(mockState.endNoBuffer).toBe(12);
                 expect(mockState.userScrollAnchorReset).toBeUndefined();
-                expect(mockState.userScrollAnchorReset?.batchSize).toBeUndefined();
             } finally {
                 Platform.OS = prevPlatform;
             }
@@ -251,7 +249,6 @@ describe("calculateItemsInView", () => {
                 expect(mockState.startNoBuffer).toBe(10);
                 expect(mockState.endNoBuffer).toBe(12);
                 expect(mockState.userScrollAnchorReset?.keys).toEqual(new Set(["item_12"]));
-                expect(mockState.userScrollAnchorReset?.batchSize).toBe(1);
             } finally {
                 Platform.OS = prevPlatform;
             }

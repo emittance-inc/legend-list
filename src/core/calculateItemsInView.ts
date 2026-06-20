@@ -715,8 +715,6 @@ export function calculateItemsInView(
             if (state.userScrollAnchorReset) {
                 if (state.userScrollAnchorReset.keys.size === 0) {
                     state.userScrollAnchorReset = undefined;
-                } else {
-                    state.userScrollAnchorReset.batchSize = state.userScrollAnchorReset.keys.size;
                 }
             }
 

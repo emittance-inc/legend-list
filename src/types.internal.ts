@@ -248,7 +248,6 @@ export interface InternalState {
         forceFullItemPositions?: boolean;
     }) => void;
     userScrollAnchorReset?: {
-        batchSize?: number;
         keys: Set<string>;
     };
     viewabilityConfigCallbackPairs: ViewabilityConfigCallbackPairs<any> | undefined;

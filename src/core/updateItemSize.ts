@@ -15,25 +15,9 @@ function runOrScheduleMVCPRecalculate(ctx: StateContext) {
     const state = ctx.state;
 
     if (state.userScrollAnchorReset !== undefined) {
-        const replacementBatchSize = state.userScrollAnchorReset.batchSize ?? state.userScrollAnchorReset.keys.size;
-        const replacementMeasurementBatchThreshold = 3;
-        const shouldBatchReplacementMeasurements = replacementBatchSize > replacementMeasurementBatchThreshold;
-
-        if (shouldBatchReplacementMeasurements) {
-            if (state.queuedMVCPRecalculate === undefined) {
-                state.queuedMVCPRecalculate = requestAnimationFrame(() => {
-                    state.queuedMVCPRecalculate = undefined;
-                    calculateItemsInView(ctx);
-                    if (state.userScrollAnchorReset?.keys.size === 0) {
-                        state.userScrollAnchorReset = undefined;
-                    }
-                });
-            }
-        } else {
-            calculateItemsInView(ctx);
-            if (state.userScrollAnchorReset?.keys.size === 0) {
-                state.userScrollAnchorReset = undefined;
-            }
+        calculateItemsInView(ctx);
+        if (state.userScrollAnchorReset?.keys.size === 0) {
+            state.userScrollAnchorReset = undefined;
         }
     } else if (Platform.OS === "web") {
         if (!state.mvcpAnchorLock) {
