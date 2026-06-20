@@ -440,6 +440,88 @@ describe("LegendList bootstrap initial scroll", () => {
         expect(ctx.values.get("readyToRender")).toBe(true);
     });
 
+    it("uses initialScrollIndex from the first non-empty data render", async () => {
+        const { LegendList } = await import("../../src/components/LegendList?bootstrap-late-index");
+        const rendered = render(
+            <LegendList
+                data={[]}
+                estimatedItemSize={50}
+                estimatedListSize={{ height: 200, width: 320 }}
+                initialScrollIndex={undefined}
+                keyExtractor={(item: { id: string }) => item.id}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        const ctx = await getContextFromRender();
+        await act(async () => {
+            setDidLayout(ctx);
+        });
+        expect(ctx.state.initialScroll).toBeUndefined();
+        expect(ctx.state.didFinishInitialScroll).toBe(true);
+
+        const nextData = Array.from({ length: 5 }, (_, index) => ({
+            id: `item-${index}`,
+            label: `Item ${index}`,
+        }));
+        rendered.rerender(
+            <LegendList
+                data={nextData}
+                estimatedItemSize={50}
+                estimatedListSize={{ height: 200, width: 320 }}
+                initialScrollIndex={2}
+                keyExtractor={(item: { id: string }) => item.id}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        await flushAsync();
+
+        const state = await getStateFromRender();
+        expect(state.initialScroll?.index).toBe(2);
+        expect(state.didFinishInitialScroll).toBe(false);
+        expect(getBootstrapSession(state)).toBeDefined();
+    });
+
+    it("replaces the empty-render initialScrollIndex when data arrives later", async () => {
+        const { LegendList } = await import("../../src/components/LegendList?bootstrap-replace-empty-index");
+        const rendered = render(
+            <LegendList
+                data={[]}
+                estimatedItemSize={50}
+                estimatedListSize={{ height: 200, width: 320 }}
+                initialScrollIndex={1}
+                keyExtractor={(item: { id: string }) => item.id}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        const ctx = await getContextFromRender();
+        expect(ctx.state.initialScroll?.index).toBe(1);
+
+        const nextData = Array.from({ length: 5 }, (_, index) => ({
+            id: `item-${index}`,
+            label: `Item ${index}`,
+        }));
+        rendered.rerender(
+            <LegendList
+                data={nextData}
+                estimatedItemSize={50}
+                estimatedListSize={{ height: 200, width: 320 }}
+                initialScrollIndex={4}
+                keyExtractor={(item: { id: string }) => item.id}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        await flushAsync();
+
+        const state = await getStateFromRender();
+        expect(state.initialScroll?.index).toBe(4);
+        expect(state.didFinishInitialScroll).toBe(false);
+        expect(getBootstrapSession(state)).toBeDefined();
+    });
+
     it("preserves the native seed when bootstrap bounds are exceeded", async () => {
         const data = Array.from({ length: 10 }, (_, index) => ({
             id: `item-${index}`,

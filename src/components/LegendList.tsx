@@ -321,6 +321,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 endNoBuffer: -1,
                 endReachedSnapshot: undefined,
                 firstFullyOnScreenIndex: -1,
+                hasHadNonEmptyData: dataProp.length > 0,
                 idCache: [],
                 idsInView: [],
                 indexByKey: new Map(),
@@ -554,6 +555,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             dataLength: dataProp.length,
             didDataChange: didDataChangeLocal,
             initialScrollAtEnd,
+            latestInitialScroll: initialScrollProp,
+            latestInitialScrollSessionKind: initialScrollUsesOffsetOnly ? "offset" : "bootstrap",
             stylePaddingBottom: stylePaddingBottomState,
             useBootstrapInitialScroll: usesBootstrapInitialScroll,
         });

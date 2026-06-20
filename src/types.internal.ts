@@ -159,6 +159,7 @@ export interface InternalState {
     preservedEndAnchorCorrection?: {
         lastRequestTime?: number;
     };
+    hasHadNonEmptyData: boolean;
     hasScrolled?: boolean;
     idCache: string[];
     idsInView: string[];

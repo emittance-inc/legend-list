@@ -38,6 +38,7 @@ export function createMockState(
         endNoBuffer: 0,
         endReachedSnapshot: undefined,
         firstFullyOnScreenIndex: 0,
+        hasHadNonEmptyData: false,
         idCache: [],
         idsInView: [],
         ignoreScrollFromMVCP: undefined,
