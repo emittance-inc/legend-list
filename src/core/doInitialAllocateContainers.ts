@@ -3,14 +3,16 @@ import { IsNewArchitecture } from "@/constants-platform";
 import { calculateItemsInView } from "@/core/calculateItemsInView";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import { getInitialContainerPoolSize } from "@/utils/containerPool";
+import { getEffectiveDrawDistance } from "@/utils/getEffectiveDrawDistance";
 
 export function doInitialAllocateContainers(ctx: StateContext): boolean | undefined {
     // Allocate containers
     const state = ctx.state;
     const {
         scrollLength,
-        props: { data, drawDistance, getFixedItemSize, getItemType, numColumns, estimatedItemSize },
+        props: { data, getFixedItemSize, getItemType, numColumns, estimatedItemSize },
     } = state;
+    const drawDistance = getEffectiveDrawDistance(ctx);
 
     const hasContainers = peek$(ctx, "numContainers");
 

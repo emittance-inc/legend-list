@@ -163,6 +163,29 @@ describe("doInitialAllocateContainers", () => {
             expect(mockCtx.values.get("numContainers")).toBe(4);
         });
 
+        it("caps drawDistance before the list is ready to render", () => {
+            mockState.props.estimatedItemSize = 100;
+            mockState.scrollLength = 500;
+            mockState.props.drawDistance = 1_000;
+
+            doInitialAllocateContainers(mockCtx);
+
+            // Expected: ceil((500 + 100*2) / 100) * 1 = 7 containers
+            expect(mockCtx.values.get("numContainers")).toBe(7);
+        });
+
+        it("uses the configured drawDistance after the list is ready to render", () => {
+            mockCtx.values.set("readyToRender", true);
+            mockState.props.estimatedItemSize = 100;
+            mockState.scrollLength = 500;
+            mockState.props.drawDistance = 1_000;
+
+            doInitialAllocateContainers(mockCtx);
+
+            // Expected: ceil((500 + 1000*2) / 100) * 1 = 25 containers
+            expect(mockCtx.values.get("numContainers")).toBe(25);
+        });
+
         it("samples distinct indices when estimating average size", () => {
             const data = [
                 { id: 0, size: 100, text: "Item 0" },

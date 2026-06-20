@@ -15,6 +15,7 @@ import type { InternalState } from "@/types.internal";
 import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
 import { getExpandedContainerPoolSize } from "@/utils/containerPool";
 import { findAvailableContainers } from "@/utils/findAvailableContainers";
+import { getEffectiveDrawDistance } from "@/utils/getEffectiveDrawDistance";
 import { getId } from "@/utils/getId";
 import { getItemSize } from "@/utils/getItemSize";
 import { getScrollVelocity } from "@/utils/getScrollVelocity";
@@ -255,14 +256,7 @@ export function calculateItemsInView(
             indexByKey,
             minIndexSizeChanged,
             positions,
-            props: {
-                alwaysRenderIndicesArr,
-                alwaysRenderIndicesSet,
-                drawDistance,
-                getItemType,
-                keyExtractor,
-                onStickyHeaderChange,
-            },
+            props: { alwaysRenderIndicesArr, alwaysRenderIndicesSet, getItemType, keyExtractor, onStickyHeaderChange },
             scrollForNextCalculateItemsInView,
             scrollLength,
             sizes,
@@ -274,6 +268,7 @@ export function calculateItemsInView(
         const stickyHeaderIndicesSet = state.props.stickyHeaderIndicesSet || new Set<number>();
         const alwaysRenderArr = alwaysRenderIndicesArr || [];
         const alwaysRenderSet = alwaysRenderIndicesSet || new Set<number>();
+        const drawDistance = getEffectiveDrawDistance(ctx);
         const { dataChanged, doMVCP, forceFullItemPositions } = params;
         const bootstrapInitialScrollState =
             state.initialScrollSession?.kind === "bootstrap" ? state.initialScrollSession.bootstrap : undefined;
