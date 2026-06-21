@@ -1,4 +1,4 @@
-import { setItemRenderMode } from "@/core/itemRenderMode";
+import { setAdaptiveRender } from "@/core/adaptiveRender";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import { INITIAL_DRAW_DISTANCE } from "@/utils/getEffectiveDrawDistance";
 
@@ -27,7 +27,7 @@ export function setInitialRenderState(
     const isReadyToRender = Boolean(state.didContainersLayout && state.didFinishInitialScroll);
     if (isReadyToRender && !peek$(ctx, "readyToRender")) {
         set$(ctx, "readyToRender", true);
-        setItemRenderMode(ctx, "normal");
+        setAdaptiveRender(ctx, "normal");
 
         if (state.props.drawDistance > INITIAL_DRAW_DISTANCE) {
             requestAnimationFrame(() => {

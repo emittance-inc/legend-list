@@ -104,6 +104,7 @@ export function createMockState(
         viewabilityConfigCallbackPairs: undefined,
         ...overrides,
         props: {
+            adaptiveRender: undefined,
             alignItemsAtEnd: false,
             alignItemsAtEndPaddingEnabled: false,
             alwaysRender: undefined,
@@ -120,7 +121,6 @@ export function createMockState(
             getItemType: undefined,
             horizontal: false,
             initialScroll: undefined,
-            itemRenderMode: undefined,
             itemsAreEqual: undefined,
             keyExtractor: (_: any, index: number) => `item_${index}`,
             maintainScrollAtEnd: undefined,

@@ -19,6 +19,7 @@ export function createMockContext(
     };
     const defaults: Record<string, any> = {
         activeStickyIndex: state.activeStickyIndex ?? -1,
+        adaptiveRender: "light",
         alignItemsAtEndPadding: 0,
         contentInset: DEFAULT_CONTENT_INSET,
         isAtEnd: state.isAtEnd ?? false,
@@ -26,7 +27,6 @@ export function createMockContext(
         isNearEnd: state.isNearEnd ?? false,
         isNearStart: state.isNearStart ?? false,
         isWithinMaintainScrollAtEndThreshold: state.isWithinMaintainScrollAtEndThreshold ?? false,
-        itemRenderMode: "light",
         scrollAdjust: 0,
         scrollAdjustPending: 0,
         scrollAdjustUserOffset: 0,

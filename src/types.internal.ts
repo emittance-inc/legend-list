@@ -171,7 +171,7 @@ export interface InternalState {
     initialScrollSession?: InternalInitialScrollSession;
     initialScroll: InternalInitialScrollTarget | undefined;
     timeoutPreservedInitialScrollClear?: any;
-    timeoutItemRenderMode?: any;
+    timeoutAdaptiveRender?: any;
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;
@@ -281,7 +281,7 @@ export interface InternalState {
         numColumns: number;
         onEndReached: LegendListPropsInternal["onEndReached"];
         onEndReachedThreshold: number | null | undefined;
-        itemRenderMode: LegendListPropsInternal["itemRenderMode"];
+        adaptiveRender: LegendListPropsInternal["adaptiveRender"];
         onItemSizeChanged: LegendListPropsInternal["onItemSizeChanged"];
         onLoad: LegendListPropsInternal["onLoad"];
         onScroll: LegendListPropsInternal["onScroll"];

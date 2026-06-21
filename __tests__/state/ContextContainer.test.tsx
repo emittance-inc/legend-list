@@ -6,9 +6,9 @@ import { Text } from "react-native";
 import {
     ContextContainer,
     type ContextContainerType,
+    useAdaptiveRender,
+    useAdaptiveRenderChange,
     useIsLastItem,
-    useItemRenderMode,
-    useItemRenderModeChange,
     useListScrollSize,
     useRecyclingEffect,
     useRecyclingState,
@@ -39,15 +39,15 @@ async function flushAsync() {
 }
 
 describe("ContextContainer hooks", () => {
-    describe("useItemRenderMode", () => {
-        it("should re-render when the item render mode changes", async () => {
+    describe("useAdaptiveRender", () => {
+        it("should re-render when the adaptive render changes", async () => {
             let capturedCtx: ReturnType<typeof useStateContext> | undefined;
             let renders = 0;
             const modes: string[] = [];
 
             const TestComponent = () => {
                 const ctx = useStateContext();
-                const mode = useItemRenderMode();
+                const mode = useAdaptiveRender();
                 capturedCtx = ctx;
                 renders++;
                 modes.push(mode);
@@ -61,7 +61,7 @@ describe("ContextContainer hooks", () => {
             );
 
             await act(async () => {
-                set$(capturedCtx!, "itemRenderMode", "normal");
+                set$(capturedCtx!, "adaptiveRender", "normal");
             });
 
             expect(renders).toBe(2);
@@ -69,7 +69,7 @@ describe("ContextContainer hooks", () => {
         });
     });
 
-    describe("useItemRenderModeChange", () => {
+    describe("useAdaptiveRenderChange", () => {
         it("should call onChange without forcing a component re-render", async () => {
             let capturedCtx: ReturnType<typeof useStateContext> | undefined;
             let renders = 0;
@@ -79,7 +79,7 @@ describe("ContextContainer hooks", () => {
                 const ctx = useStateContext();
                 capturedCtx = ctx;
                 renders++;
-                useItemRenderModeChange((mode) => modes.push(mode));
+                useAdaptiveRenderChange((mode) => modes.push(mode));
                 return <Text>Test</Text>;
             };
 
@@ -91,7 +91,7 @@ describe("ContextContainer hooks", () => {
 
             await flushAsync();
             await act(async () => {
-                set$(capturedCtx!, "itemRenderMode", "normal");
+                set$(capturedCtx!, "adaptiveRender", "normal");
             });
 
             expect(renders).toBe(1);

@@ -108,7 +108,7 @@ describe("updateScroll large user jumps", () => {
         expect(flushSyncSpy).not.toHaveBeenCalled();
     });
 
-    it("updates item render mode from the current scroll sample", () => {
+    it("updates adaptive render from the current scroll sample", () => {
         const originalDateNow = Date.now;
         const changes: string[] = [];
         const now = 1000;
@@ -117,13 +117,13 @@ describe("updateScroll large user jumps", () => {
         try {
             mockCtx = createMockContext(
                 {
-                    itemRenderMode: "normal",
+                    adaptiveRender: "normal",
                 },
                 {
                     props: {
-                        itemRenderMode: {
+                        adaptiveRender: {
+                            enterVelocity: 1,
                             onChange: (mode) => changes.push(mode),
-                            velocityThreshold: 1,
                         },
                     },
                     scroll: 0,
@@ -135,7 +135,7 @@ describe("updateScroll large user jumps", () => {
 
             updateScroll(mockCtx, 200);
 
-            expect(peek$(mockCtx, "itemRenderMode")).toBe("light");
+            expect(peek$(mockCtx, "adaptiveRender")).toBe("light");
             expect(changes).toEqual(["light"]);
         } finally {
             for (const timeout of mockCtx.state.timeouts) {

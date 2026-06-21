@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import "../setup";
 
-import { updateItemRenderMode } from "@/core/itemRenderMode";
+import { updateAdaptiveRender } from "@/core/adaptiveRender";
 import { peek$ } from "@/state/state";
 import { createMockContext } from "../__mocks__/createMockContext";
 
@@ -11,7 +11,7 @@ type TimeoutRecord = {
     delay: number;
 };
 
-describe("updateItemRenderMode", () => {
+describe("updateAdaptiveRender", () => {
     const originalClearTimeout = globalThis.clearTimeout;
     const originalSetTimeout = globalThis.setTimeout;
     let timers: TimeoutRecord[];
@@ -39,101 +39,108 @@ describe("updateItemRenderMode", () => {
         }
     }
 
-    it("switches to light mode immediately when velocity exceeds the default threshold", () => {
+    it("switches to light mode immediately when velocity exceeds the default enter velocity", () => {
         const changes: string[] = [];
         const ctx = createMockContext(
-            { itemRenderMode: "normal" },
+            { adaptiveRender: "normal" },
             {
                 props: {
-                    itemRenderMode: {
+                    adaptiveRender: {
                         onChange: (mode) => changes.push(mode),
                     },
                 },
             },
         );
 
-        updateItemRenderMode(ctx, 1.1);
+        updateAdaptiveRender(ctx, 4.1);
 
-        expect(peek$(ctx, "itemRenderMode")).toBe("light");
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
         expect(changes).toEqual(["light"]);
     });
 
-    it("waits for the default settle delay before returning to normal mode", () => {
+    it("waits for the default exit delay before returning to normal mode", () => {
         const changes: string[] = [];
         const ctx = createMockContext(
-            { itemRenderMode: "normal" },
+            { adaptiveRender: "normal" },
             {
                 props: {
-                    itemRenderMode: {
+                    adaptiveRender: {
                         onChange: (mode) => changes.push(mode),
                     },
                 },
             },
         );
 
-        updateItemRenderMode(ctx, 2);
-        updateItemRenderMode(ctx, 0.5);
+        updateAdaptiveRender(ctx, 5);
+        updateAdaptiveRender(ctx, 0.5);
 
-        expect(peek$(ctx, "itemRenderMode")).toBe("light");
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
         expect(timers).toHaveLength(1);
-        expect(timers[0].delay).toBe(150);
+        expect(timers[0].delay).toBe(1000);
 
         runTimer(timers[0]);
 
-        expect(peek$(ctx, "itemRenderMode")).toBe("normal");
+        expect(peek$(ctx, "adaptiveRender")).toBe("normal");
         expect(changes).toEqual(["light", "normal"]);
     });
 
-    it("cancels a pending settle timeout when velocity crosses the threshold again", () => {
-        const ctx = createMockContext({ itemRenderMode: "normal" });
+    it("cancels a pending exit timeout when velocity crosses the exit velocity again", () => {
+        const ctx = createMockContext({ adaptiveRender: "normal" });
 
-        updateItemRenderMode(ctx, 2);
-        updateItemRenderMode(ctx, 0);
+        updateAdaptiveRender(ctx, 5);
+        updateAdaptiveRender(ctx, 0);
 
         const settleTimer = timers[0];
-        updateItemRenderMode(ctx, 2);
+        updateAdaptiveRender(ctx, 2);
         runTimer(settleTimer);
 
         expect(settleTimer.cleared).toBe(true);
-        expect(peek$(ctx, "itemRenderMode")).toBe("light");
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
     });
 
     it("does not extend settling while velocity remains below the threshold", () => {
-        const ctx = createMockContext({ itemRenderMode: "normal" });
+        const ctx = createMockContext({ adaptiveRender: "normal" });
 
-        updateItemRenderMode(ctx, 2);
-        updateItemRenderMode(ctx, 0.5);
-        updateItemRenderMode(ctx, 0.25);
+        updateAdaptiveRender(ctx, 5);
+        updateAdaptiveRender(ctx, 0.5);
+        updateAdaptiveRender(ctx, 0.25);
 
         expect(timers).toHaveLength(1);
-        expect(timers[0].delay).toBe(150);
+        expect(timers[0].delay).toBe(1000);
 
         runTimer(timers[0]);
 
-        expect(peek$(ctx, "itemRenderMode")).toBe("normal");
+        expect(peek$(ctx, "adaptiveRender")).toBe("normal");
     });
 
-    it("uses custom threshold and settle delay values", () => {
+    it("uses custom enter velocity, exit velocity, and exit delay values", () => {
         const ctx = createMockContext(
-            { itemRenderMode: "normal" },
+            { adaptiveRender: "normal" },
             {
                 props: {
-                    itemRenderMode: {
-                        settleDelayMs: 25,
-                        velocityThreshold: 3,
+                    adaptiveRender: {
+                        enterVelocity: 3,
+                        exitDelay: 25,
+                        exitVelocity: 1,
                     },
                 },
             },
         );
 
-        updateItemRenderMode(ctx, 2);
-        expect(peek$(ctx, "itemRenderMode")).toBe("normal");
+        updateAdaptiveRender(ctx, 2);
+        expect(peek$(ctx, "adaptiveRender")).toBe("normal");
 
-        updateItemRenderMode(ctx, 4);
-        updateItemRenderMode(ctx, 0);
+        updateAdaptiveRender(ctx, 4);
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
 
-        expect(peek$(ctx, "itemRenderMode")).toBe("light");
-        expect(timers).toHaveLength(1);
-        expect(timers[0].delay).toBe(25);
+        updateAdaptiveRender(ctx, 2);
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
+
+        updateAdaptiveRender(ctx, 0);
+
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
+        expect(timers).toHaveLength(2);
+        expect(timers[0].cleared).toBe(true);
+        expect(timers[1].delay).toBe(25);
     });
 });

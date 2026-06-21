@@ -29,9 +29,9 @@ export const internal = {
 } as const;
 
 export {
+    useAdaptiveRender,
+    useAdaptiveRenderChange,
     useIsLastItem,
-    useItemRenderMode,
-    useItemRenderModeChange,
     useListScrollSize,
     useRecyclingEffect,
     useRecyclingState,

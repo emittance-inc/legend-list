@@ -1,5 +1,5 @@
+import { updateAdaptiveRender } from "@/core/adaptiveRender";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
-import { updateItemRenderMode } from "@/core/itemRenderMode";
 import { resolvePendingNativeMVCPAdjust } from "@/core/mvcp";
 import { flushSync } from "@/platform/flushSync";
 import type { StateContext } from "@/state/state";
@@ -48,7 +48,7 @@ export function updateScroll(
     }
 
     const scrollVelocity = getScrollVelocity(state);
-    updateItemRenderMode(ctx, scrollVelocity);
+    updateAdaptiveRender(ctx, scrollVelocity);
 
     // Ignore scroll events that are closer to the previous scroll position than the target position after MVCP
     // This prevents a race condition where MVCP adjusts the scroll position for the new items
