@@ -75,11 +75,10 @@ describe("updateItemRenderMode", () => {
         updateItemRenderMode(ctx, 0.5);
 
         expect(peek$(ctx, "itemRenderMode")).toBe("light");
-        expect(timers).toHaveLength(2);
-        expect(timers[0].cleared).toBe(true);
-        expect(timers[1].delay).toBe(150);
+        expect(timers).toHaveLength(1);
+        expect(timers[0].delay).toBe(150);
 
-        runTimer(timers[1]);
+        runTimer(timers[0]);
 
         expect(peek$(ctx, "itemRenderMode")).toBe("normal");
         expect(changes).toEqual(["light", "normal"]);
@@ -97,6 +96,21 @@ describe("updateItemRenderMode", () => {
 
         expect(settleTimer.cleared).toBe(true);
         expect(peek$(ctx, "itemRenderMode")).toBe("light");
+    });
+
+    it("does not extend settling while velocity remains below the threshold", () => {
+        const ctx = createMockContext({ itemRenderMode: "normal" });
+
+        updateItemRenderMode(ctx, 2);
+        updateItemRenderMode(ctx, 0.5);
+        updateItemRenderMode(ctx, 0.25);
+
+        expect(timers).toHaveLength(1);
+        expect(timers[0].delay).toBe(150);
+
+        runTimer(timers[0]);
+
+        expect(peek$(ctx, "itemRenderMode")).toBe("normal");
     });
 
     it("uses custom threshold and settle delay values", () => {
@@ -119,8 +133,7 @@ describe("updateItemRenderMode", () => {
         updateItemRenderMode(ctx, 0);
 
         expect(peek$(ctx, "itemRenderMode")).toBe("light");
-        expect(timers).toHaveLength(2);
-        expect(timers[0].cleared).toBe(true);
-        expect(timers[1].delay).toBe(25);
+        expect(timers).toHaveLength(1);
+        expect(timers[0].delay).toBe(25);
     });
 });

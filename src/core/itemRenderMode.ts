@@ -1,8 +1,8 @@
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { ItemRenderMode } from "@/types.base";
 
-const DEFAULT_VELOCITY_THRESHOLD = 1;
-const DEFAULT_SETTLE_DELAY_MS = 150;
+const DEFAULT_VELOCITY_THRESHOLD = 5;
+const DEFAULT_SETTLE_DELAY_MS = 500;
 
 function scheduleItemRenderModeSettle(ctx: StateContext, settleDelayMs: number) {
     const state = ctx.state;
@@ -40,11 +40,15 @@ export function updateItemRenderMode(ctx: StateContext, scrollVelocity: number) 
     const settleDelayMs = itemRenderMode?.settleDelayMs ?? DEFAULT_SETTLE_DELAY_MS;
     const velocityThreshold = itemRenderMode?.velocityThreshold ?? DEFAULT_VELOCITY_THRESHOLD;
     const nextMode = Math.abs(scrollVelocity) > velocityThreshold ? "light" : "normal";
+    const currentMode = peek$(ctx, "itemRenderMode");
+    const previousMode = state.timeoutItemRenderMode !== undefined ? "normal" : currentMode;
 
-    if (nextMode === "light") {
-        setItemRenderMode(ctx, "light");
-        scheduleItemRenderModeSettle(ctx, settleDelayMs);
-    } else if (peek$(ctx, "itemRenderMode") === "light") {
-        scheduleItemRenderModeSettle(ctx, settleDelayMs);
+    if (nextMode !== previousMode) {
+        if (nextMode === "light") {
+            setItemRenderMode(ctx, "light");
+            scheduleItemRenderModeSettle(ctx, settleDelayMs);
+        } else if (currentMode === "light") {
+            scheduleItemRenderModeSettle(ctx, settleDelayMs);
+        }
     }
 }
