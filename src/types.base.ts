@@ -32,6 +32,27 @@ export interface NativeSyntheticEvent<T> {
 export type ViewStyle = Record<string, unknown>;
 export type StyleProp<T> = T | T[] | null | undefined | false;
 
+export type ItemRenderMode = "normal" | "light";
+
+export interface ItemRenderModeConfig {
+    /**
+     * Scroll velocity in pixels per millisecond above which items should render in light mode.
+     * @default 1
+     */
+    velocityThreshold?: number;
+
+    /**
+     * Time in milliseconds to wait after velocity drops below the threshold before returning to normal mode.
+     * @default 150
+     */
+    settleDelayMs?: number;
+
+    /**
+     * Called when the list-level item render mode changes.
+     */
+    onChange?: (mode: ItemRenderMode) => void;
+}
+
 // Base ScrollView props with exclusions
 export type BaseScrollViewProps<TScrollView> = Omit<
     TScrollView,
@@ -284,6 +305,11 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
      * Called when list layout metrics change.
      */
     onMetricsChange?: (metrics: LegendListMetrics) => void;
+
+    /**
+     * Configures the item render mode signal. Items can use this to render a lighter version while scrolling quickly.
+     */
+    itemRenderMode?: ItemRenderModeConfig;
 
     /**
      * Function to call when the user pulls to refresh.

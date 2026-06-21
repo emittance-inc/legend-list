@@ -244,7 +244,7 @@ function updateViewabilityForCachedRange(
 
 export function calculateItemsInView(
     ctx: StateContext,
-    params: { doMVCP?: boolean; dataChanged?: boolean; forceFullItemPositions?: boolean } = {},
+    params: { doMVCP?: boolean; dataChanged?: boolean; forceFullItemPositions?: boolean; scrollVelocity?: number } = {},
 ) {
     const state = ctx.state;
     batchedUpdates(() => {
@@ -281,7 +281,7 @@ export function calculateItemsInView(
         let totalSize = getContentSize(ctx);
         const topPad = peek$(ctx, "stylePaddingTop") + peek$(ctx, "alignItemsAtEndPadding") + peek$(ctx, "headerSize");
         const numColumns = peek$(ctx, "numColumns");
-        const speed = getScrollVelocity(state);
+        const speed = params.scrollVelocity ?? getScrollVelocity(state);
 
         ////// Calculate scroll state
         const scrollExtra = 0;

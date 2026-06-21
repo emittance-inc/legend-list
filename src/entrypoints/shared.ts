@@ -30,6 +30,8 @@ export const internal = {
 
 export {
     useIsLastItem,
+    useItemRenderMode,
+    useItemRenderModeChange,
     useListScrollSize,
     useRecyclingEffect,
     useRecyclingState,

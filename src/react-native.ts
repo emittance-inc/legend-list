@@ -7,6 +7,8 @@ export const internal = sharedInternal;
 
 export {
     useIsLastItem,
+    useItemRenderMode,
+    useItemRenderModeChange,
     useListScrollSize,
     useRecyclingEffect,
     useRecyclingState,

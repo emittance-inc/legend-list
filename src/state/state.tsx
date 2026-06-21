@@ -49,6 +49,7 @@ export type ListenerType =
     | "isNearEnd"
     | "isNearStart"
     | "isWithinMaintainScrollAtEndThreshold"
+    | "itemRenderMode"
     | `containerColumn${number}`
     | `containerSpan${number}`
     | `containerItemData${number}`
@@ -67,6 +68,7 @@ export type LegendListListenerType = Extract<
     | "isNearEnd"
     | "isNearStart"
     | "isWithinMaintainScrollAtEndThreshold"
+    | "itemRenderMode"
     | "lastItemKeys"
     | "lastPositionUpdate"
     | "numContainers"
@@ -107,6 +109,7 @@ export type ListenerTypeValueMap = {
     snapToOffsets: number[];
     stylePaddingTop: number;
     totalSize: number;
+    itemRenderMode: "normal" | "light";
 } & {
     [K in ListenerType as K extends `containerItemKey${number}` ? K : never]: string;
 } & {
@@ -180,6 +183,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             ["isNearEnd", false],
             ["isNearStart", false],
             ["isWithinMaintainScrollAtEndThreshold", false],
+            ["itemRenderMode", "light"],
             ["totalSize", 0],
             ["scrollAdjustPending", 0],
         ]),

@@ -26,6 +26,7 @@ export function createMockContext(
         isNearEnd: state.isNearEnd ?? false,
         isNearStart: state.isNearStart ?? false,
         isWithinMaintainScrollAtEndThreshold: state.isWithinMaintainScrollAtEndThreshold ?? false,
+        itemRenderMode: "light",
         scrollAdjust: 0,
         scrollAdjustPending: 0,
         scrollAdjustUserOffset: 0,

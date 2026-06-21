@@ -471,6 +471,24 @@ describe("calculateItemsInView", () => {
             expect(result).toBeUndefined();
         });
 
+        it("uses provided scroll velocity for item position updates", () => {
+            const updateItemPositionsSpy = spyOn(updateItemPositionsModule, "updateItemPositions");
+
+            try {
+                setupFixedSizeItems(10, 100);
+
+                calculateItemsInView(mockCtx, { scrollVelocity: 2 });
+
+                expect(updateItemPositionsSpy).toHaveBeenCalledWith(
+                    mockCtx,
+                    undefined,
+                    expect.objectContaining({ scrollVelocity: 2 }),
+                );
+            } finally {
+                updateItemPositionsSpy.mockRestore();
+            }
+        });
+
         it("updates viewability without recalculating layout when within precomputed range", () => {
             const itemSize = 100;
             const viewabilityCalls: any[] = [];

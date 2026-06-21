@@ -6,6 +6,7 @@ import { updateScroll } from "@/core/updateScroll";
 import * as flushSyncModule from "@/platform/flushSync";
 import { Platform } from "@/platform/Platform";
 import type { StateContext } from "@/state/state";
+import { peek$ } from "@/state/state";
 import * as requestAdjustModule from "@/utils/requestAdjust";
 import { createMockContext } from "../__mocks__/createMockContext";
 
@@ -91,7 +92,7 @@ describe("updateScroll large user jumps", () => {
         updateScroll(mockCtx, 150);
 
         expect(flushSyncSpy).not.toHaveBeenCalled();
-        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: true });
+        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: true, scrollVelocity: 0 });
         expect(mockCtx.state.mvcpAnchorLock).toBe(anchorLock);
         expect(mockCtx.state.pendingNativeMVCPAdjust).toBeDefined();
         expect(mockCtx.state.userScrollAnchorReset).toBeUndefined();
@@ -105,6 +106,43 @@ describe("updateScroll large user jumps", () => {
         updateScroll(mockCtx, 50);
 
         expect(flushSyncSpy).not.toHaveBeenCalled();
+    });
+
+    it("updates item render mode from the current scroll sample", () => {
+        const originalDateNow = Date.now;
+        const changes: string[] = [];
+        const now = 1000;
+        Date.now = () => now;
+
+        try {
+            mockCtx = createMockContext(
+                {
+                    itemRenderMode: "normal",
+                },
+                {
+                    props: {
+                        itemRenderMode: {
+                            onChange: (mode) => changes.push(mode),
+                            velocityThreshold: 1,
+                        },
+                    },
+                    scroll: 0,
+                    scrollHistory: [{ scroll: 0, time: 900 }],
+                    scrollLength: 1000,
+                    triggerCalculateItemsInView: () => {},
+                },
+            );
+
+            updateScroll(mockCtx, 200);
+
+            expect(peek$(mockCtx, "itemRenderMode")).toBe("light");
+            expect(changes).toEqual(["light"]);
+        } finally {
+            for (const timeout of mockCtx.state.timeouts) {
+                clearTimeout(timeout);
+            }
+            Date.now = originalDateNow;
+        }
     });
 
     it("uses flushSync for large non-web user scroll jumps", () => {
@@ -146,7 +184,7 @@ describe("updateScroll mvcp active mode", () => {
         updateScroll(mockCtx, 101);
 
         expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledTimes(1);
-        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: false });
+        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: false, scrollVelocity: 0 });
         expect(doMaintainScrollAtEndSpy).not.toHaveBeenCalled();
         triggerCalculateItemsInViewSpy.mockRestore();
     });

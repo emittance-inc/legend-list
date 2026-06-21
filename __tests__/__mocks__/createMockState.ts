@@ -120,6 +120,7 @@ export function createMockState(
             getItemType: undefined,
             horizontal: false,
             initialScroll: undefined,
+            itemRenderMode: undefined,
             itemsAreEqual: undefined,
             keyExtractor: (_: any, index: number) => `item_${index}`,
             maintainScrollAtEnd: undefined,

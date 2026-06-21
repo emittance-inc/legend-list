@@ -7,6 +7,8 @@ import {
     ContextContainer,
     type ContextContainerType,
     useIsLastItem,
+    useItemRenderMode,
+    useItemRenderModeChange,
     useListScrollSize,
     useRecyclingEffect,
     useRecyclingState,
@@ -14,7 +16,7 @@ import {
     useViewability,
     useViewabilityAmount,
 } from "../../src/state/ContextContainer";
-import { StateProvider, useStateContext } from "../../src/state/state";
+import { StateProvider, set$, useStateContext } from "../../src/state/state";
 import type { ViewAmountToken, ViewToken } from "../../src/types.base";
 import { act, render } from "../helpers/testingLibrary";
 
@@ -37,6 +39,66 @@ async function flushAsync() {
 }
 
 describe("ContextContainer hooks", () => {
+    describe("useItemRenderMode", () => {
+        it("should re-render when the item render mode changes", async () => {
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let renders = 0;
+            const modes: string[] = [];
+
+            const TestComponent = () => {
+                const ctx = useStateContext();
+                const mode = useItemRenderMode();
+                capturedCtx = ctx;
+                renders++;
+                modes.push(mode);
+                return <Text>{mode}</Text>;
+            };
+
+            render(
+                <StateProvider>
+                    <TestComponent />
+                </StateProvider>,
+            );
+
+            await act(async () => {
+                set$(capturedCtx!, "itemRenderMode", "normal");
+            });
+
+            expect(renders).toBe(2);
+            expect(modes).toEqual(["light", "normal"]);
+        });
+    });
+
+    describe("useItemRenderModeChange", () => {
+        it("should call onChange without forcing a component re-render", async () => {
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let renders = 0;
+            const modes: string[] = [];
+
+            const TestComponent = () => {
+                const ctx = useStateContext();
+                capturedCtx = ctx;
+                renders++;
+                useItemRenderModeChange((mode) => modes.push(mode));
+                return <Text>Test</Text>;
+            };
+
+            render(
+                <StateProvider>
+                    <TestComponent />
+                </StateProvider>,
+            );
+
+            await flushAsync();
+            await act(async () => {
+                set$(capturedCtx!, "itemRenderMode", "normal");
+            });
+
+            expect(renders).toBe(1);
+            expect(modes).toEqual(["normal"]);
+        });
+    });
+
     describe("useViewability", () => {
         it("should register callback when used inside context", async () => {
             const callback = (token: ViewToken) => {

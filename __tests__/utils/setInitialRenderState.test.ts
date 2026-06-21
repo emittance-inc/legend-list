@@ -37,6 +37,7 @@ describe("setInitialRenderState", () => {
         setInitialRenderState(ctx, { didInitialScroll: true });
 
         expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("itemRenderMode")).toBe("normal");
         expect(rafCallbacks).toHaveLength(1);
         expect(triggerCalculateItemsInView).not.toHaveBeenCalled();
 
@@ -60,6 +61,7 @@ describe("setInitialRenderState", () => {
         setInitialRenderState(ctx, { didInitialScroll: true });
 
         expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("itemRenderMode")).toBe("normal");
         expect(rafCallbacks).toHaveLength(0);
     });
 
