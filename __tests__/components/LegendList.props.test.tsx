@@ -123,6 +123,29 @@ beforeEach(() => {
 });
 
 describe("LegendList props behavior", () => {
+    it("clears tracked timeouts on unmount", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const { LegendList } = await import("../../src/components/LegendList?props-test-timeout-cleanup");
+
+        const rendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={renderItem}
+            />,
+        );
+        const state = await getStateFromRender();
+        const timeout = setTimeout(() => {}, 1000) as unknown as number;
+        state.timeouts.add(timeout);
+
+        rendered.unmount();
+
+        expect(state.timeouts.size).toBe(0);
+    });
+
     it("stores the derived scroll-axis gap on context", async () => {
         const data = [{ id: "item-1", label: "Alpha" }];
         const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;

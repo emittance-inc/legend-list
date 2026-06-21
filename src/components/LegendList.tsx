@@ -731,6 +731,15 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     useImperativeHandle(forwardedRef, () => createImperativeHandle(ctx, scheduleImperativeScrollCommit), []);
 
+    useEffect(() => {
+        return () => {
+            for (const timeout of state.timeouts) {
+                clearTimeout(timeout);
+            }
+            state.timeouts.clear();
+        };
+    }, [state]);
+
     // Run pending scroll to end after props have settled.
     useLayoutEffect(() => {
         state.runPendingScrollToEnd?.();
