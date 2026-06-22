@@ -265,6 +265,45 @@ describe("prepareMVCP", () => {
             });
         });
 
+        it("skips web dataChanged adjustments while a scrollToEnd is pending", () => {
+            withWebPlatform(() => {
+                mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(true);
+                mockState.pendingScrollToEnd = {
+                    resolve: () => {},
+                    token: 1,
+                };
+                mockState.mvcpAnchorLock = {
+                    expiresAt: Date.now() + 500,
+                    id: "item-1",
+                    position: 100,
+                    quietPasses: 0,
+                };
+
+                const adjustFunction = prepareMVCP(mockCtx, true);
+
+                setLayoutValue(mockState, "positions", "item-1", 150);
+
+                expect(adjustFunction).toBeUndefined();
+                expect(mockState.mvcpAnchorLock).toBeUndefined();
+                expect(requestAdjustSpy).not.toHaveBeenCalled();
+            });
+        });
+
+        it("keeps native dataChanged adjustments while a scrollToEnd is pending", () => {
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(true);
+            mockState.pendingScrollToEnd = {
+                resolve: () => {},
+                token: 1,
+            };
+
+            const adjustFunction = expectAdjustFunction(prepareMVCP(mockCtx, true));
+
+            setLayoutValue(mockState, "positions", "item-1", 150);
+            adjustFunction();
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(mockCtx, 50, true);
+        });
+
         it("predicts the native end clamp immediately when the shrink is already known", () => {
             mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(true);
             mockState.scroll = 420;

@@ -237,6 +237,13 @@ export function prepareMVCP(ctx: StateContext, dataChanged?: boolean): (() => vo
     const now = Date.now();
     const enableMVCPAnchorLock = isWeb && (!!dataChanged || !!state.mvcpAnchorLock);
     const scrollingTo = state.scrollingTo;
+    // A deferred scrollToEnd has not become state.scrollingTo yet. On web, data MVCP would otherwise
+    // preserve the old visible anchor with an instant ScrollAdjust before the intended end scroll can animate.
+    if (isWeb && dataChanged && state.pendingScrollToEnd && scrollingTo === undefined) {
+        state.mvcpAnchorLock = undefined;
+        return undefined;
+    }
+
     const anchorLock = isWeb ? resolveAnchorLock(state, enableMVCPAnchorLock, mvcpData, now) : undefined;
 
     let prevPosition: number | undefined;
