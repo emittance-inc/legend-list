@@ -13,6 +13,7 @@ const prompt = [
     "Write entries in plain, human language that explains what users should notice.",
     "Avoid buzzwords and vague release-note phrasing like optimized, enhanced, improved, streamlined, or robust unless the sentence says what actually changed.",
     "Keep useful implementation details only when they make the behavior clearer.",
+    "If a commit message includes an issue reference like #123, include that issue reference in the relevant changelog entry.",
     "Use the existing changelog format and see changelog.mdc for more details.",
 ].join(" ");
 
