@@ -1,3 +1,17 @@
+## 3.1.0
+
+- Feat: Add `experimental_adaptiveRender` with `useAdaptiveRender` and `useAdaptiveRenderChange`, so item components can render a lighter version while the list is moving quickly and return to normal after scrolling slows.
+- Feat: Add `setItemSize` to the list ref for updating a known item's measured size directly when its content changes outside normal layout measurement.
+- Fix: Web maintainVisibleContentPosition keeps the intended anchor when headers change, browser scroll anchoring runs, or an animated `scrollToEnd` is already in progress. #468 #463
+- Fix: `initialScrollIndex` and `initialScrollAtEnd` use the latest initial scroll props when data starts empty and loads later, so lists do not scroll to an old startup target.
+- Fix: Changing `gap` now refreshes cached item measurements, and fixed-size rows include the gap in their positions.
+- Fix: SectionList sticky headers update after the section data changes. #445
+- Fix: Horizontal lists with end alignment now place items at the end instead of ignoring the alignment. #472
+- Fix: Lists clear scheduled timers on unmount, preventing delayed adaptive-render or scroll work from running after the list is gone.
+- Perf: The first render starts with a smaller draw distance and expands shortly after, reducing offscreen work before the initial content appears.
+- Perf: `alignItemsAtEnd` spacer updates cause fewer ScrollView rerenders.
+- Types: Export `AdaptiveRender` and `AdaptiveRenderConfig` from the React Native and web type entrypoints.
+
 ## 3.0.6
 
 - Fix: KeyboardAwareLegendList now accounts for bottom insets when alignItemsAtEnd is used, so short chat-style lists stay pinned above the keyboard or safe area instead of being pushed too low or leaving extra scroll space.
