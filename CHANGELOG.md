@@ -1,3 +1,7 @@
+## 3.1.1
+
+- Fix: `maintainScrollAtEnd` now stays pinned when a `ListFooterComponent` appears, disappears, or changes size, so chat typing indicators and other dynamic footers do not leave the list slightly above the end. If you use an explicit `maintainScrollAtEnd.on` config, add `footerLayout` to opt into footer size changes.
+
 ## 3.1.0
 
 - Feat: Add `experimental_adaptiveRender` prop, with `useAdaptiveRender` and `useAdaptiveRenderChange` hooks, so item components can render a lighter version while the list is moving quickly and return to normal after scrolling slows.
