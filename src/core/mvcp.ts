@@ -383,6 +383,11 @@ export function prepareMVCP(ctx: StateContext, dataChanged?: boolean): (() => vo
                         if (diff > 0) {
                             diff = Math.max(0, totalSize - state.scroll - state.scrollLength);
                         } else {
+                            // Content shrank while the end target was already past the new max scroll. Native will clamp
+                            // to this value during layout, so keep JS state in sync and skip an extra MVCP anchor move.
+                            const maxScroll = Math.max(0, totalSize - state.scrollLength);
+                            state.scroll = maxScroll;
+                            state.scrollPending = maxScroll;
                             diff = 0;
                         }
                     }

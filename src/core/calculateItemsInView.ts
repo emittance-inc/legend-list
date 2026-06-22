@@ -462,7 +462,7 @@ export function calculateItemsInView(
             !!checkMVCP &&
             (state.scroll !== scrollBeforeMVCP ||
                 (peek$(ctx, "scrollAdjustPending") ?? 0) !== scrollAdjustPendingBeforeMVCP);
-        if (didMVCPAdjustScroll && initialScroll) {
+        if (didMVCPAdjustScroll && (initialScroll || state.scrollingTo)) {
             updateScroll(state.scroll);
             updateScrollRange();
         }

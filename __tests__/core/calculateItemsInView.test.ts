@@ -1020,6 +1020,84 @@ describe("calculateItemsInView", () => {
             }
         });
 
+        it("uses the clamped MVCP scroll for the visible range when an end target shrinks", () => {
+            const itemCount = 20;
+            mockState.props.data = Array.from({ length: itemCount }, (_, i) => ({ id: i }));
+            mockState.props.drawDistance = 0;
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(true);
+            mockState.scroll = 1700;
+            mockState.scrollLength = 300;
+            mockState.scrollPending = 1700;
+            mockState.scrollingTo = {
+                animated: false,
+                index: itemCount - 1,
+                itemSize: 100,
+                offset: 1700,
+                viewPosition: 1,
+            };
+            mockCtx.values.set("numContainers", itemCount);
+            mockCtx.values.set("totalSize", 2000);
+            mockState.totalSize = 2000;
+
+            for (let i = 0; i < itemCount; i++) {
+                const id = `item_${i}`;
+                mockState.idCache[i] = id;
+                mockState.indexByKey.set(id, i);
+                setLayoutValue(mockState, "positions", id, i * 100);
+                mockState.sizes.set(id, 100);
+                mockState.sizesKnown.set(id, i < 10 ? 50 : 100);
+            }
+
+            calculateItemsInView(mockCtx, { doMVCP: true, forceFullItemPositions: true });
+
+            expect(mockState.scroll).toBe(1200);
+            expect(mockState.scrollPending).toBe(1200);
+            expect(mockState.startNoBuffer).toBe(17);
+            expect(mockState.endNoBuffer).toBe(19);
+            expect(mockState.idsInView).toEqual(["item_17", "item_18", "item_19"]);
+        });
+
+        it("uses the adjusted MVCP scroll for the visible range while a non-end target shifts", () => {
+            const itemCount = 20;
+            mockState.props.data = Array.from({ length: itemCount }, (_, i) => ({ id: i }));
+            mockState.props.drawDistance = 0;
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(true);
+            mockState.scroll = 200;
+            mockState.scrollLength = 300;
+            mockState.scrollPending = 200;
+            mockState.scrollingTo = {
+                animated: false,
+                index: 2,
+                itemSize: 100,
+                offset: 200,
+                viewPosition: 0,
+            };
+            mockState.scrollAdjustHandler.requestAdjust = mock(() => {});
+            mockCtx.values.set("numContainers", itemCount);
+            mockCtx.values.set("readyToRender", true);
+            mockCtx.values.set("totalSize", 2000);
+            mockState.totalSize = 2000;
+
+            for (let i = 0; i < itemCount; i++) {
+                const id = `item_${i}`;
+                mockState.idCache[i] = id;
+                mockState.indexByKey.set(id, i);
+                setLayoutValue(mockState, "positions", id, i * 100);
+                mockState.sizes.set(id, 100);
+                mockState.sizesKnown.set(id, 100);
+            }
+
+            mockState.sizesKnown.set("item_0", 150);
+            mockState.sizesKnown.set("item_1", 150);
+
+            calculateItemsInView(mockCtx, { doMVCP: true, forceFullItemPositions: true });
+
+            expect(mockState.scroll).toBe(300);
+            expect(mockState.startNoBuffer).toBe(2);
+            expect(mockState.endNoBuffer).toBe(5);
+            expect(mockState.idsInView).toEqual(["item_2", "item_3", "item_4", "item_5"]);
+        });
+
         it("completes a full position update after optimized scrolling finishes", () => {
             const itemCount = 50;
             mockState.props.data = Array.from({ length: itemCount }, (_, index) => ({ value: index }));
