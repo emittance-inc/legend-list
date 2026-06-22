@@ -12,6 +12,8 @@ import type {
 import type { LegendListPropsBase } from "@/types.internal";
 
 export type {
+    AdaptiveRender,
+    AdaptiveRenderConfig,
     AlwaysRenderConfig,
     ColumnWrapperStyle,
     Insets,
