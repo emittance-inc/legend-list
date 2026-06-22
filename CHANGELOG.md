@@ -1,6 +1,6 @@
 ## 3.1.0
 
-- Feat: Add `experimental_adaptiveRender` with `useAdaptiveRender` and `useAdaptiveRenderChange`, so item components can render a lighter version while the list is moving quickly and return to normal after scrolling slows.
+- Feat: Add `experimental_adaptiveRender` prop, with `useAdaptiveRender` and `useAdaptiveRenderChange` hooks, so item components can render a lighter version while the list is moving quickly and return to normal after scrolling slows.
 - Feat: Add `setItemSize` to the list ref for updating a known item's measured size directly when its content changes outside normal layout measurement.
 - Fix: Web maintainVisibleContentPosition keeps the intended anchor when headers change, browser scroll anchoring runs, or an animated `scrollToEnd` is already in progress. #468 #463
 - Fix: `initialScrollIndex` and `initialScrollAtEnd` use the latest initial scroll props when data starts empty and loads later, so lists do not scroll to an old startup target.
