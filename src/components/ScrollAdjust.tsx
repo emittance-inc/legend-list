@@ -44,6 +44,7 @@ export function scrollAdjustBy(el: HTMLElement, left: number, top: number) {
 export function ScrollAdjust() {
     const ctx = useStateContext();
     const lastScrollOffsetRef = React.useRef(0);
+    const lastScrollAdjustUserOffsetRef = React.useRef(0);
     const resetPaddingRafRef = React.useRef<number | undefined>(undefined);
     const resetPaddingBaselineRef = React.useRef<string | undefined>(undefined);
     const contentNodeRef = React.useRef<HTMLElement | null>(null);
@@ -64,7 +65,8 @@ export function ScrollAdjust() {
                 const axis = getScrollAdjustAxis(horizontal);
                 const { contentNode, scrollElement: el } = target;
                 const currentScroll = horizontal ? el.scrollLeft : el.scrollTop;
-                const intendedScroll = ctx.state.scroll + (scrollAdjustUserOffset || 0);
+                const userOffsetDelta = (scrollAdjustUserOffset || 0) - lastScrollAdjustUserOffsetRef.current;
+                const intendedScroll = userOffsetDelta !== 0 ? currentScroll + userOffsetDelta : ctx.state.scroll;
                 // Reconcile against live DOM scroll so browser clamping/anchoring
                 // is not applied a second time as another relative scrollBy.
                 const scrollDelta = intendedScroll - currentScroll;
@@ -115,6 +117,7 @@ export function ScrollAdjust() {
             }
 
             lastScrollOffsetRef.current = scrollOffset;
+            lastScrollAdjustUserOffsetRef.current = scrollAdjustUserOffset || 0;
         }
     }, [ctx]);
 

@@ -163,4 +163,129 @@ describe("ScrollAdjust (web)", () => {
             });
         }
     });
+
+    it("applies only the user anchor offset delta after state observes the previous adjustment", () => {
+        const scrollByCalls: Array<{ left: number; top: number }> = [];
+        const contentNode = {
+            clientHeight: 0,
+            offsetHeight: 0,
+            parentElement: null,
+            scrollHeight: 5000,
+            style: {},
+        } as unknown as HTMLElement;
+        const scrollElement = {
+            clientHeight: 500,
+            querySelector: mock(() => contentNode),
+            scrollBy: mock(({ left, top }: { left: number; top: number }) => {
+                scrollByCalls.push({ left, top });
+                scrollElement.scrollLeft += left;
+                scrollElement.scrollTop += top;
+            }),
+            scrollLeft: 0,
+            scrollTop: 1000,
+        } as unknown as HTMLElement;
+        let ctx: ReturnType<typeof useStateContext> | undefined;
+        function Setup() {
+            ctx = useStateContext();
+            ctx.state = createMockState({
+                props: { horizontal: false },
+                refScroller: {
+                    current: {
+                        getScrollableNode: () => scrollElement,
+                    },
+                } as any,
+                scroll: 1000,
+            });
+
+            return React.createElement(ScrollAdjust);
+        }
+
+        let renderer: TestRenderer.ReactTestRenderer | undefined;
+        try {
+            act(() => {
+                renderer = TestRenderer.create(React.createElement(StateProvider, null, React.createElement(Setup)));
+            });
+
+            act(() => {
+                set$(ctx!, "scrollAdjustUserOffset", 50);
+            });
+            expect(scrollElement.scrollTop).toBe(1050);
+
+            ctx!.state.scroll = 1050;
+            act(() => {
+                set$(ctx!, "scrollAdjustUserOffset", 100);
+            });
+
+            expect(scrollElement.scrollTop).toBe(1100);
+            expect(scrollByCalls).toEqual([
+                { left: 0, top: 50 },
+                { left: 0, top: 50 },
+            ]);
+        } finally {
+            act(() => {
+                renderer?.unmount();
+            });
+        }
+    });
+
+    it("applies only the user anchor offset delta before state observes the previous adjustment", () => {
+        const scrollByCalls: Array<{ left: number; top: number }> = [];
+        const contentNode = {
+            clientHeight: 0,
+            offsetHeight: 0,
+            parentElement: null,
+            scrollHeight: 5000,
+            style: {},
+        } as unknown as HTMLElement;
+        const scrollElement = {
+            clientHeight: 500,
+            querySelector: mock(() => contentNode),
+            scrollBy: mock(({ left, top }: { left: number; top: number }) => {
+                scrollByCalls.push({ left, top });
+                scrollElement.scrollLeft += left;
+                scrollElement.scrollTop += top;
+            }),
+            scrollLeft: 0,
+            scrollTop: 1000,
+        } as unknown as HTMLElement;
+        let ctx: ReturnType<typeof useStateContext> | undefined;
+        function Setup() {
+            ctx = useStateContext();
+            ctx.state = createMockState({
+                props: { horizontal: false },
+                refScroller: {
+                    current: {
+                        getScrollableNode: () => scrollElement,
+                    },
+                } as any,
+                scroll: 1000,
+            });
+
+            return React.createElement(ScrollAdjust);
+        }
+
+        let renderer: TestRenderer.ReactTestRenderer | undefined;
+        try {
+            act(() => {
+                renderer = TestRenderer.create(React.createElement(StateProvider, null, React.createElement(Setup)));
+            });
+
+            act(() => {
+                set$(ctx!, "scrollAdjustUserOffset", 50);
+            });
+            act(() => {
+                set$(ctx!, "scrollAdjustUserOffset", 100);
+            });
+
+            expect(scrollElement.scrollTop).toBe(1100);
+            expect(scrollByCalls).toEqual([
+                { left: 0, top: 50 },
+                { left: 0, top: 50 },
+            ]);
+        } finally {
+            act(() => {
+                renderer?.unmount();
+            });
+        }
+    });
 });
