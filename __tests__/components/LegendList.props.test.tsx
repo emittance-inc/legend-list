@@ -174,6 +174,39 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
+    it("invalidates cached item sizes when the scroll-axis gap changes", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const { LegendList } = await import("../../src/components/LegendList?props-test-scroll-axis-gap-cache");
+        const renderList = (gap: number) => (
+            <LegendList
+                contentContainerStyle={{ rowGap: gap }}
+                data={data}
+                estimatedItemSize={100}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={renderItem}
+            />
+        );
+
+        const rendered = render(renderList(12));
+        const ctx = await getContextFromRender();
+        const state = ctx.state;
+
+        state.sizes.set("item-1", 112);
+        state.sizesKnown.set("item-1", 112);
+        state.totalSize = 112;
+        set$(ctx, "totalSize", 112);
+
+        rendered.rerender(renderList(24));
+
+        expect(ctx.scrollAxisGap).toBe(24);
+        expect(state.sizes.size).toBe(0);
+        expect(state.sizesKnown.size).toBe(0);
+
+        rendered.unmount();
+    });
+
     it("calls warnDevOnce when recycleItems is omitted", async () => {
         const consoleWarnSpy = mock(() => {});
         const originalWarn = console.warn;

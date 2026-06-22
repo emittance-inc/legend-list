@@ -271,7 +271,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const scrollAxisGap = horizontal
         ? (ctx.columnWrapperStyle?.columnGap ?? ctx.columnWrapperStyle?.gap)
         : (ctx.columnWrapperStyle?.rowGap ?? ctx.columnWrapperStyle?.gap);
-    ctx.scrollAxisGap = typeof scrollAxisGap === "number" && Number.isFinite(scrollAxisGap) ? scrollAxisGap : 0;
+    const nextScrollAxisGap = typeof scrollAxisGap === "number" && Number.isFinite(scrollAxisGap) ? scrollAxisGap : 0;
 
     const refScroller = useRef<LooseScrollView>(null);
     const combinedRef = useCombinedRef(refScroller, refScrollView);
@@ -389,8 +389,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const state = refState.current!;
     const isFirstLocal = state.isFirst;
     const previousNumColumnsProp = state.props.numColumns;
+    const didScrollAxisGapChange = !isFirstLocal && ctx.scrollAxisGap !== nextScrollAxisGap;
 
-    state.didColumnsChange = numColumnsProp !== previousNumColumnsProp;
+    ctx.scrollAxisGap = nextScrollAxisGap;
+    state.didColumnsChange = numColumnsProp !== previousNumColumnsProp || didScrollAxisGapChange;
     const didDataReferenceChangeLocal = state.props.data !== dataProp;
     const didDataVersionChangeLocal = state.props.dataVersion !== dataVersion;
     const didDataChangeLocal =
@@ -538,7 +540,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         });
     }, []);
 
-    if (isFirstLocal || didDataChangeLocal || numColumnsProp !== peek$(ctx, "numColumns")) {
+    if (isFirstLocal || didDataChangeLocal || state.didColumnsChange) {
         refState.current.lastBatchingAction = Date.now();
         if (!keyExtractorProp && !isFirstLocal && didDataChangeLocal) {
             // If we have no keyExtractor then we have no guarantees about previous item sizes so we have to reset
@@ -641,6 +643,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             dataVersion,
             memoizedLastItemKeys.join(","),
             numColumnsProp,
+            nextScrollAxisGap,
             stylePaddingBottomState,
             stylePaddingTopState,
             useAlignItemsAtEndPadding,
@@ -667,7 +670,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         state.didColumnsChange = false;
         state.didDataChange = false;
         state.isFirst = false;
-    }, [dataProp, dataVersion, numColumnsProp]);
+    }, [dataProp, dataVersion, numColumnsProp, nextScrollAxisGap]);
 
     useLayoutEffect(() => {
         set$(ctx, "extraData", extraData);
