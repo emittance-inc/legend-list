@@ -281,7 +281,7 @@ export interface InternalState {
         numColumns: number;
         onEndReached: LegendListPropsInternal["onEndReached"];
         onEndReachedThreshold: number | null | undefined;
-        adaptiveRender: LegendListPropsInternal["adaptiveRender"];
+        adaptiveRender: LegendListPropsInternal["experimental_adaptiveRender"];
         onItemSizeChanged: LegendListPropsInternal["onItemSizeChanged"];
         onLoad: LegendListPropsInternal["onLoad"];
         onScroll: LegendListPropsInternal["onScroll"];

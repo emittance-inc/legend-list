@@ -315,7 +315,7 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
     /**
      * Configures the adaptive render signal. Items can use this to render a lighter version while scrolling quickly.
      */
-    adaptiveRender?: AdaptiveRenderConfig;
+    experimental_adaptiveRender?: AdaptiveRenderConfig;
 
     /**
      * Function to call when the user pulls to refresh.

@@ -139,7 +139,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         initialScrollAtEnd = false,
         initialScrollIndex: initialScrollIndexProp,
         initialScrollOffset: initialScrollOffsetProp,
-        adaptiveRender,
+        experimental_adaptiveRender,
         itemsAreEqual,
         keyExtractor: keyExtractorProp,
         ListEmptyComponent,
@@ -421,7 +421,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         state.props.anchoredEndSpace?.anchorIndex !== anchoredEndSpaceResolved?.anchorIndex;
 
     state.props = {
-        adaptiveRender,
+        adaptiveRender: experimental_adaptiveRender,
         alignItemsAtEnd,
         alignItemsAtEndPaddingEnabled: useAlignItemsAtEndPadding,
         alwaysRender,
