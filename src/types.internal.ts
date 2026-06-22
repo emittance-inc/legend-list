@@ -51,6 +51,7 @@ export interface MaintainScrollAtEndNormalized {
     onLayout: boolean;
     onItemLayout: boolean;
     onDataChange: boolean;
+    onFooterLayout: boolean;
 }
 
 export interface ThresholdSnapshot {

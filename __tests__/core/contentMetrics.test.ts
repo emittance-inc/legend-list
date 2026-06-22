@@ -1,6 +1,6 @@
 import { describe, expect, it, spyOn } from "bun:test";
 import { clampScrollOffset } from "../../src/core/clampScrollOffset";
-import { setContentInsetOverride, setHeaderSize } from "../../src/core/updateContentMetrics";
+import { setContentInsetOverride, setFooterSize, setHeaderSize } from "../../src/core/updateContentMetrics";
 import { updateContentMetricsState } from "../../src/core/updateContentMetricsState";
 import { Platform } from "../../src/platform/Platform";
 import { getContentSize } from "../../src/state/getContentSize";
@@ -125,6 +125,47 @@ describe("updateContentMetrics", () => {
         expect(setContentInsetOverride(ctx, { bottom: 301 })).toBe(true);
         expect(ctx.values.get("alignItemsAtEndPadding")).toBe(279);
         expect(setContentInsetOverride(ctx, { bottom: 301 })).toBe(false);
+    });
+
+    it("updates content metrics when footer size changes through the domain setter", () => {
+        const ctx = createMockContext(
+            {
+                footerSize: 20,
+                totalSize: 84,
+            },
+            {
+                contentInsetOverride: { bottom: 301 },
+                props: {
+                    alignItemsAtEnd: true,
+                    alignItemsAtEndPaddingEnabled: true,
+                    data: [1],
+                },
+                scrollLength: 664,
+                totalSize: 84,
+            },
+        );
+
+        updateContentMetricsState(ctx);
+        expect(ctx.values.get("alignItemsAtEndPadding")).toBe(259);
+
+        expect(setFooterSize(ctx, 0)).toBe(true);
+
+        expect(ctx.values.get("alignItemsAtEndPadding")).toBe(279);
+    });
+
+    it("reports unchanged footer sizes without updating content metrics", () => {
+        const ctx = createMockContext(
+            {
+                footerSize: 12,
+                totalSize: 1000,
+            },
+            {
+                props: {},
+            },
+        );
+
+        expect(setFooterSize(ctx, 12)).toBe(false);
+        expect(ctx.values.get("footerSize")).toBe(12);
     });
 
     it("compensates web MVCP when a measured header changes above the viewport", () => {

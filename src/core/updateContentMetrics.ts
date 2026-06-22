@@ -7,10 +7,14 @@ import { updateContentMetricsState } from "./updateContentMetricsState";
 const SCROLL_ADJUST_EPSILON = 0.1;
 
 function setContentLengthSignal(ctx: StateContext, signalName: "footerSize" | "headerSize", size: number) {
-    if (peek$(ctx, signalName) !== size) {
+    const didChange = peek$(ctx, signalName) !== size;
+
+    if (didChange) {
         set$(ctx, signalName, size);
         updateContentMetricsState(ctx);
     }
+
+    return didChange;
 }
 
 function shouldAdjustForHeaderSizeChange(ctx: StateContext, previousHeaderSize: number, nextHeaderSize: number) {
@@ -52,7 +56,7 @@ export function setHeaderSize(ctx: StateContext, size: number) {
 }
 
 export function setFooterSize(ctx: StateContext, size: number) {
-    setContentLengthSignal(ctx, "footerSize", size);
+    return setContentLengthSignal(ctx, "footerSize", size);
 }
 
 function areInsetsEqual(left: Partial<Insets> | null | undefined, right: Partial<Insets> | null | undefined) {

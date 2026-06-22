@@ -484,6 +484,7 @@ export interface AlwaysRenderConfig {
 
 export interface MaintainScrollAtEndOnOptions {
     dataChange?: boolean;
+    footerLayout?: boolean;
     itemLayout?: boolean;
     layout?: boolean;
 }

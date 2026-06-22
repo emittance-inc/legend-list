@@ -10,6 +10,7 @@ import { ScrollAdjust } from "@/components/ScrollAdjust";
 import { SnapWrapper } from "@/components/SnapWrapper";
 import { WebAnchoredEndSpace } from "@/components/WebAnchoredEndSpace";
 import { ENABLE_DEVMODE } from "@/constants";
+import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import type { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
 import { setFooterSize, setHeaderSize } from "@/core/updateContentMetrics";
 import { useStableRenderComponent } from "@/hooks/useStableRenderComponent";
@@ -132,15 +133,27 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
         ? SnapWrapper
         : (ScrollComponent as React.ComponentType<any>);
 
+    const updateFooterSize = useCallback(
+        (size: number, afterSizeUpdate?: () => void) => {
+            const didFooterSizeChange = setFooterSize(ctx, size);
+            afterSizeUpdate?.();
+
+            if (didFooterSizeChange && ctx.state.props.maintainScrollAtEnd?.onFooterLayout) {
+                doMaintainScrollAtEnd(ctx);
+            }
+        },
+        [ctx],
+    );
+
     useLayoutEffect(() => {
         // Handle header/footer getting toggled on and off, remove header/footer size when they are not present
         if (!ListHeaderComponent) {
             setHeaderSize(ctx, 0);
         }
         if (!ListFooterComponent) {
-            setFooterSize(ctx, 0);
+            updateFooterSize(0);
         }
-    }, [ListHeaderComponent, ListFooterComponent, ctx]);
+    }, [ListHeaderComponent, ListFooterComponent, ctx, updateFooterSize]);
 
     const onLayoutHeader = useCallback(
         (rect: LayoutRectangle) => {
@@ -153,10 +166,11 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
     const onLayoutFooterInternal = useCallback(
         (rect: LayoutRectangle, fromLayoutEffect: boolean) => {
             const size = rect[horizontal ? "width" : "height"];
-            setFooterSize(ctx, size);
-            onLayoutFooter?.(rect, fromLayoutEffect);
+            updateFooterSize(size, () => {
+                onLayoutFooter?.(rect, fromLayoutEffect);
+            });
         },
-        [ctx, horizontal, onLayoutFooter],
+        [horizontal, onLayoutFooter, updateFooterSize],
     );
 
     return (
