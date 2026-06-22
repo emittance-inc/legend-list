@@ -104,6 +104,7 @@ export function createMockState(
         viewabilityConfigCallbackPairs: undefined,
         ...overrides,
         props: {
+            adaptiveRender: undefined,
             alignItemsAtEnd: false,
             alignItemsAtEndPaddingEnabled: false,
             alwaysRender: undefined,

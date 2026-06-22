@@ -19,6 +19,7 @@ export function createMockContext(
     };
     const defaults: Record<string, any> = {
         activeStickyIndex: state.activeStickyIndex ?? -1,
+        adaptiveRender: "light",
         alignItemsAtEndPadding: 0,
         contentInset: DEFAULT_CONTENT_INSET,
         isAtEnd: state.isAtEnd ?? false,

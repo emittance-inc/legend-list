@@ -171,6 +171,7 @@ export interface InternalState {
     initialScrollSession?: InternalInitialScrollSession;
     initialScroll: InternalInitialScrollTarget | undefined;
     timeoutPreservedInitialScrollClear?: any;
+    timeoutAdaptiveRender?: any;
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;
@@ -247,6 +248,7 @@ export interface InternalState {
         doMVCP?: boolean;
         dataChanged?: boolean;
         forceFullItemPositions?: boolean;
+        scrollVelocity?: number;
     }) => void;
     userScrollAnchorReset?: {
         keys: Set<string>;
@@ -279,6 +281,7 @@ export interface InternalState {
         numColumns: number;
         onEndReached: LegendListPropsInternal["onEndReached"];
         onEndReachedThreshold: number | null | undefined;
+        adaptiveRender: LegendListPropsInternal["experimental_adaptiveRender"];
         onItemSizeChanged: LegendListPropsInternal["onItemSizeChanged"];
         onLoad: LegendListPropsInternal["onLoad"];
         onScroll: LegendListPropsInternal["onScroll"];

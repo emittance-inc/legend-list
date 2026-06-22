@@ -1,8 +1,10 @@
+import { updateAdaptiveRender } from "@/core/adaptiveRender";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import { resolvePendingNativeMVCPAdjust } from "@/core/mvcp";
 import { flushSync } from "@/platform/flushSync";
 import type { StateContext } from "@/state/state";
 import { checkThresholds } from "@/utils/checkThresholds";
+import { getScrollVelocity } from "@/utils/getScrollVelocity";
 import { isInMVCPActiveMode } from "@/utils/isInMVCPActiveMode";
 
 export function updateScroll(
@@ -45,6 +47,9 @@ export function updateScroll(
         scrollHistory.shift();
     }
 
+    const scrollVelocity = getScrollVelocity(state);
+    updateAdaptiveRender(ctx, scrollVelocity);
+
     // Ignore scroll events that are closer to the previous scroll position than the target position after MVCP
     // This prevents a race condition where MVCP adjusts the scroll position for the new items
     // and then a scroll event comes in that was relevant from before the MVCP adjustment.
@@ -84,7 +89,7 @@ export function updateScroll(
 
         // Use velocity to predict scroll position
         const runCalculateItems = () => {
-            state.triggerCalculateItemsInView?.({ doMVCP: scrollingTo !== undefined });
+            state.triggerCalculateItemsInView?.({ doMVCP: scrollingTo !== undefined, scrollVelocity });
             checkThresholds(ctx);
         };
 

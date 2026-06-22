@@ -6,6 +6,8 @@ export const LegendList = LegendListRuntime as LegendListComponent;
 export const internal = sharedInternal;
 
 export {
+    useAdaptiveRender,
+    useAdaptiveRenderChange,
     useIsLastItem,
     useListScrollSize,
     useRecyclingEffect,

@@ -139,6 +139,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         initialScrollAtEnd = false,
         initialScrollIndex: initialScrollIndexProp,
         initialScrollOffset: initialScrollOffsetProp,
+        experimental_adaptiveRender,
         itemsAreEqual,
         keyExtractor: keyExtractorProp,
         ListEmptyComponent,
@@ -366,6 +367,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 startReachedSnapshotDataChangeEpoch: undefined,
                 stickyContainerPool: new Set(),
                 stickyContainers: new Map(),
+                timeoutAdaptiveRender: undefined,
                 timeouts: new Set(),
                 totalSize: 0,
                 viewabilityConfigCallbackPairs: undefined as never,
@@ -419,6 +421,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         state.props.anchoredEndSpace?.anchorIndex !== anchoredEndSpaceResolved?.anchorIndex;
 
     state.props = {
+        adaptiveRender: experimental_adaptiveRender,
         alignItemsAtEnd,
         alignItemsAtEndPaddingEnabled: useAlignItemsAtEndPadding,
         alwaysRender,
