@@ -216,7 +216,7 @@ export function updateItemPositions(
     }
 
     // If we didn't break early, update total size
-    // otherwise expect that a diff will be applied in updateItemSize
+    // otherwise expect that a diff will be applied while updating item sizes
     if (!didBreakEarly) {
         updateTotalSize(ctx);
     }

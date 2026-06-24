@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { PositionView, PositionViewSticky } from "@/components/PositionView";
 import { Separator } from "@/components/Separator";
 import { IsNewArchitecture } from "@/constants-platform";
+import { updateItemSizes } from "@/core/updateItemSizes";
 import { useOnLayoutSync } from "@/hooks/useOnLayoutSync";
 import { Platform } from "@/platform/Platform";
 import type { DimensionValue, LayoutRectangle, LooseView, StyleProp, ViewStyle } from "@/platform/scrollview-types";
@@ -86,7 +87,6 @@ export const Container = typedMemo(function Container<ItemT>({
     recycleItems,
     horizontal,
     getRenderedItem,
-    updateItemSize,
     ItemSeparatorComponent,
     stickyHeaderConfig,
 }: {
@@ -95,7 +95,6 @@ export const Container = typedMemo(function Container<ItemT>({
     recycleItems?: boolean;
     horizontal: boolean;
     getRenderedItem: GetRenderedItem;
-    updateItemSize: (itemKey: string, size: { width: number; height: number }) => void;
     ItemSeparatorComponent?: React.ComponentType<{ leadingItem: ItemT }>;
     stickyHeaderConfig?: StickyHeaderConfig;
 }) {
@@ -120,17 +119,14 @@ export const Container = typedMemo(function Container<ItemT>({
         lastSize?: { width: number; height: number };
         didLayout: boolean;
         pendingShrinkToken: number;
-        updateItemSize: (key: string, size: { width: number; height: number }) => void;
     }>({
         didLayout: false,
         horizontal,
         itemKey,
         pendingShrinkToken: 0,
-        updateItemSize,
     });
     itemLayoutRef.current.horizontal = horizontal;
     itemLayoutRef.current.itemKey = itemKey;
-    itemLayoutRef.current.updateItemSize = updateItemSize;
     const ref = useRef<LooseView>(null);
     const [layoutRenderCount, forceLayoutRender] = useState(0);
 
@@ -172,11 +168,10 @@ export const Container = typedMemo(function Container<ItemT>({
     );
     const { index, renderedItem } = renderedItemInfo || {};
 
-    const onLayoutChange = useCallback((rectangle: LayoutRectangle) => {
+    const onLayoutChange = useCallback((rectangle: LayoutRectangle, fromLayoutEffect: boolean) => {
         const {
             horizontal: currentHorizontal,
             itemKey: currentItemKey,
-            updateItemSize: updateItemSizeFn,
             lastSize,
             pendingShrinkToken,
         } = itemLayoutRef.current;
@@ -195,7 +190,12 @@ export const Container = typedMemo(function Container<ItemT>({
 
         const doUpdate = () => {
             itemLayoutRef.current.lastSize = layout;
-            updateItemSizeFn(currentItemKey, layout);
+            updateItemSizes(ctx, {
+                containerId: id,
+                fromLayoutEffect,
+                itemKey: currentItemKey,
+                size: layout,
+            });
             itemLayoutRef.current.didLayout = true;
         };
 
@@ -271,7 +271,7 @@ export const Container = typedMemo(function Container<ItemT>({
 
     if (!IsNewArchitecture) {
         // Since old architecture cannot use unstable_getBoundingClientRect it needs to ensure that
-        // all containers updateItemSize even if the container did not resize.
+        // all containers update their item size even if the container did not resize.
         useEffect(() => {
             // Catch a bug where a container is reused and is the exact same size as the previous item
             // so it does not fire an onLayout, so we need to trigger it manually.
@@ -284,14 +284,15 @@ export const Container = typedMemo(function Container<ItemT>({
 
                 const timeout = setTimeout(() => {
                     if (!itemLayoutRef.current.didLayout) {
-                        const {
-                            itemKey: currentItemKey,
-                            lastSize,
-                            updateItemSize: updateItemSizeFn,
-                        } = itemLayoutRef.current;
+                        const { itemKey: currentItemKey, lastSize } = itemLayoutRef.current;
 
                         if (lastSize && !isNullOrUndefined(currentItemKey)) {
-                            updateItemSizeFn(currentItemKey, lastSize);
+                            updateItemSizes(ctx, {
+                                containerId: id,
+                                fromLayoutEffect: false,
+                                itemKey: currentItemKey,
+                                size: lastSize,
+                            });
                             itemLayoutRef.current.didLayout = true;
                         }
                     }

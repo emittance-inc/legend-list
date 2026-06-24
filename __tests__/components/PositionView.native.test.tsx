@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { describe, expect, it, mock } from "bun:test";
 import { PositionView, PositionViewSticky } from "../../src/components/PositionView.native";
-import { updateItemSize } from "../../src/core/updateItemSize";
+import { updateItemSizes } from "../../src/core/updateItemSizes";
 import { type StateContext, StateProvider, useStateContext } from "../../src/state/state";
 import { createMockState } from "../__mocks__/createMockState";
 import { setLayoutValue } from "../helpers/layoutArrays";
@@ -177,7 +177,7 @@ describe("PositionView.native", () => {
             expect(flattenStyle((toJSON() as any)?.props?.style)?.top).toBe(100);
 
             act(() => {
-                updateItemSize(currentCtx!, "item_0", { height: 150, width: 400 });
+                updateItemSizes(currentCtx!, { itemKey: "item_0", size: { height: 150, width: 400 } });
             });
 
             expect(rafCallbacks).toHaveLength(0);

@@ -103,7 +103,6 @@ function ListComponentHarness({
             snapToIndices={undefined}
             stickyHeaderIndices={undefined}
             style={{}}
-            updateItemSize={() => {}}
         />
     );
 }

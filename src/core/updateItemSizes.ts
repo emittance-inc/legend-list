@@ -1,3 +1,4 @@
+import { IsNewArchitecture } from "@/constants-platform";
 import { calculateItemsInView } from "@/core/calculateItemsInView";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import { setSize } from "@/core/setSize";
@@ -9,7 +10,7 @@ import { getItemSize } from "@/utils/getItemSize";
 import { roundSize } from "@/utils/helpers";
 import { isNativeLayoutNoise } from "@/utils/layoutMeasurement";
 
-function runOrScheduleMVCPRecalculate(ctx: StateContext) {
+export function runOrScheduleMVCPRecalculate(ctx: StateContext) {
     // Runs the MVCP recalculation pass after item-size changes.
     // On web, an active anchor lock coalesces recalculations to one RAF to reduce oscillating adjustments.
     const state = ctx.state;
@@ -59,7 +60,83 @@ interface ResolvedMeasurementItem {
     itemType?: string;
 }
 
-export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: number; height: number }) {
+export interface ItemSizeMeasurement {
+    containerId?: number;
+    fromLayoutEffect?: boolean;
+    itemKey: string;
+    size: { width: number; height: number };
+}
+
+interface ItemSizeUpdateResult {
+    didChange?: boolean;
+    didMeasureUserScrollAnchorResetItem?: boolean;
+    needsRecalculate?: boolean;
+    shouldMaintainScrollAtEnd?: boolean;
+}
+
+function mergeItemSizeUpdateResult(result: ItemSizeUpdateResult, next: ItemSizeUpdateResult) {
+    result.didChange ||= next.didChange;
+    result.didMeasureUserScrollAnchorResetItem ||= next.didMeasureUserScrollAnchorResetItem;
+    result.needsRecalculate ||= next.needsRecalculate;
+    result.shouldMaintainScrollAtEnd ||= next.shouldMaintainScrollAtEnd;
+}
+
+function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
+    const state = ctx.state;
+    if (result.didChange && result.needsRecalculate) {
+        state.scrollForNextCalculateItemsInView = undefined;
+        runOrScheduleMVCPRecalculate(ctx);
+    } else if (result.didMeasureUserScrollAnchorResetItem && state.userScrollAnchorReset?.keys.size === 0) {
+        state.userScrollAnchorReset = undefined;
+    }
+    if (result.didChange && result.shouldMaintainScrollAtEnd) {
+        doMaintainScrollAtEnd(ctx);
+    }
+}
+
+/**
+ * Updates the current measured item. On Fabric layout-effect measurements, also synchronously
+ * measures any pending replacement containers so the whole pass resolves with one recalc.
+ */
+export function updateItemSizes(ctx: StateContext, measurement: ItemSizeMeasurement) {
+    const state = ctx.state;
+    const pendingKeys = state.userScrollAnchorReset?.keys;
+    const shouldBatchPendingMeasurements = IsNewArchitecture && measurement.fromLayoutEffect && !!pendingKeys?.size;
+
+    if (!shouldBatchPendingMeasurements) {
+        flushItemSizeUpdates(ctx, applyItemSize(ctx, measurement.itemKey, measurement.size));
+    } else {
+        const result: ItemSizeUpdateResult = {};
+
+        const updateContainerItemSize = (
+            itemKey: string,
+            containerId: number | undefined,
+            size: { width: number; height: number },
+        ) => {
+            if (containerId !== undefined && peek$(ctx, `containerItemKey${containerId}`) === itemKey) {
+                mergeItemSizeUpdateResult(result, applyItemSize(ctx, itemKey, size));
+            }
+        };
+
+        updateContainerItemSize(measurement.itemKey, measurement.containerId, measurement.size);
+
+        const keys = Array.from(pendingKeys);
+        for (const itemKey of keys) {
+            const containerId = state.containerItemKeys.get(itemKey);
+            if (containerId !== undefined) {
+                ctx.viewRefs.get(containerId)?.current?.measure?.((_x, _y, width, height) => {
+                    if (pendingKeys.has(itemKey)) {
+                        updateContainerItemSize(itemKey, containerId, { height, width });
+                    }
+                });
+            }
+        }
+
+        flushItemSizeUpdates(ctx, result);
+    }
+}
+
+function applyItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: number; height: number }) {
     const state = ctx.state;
     const userScrollAnchorReset = state.userScrollAnchorReset;
     const didMeasureUserScrollAnchorResetItem = !!userScrollAnchorReset?.keys.delete(itemKey);
@@ -68,18 +145,18 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
         sizesKnown,
         props: { getFixedItemSize, getItemType, horizontal, onItemSizeChanged, data, maintainScrollAtEnd },
     } = state;
-    if (!data) return;
+    if (!data) return { didMeasureUserScrollAnchorResetItem };
 
     const index = state.indexByKey.get(itemKey)!;
     let resolvedMeasurementItem: ResolvedMeasurementItem | undefined;
 
     if (getFixedItemSize) {
         if (index === undefined) {
-            return;
+            return { didMeasureUserScrollAnchorResetItem };
         }
         const itemData = state.props.data[index];
         if (itemData === undefined) {
-            return;
+            return { didMeasureUserScrollAnchorResetItem };
         }
         const type = getItemType ? (getItemType(itemData, index) ?? "") : "";
         const size = getFixedItemSize(itemData, index, type);
@@ -91,7 +168,7 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
         };
         if (size !== undefined && size === sizesKnown.get(itemKey)) {
             updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
-            return;
+            return { didMeasureUserScrollAnchorResetItem };
         }
     }
 
@@ -143,18 +220,19 @@ export function updateItemSize(ctx: StateContext, itemKey: string, sizeObj: { wi
     updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
 
     if (didContainersLayout || checkAllSizesKnown(state, state.startBuffered, state.endBuffered)) {
-        if (needsRecalculate) {
-            state.scrollForNextCalculateItemsInView = undefined;
-            runOrScheduleMVCPRecalculate(ctx);
-        } else if (didMeasureUserScrollAnchorResetItem && userScrollAnchorReset?.keys.size === 0) {
-            state.userScrollAnchorReset = undefined;
-        }
-        if (shouldMaintainScrollAtEnd) {
-            if (maintainScrollAtEnd?.onItemLayout) {
-                doMaintainScrollAtEnd(ctx);
-            }
-        }
+        const canMaintainScrollAtEnd = shouldMaintainScrollAtEnd && !!maintainScrollAtEnd?.onItemLayout;
+        return {
+            didChange: diff !== 0,
+            didMeasureUserScrollAnchorResetItem,
+            needsRecalculate,
+            shouldMaintainScrollAtEnd: canMaintainScrollAtEnd,
+        };
     }
+
+    return {
+        didChange: diff !== 0,
+        didMeasureUserScrollAnchorResetItem,
+    };
 }
 
 export function updateOneItemSize(

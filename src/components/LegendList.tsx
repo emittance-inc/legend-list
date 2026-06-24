@@ -34,7 +34,6 @@ import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { updateContentInsetEndAdjustment } from "@/core/updateContentInsetEndAdjustment";
 import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { updateItemPositions } from "@/core/updateItemPositions";
-import { updateItemSize } from "@/core/updateItemSize";
 import { updateScroll } from "@/core/updateScroll";
 import { useWrapIfItem } from "@/core/useWrapIfItem";
 import { setupViewability } from "@/core/viewability";
@@ -773,8 +772,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 }
             },
             onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => onScroll(ctx, event),
-            updateItemSize: (itemKey: string, sizeObj: { width: number; height: number }) =>
-                updateItemSize(ctx, itemKey, sizeObj),
         }),
         [],
     );
@@ -825,7 +822,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 snapToIndices={snapToIndices}
                 stickyHeaderIndices={stickyHeaderIndices}
                 style={style}
-                updateItemSize={fns.updateItemSize}
                 useWindowScroll={useWindowScrollResolved}
             />
             {IS_DEV && ENABLE_DEBUG_VIEW && <DebugView />}

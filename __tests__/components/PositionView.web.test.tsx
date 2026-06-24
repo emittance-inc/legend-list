@@ -3,7 +3,7 @@ import * as React from "react";
 import { describe, expect, it } from "bun:test";
 import "../setup";
 
-import { updateItemSize } from "../../src/core/updateItemSize";
+import { updateItemSizes } from "../../src/core/updateItemSizes";
 import { type StateContext, StateProvider, useStateContext } from "../../src/state/state";
 import { createMockState } from "../__mocks__/createMockState";
 import { setLayoutValue } from "../helpers/layoutArrays";
@@ -143,7 +143,7 @@ describe("PositionView (web)", () => {
             expect(renderer!.root.findByType("div").props.style.top).toBe(100);
 
             act(() => {
-                updateItemSize(currentCtx!, "item_0", { height: 150, width: 400 });
+                updateItemSizes(currentCtx!, { itemKey: "item_0", size: { height: 150, width: 400 } });
             });
 
             expect(rafCallbacks).toHaveLength(0);

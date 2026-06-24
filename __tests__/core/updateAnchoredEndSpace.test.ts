@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { maybeUpdateAnchoredEndSpace } from "../../src/core/updateAnchoredEndSpace";
-import { updateItemSize } from "../../src/core/updateItemSize";
+import { updateItemSizes } from "../../src/core/updateItemSizes";
 import { getContentInsetEnd } from "../../src/state/getContentInsetEnd";
 import { peek$, type StateContext, set$ } from "../../src/state/state";
 import type { InternalState } from "../../src/types";
@@ -128,7 +128,7 @@ describe("updateAnchoredEndSpace", () => {
         expect(getContentInsetEnd(mockCtx)).toBe(110);
     });
 
-    it("recomputes when item sizes change through updateItemSize", () => {
+    it("recomputes when item sizes change through updateItemSizes", () => {
         const onSizeChanged = mock(() => {});
         mockState.props.anchoredEndSpace = {
             anchorIndex: 1,
@@ -141,7 +141,7 @@ describe("updateAnchoredEndSpace", () => {
         mockState.sizes.set("item_1", 120);
 
         maybeUpdateAnchoredEndSpace(mockCtx);
-        updateItemSize(mockCtx, "item_1", { height: 150, width: 100 });
+        updateItemSizes(mockCtx, { itemKey: "item_1", size: { height: 150, width: 100 } });
 
         expect(peek$(mockCtx, "anchoredEndSpaceSize")).toBe(70);
         expect(onSizeChanged).toHaveBeenLastCalledWith(70);

@@ -31,7 +31,6 @@ function registerLegendListBootstrapMocks() {
                     ItemSeparatorComponent={props.ItemSeparatorComponent}
                     recycleItems={props.recycleItems}
                     stickyHeaderConfig={props.stickyHeaderConfig}
-                    updateItemSize={props.updateItemSize}
                 />
             ) : null;
         },

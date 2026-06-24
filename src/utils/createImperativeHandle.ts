@@ -3,7 +3,7 @@ import { scrollTo } from "@/core/scrollTo";
 import { scrollToEnd } from "@/core/scrollToEnd";
 import { scrollToIndex } from "@/core/scrollToIndex";
 import { setContentInsetOverride } from "@/core/updateContentMetrics";
-import { updateItemSize } from "@/core/updateItemSize";
+import { updateItemSizes } from "@/core/updateItemSizes";
 import { updateScroll } from "@/core/updateScroll";
 import { getContentSize } from "@/state/getContentSize";
 import {
@@ -297,7 +297,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
                 return true;
             }),
         setItemSize: (itemKey, size) => {
-            updateItemSize(ctx, itemKey, size);
+            updateItemSizes(ctx, { itemKey, size });
         },
         setScrollProcessingEnabled: (enabled: boolean) => {
             state.scrollProcessingEnabled = enabled;

@@ -48,7 +48,6 @@ interface ListComponentProps<ItemT>
     initialContentOffset: number | undefined;
     refScrollView: React.Ref<LooseScrollView | null>;
     getRenderedItem: GetRenderedItem;
-    updateItemSize: (itemKey: string, size: { width: number; height: number }) => void;
     onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     onLayout: (event: LayoutChangeEvent) => void;
     onLayoutFooter?: (rect: LayoutRectangle, fromLayoutEffect: boolean) => void;
@@ -100,7 +99,6 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
     ListFooterComponentStyle,
     ListEmptyComponent,
     getRenderedItem,
-    updateItemSize,
     refScrollView,
     renderScrollComponent,
     onLayoutFooter,
@@ -220,7 +218,6 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
                     ItemSeparatorComponent={ItemSeparatorComponent}
                     recycleItems={recycleItems!}
                     stickyHeaderConfig={stickyHeaderConfig}
-                    updateItemSize={updateItemSize}
                 />
             )}
             {ListFooterComponent && (

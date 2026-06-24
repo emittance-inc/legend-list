@@ -4,14 +4,18 @@ import "../setup"; // Import global test setup
 import { Platform } from "@/platform/Platform";
 import * as calculateItemsInViewModule from "../../src/core/calculateItemsInView";
 import * as doMaintainScrollAtEndModule from "../../src/core/doMaintainScrollAtEnd";
-import { updateItemSize, updateOneItemSize } from "../../src/core/updateItemSize";
+import { updateItemSizes, updateOneItemSize } from "../../src/core/updateItemSizes";
 import type { StateContext } from "../../src/state/state";
 import type { InternalState } from "../../src/types.internal";
 import { getItemSize } from "../../src/utils/getItemSize";
 import { normalizeMaintainVisibleContentPosition } from "../../src/utils/normalizeMaintainVisibleContentPosition";
 import { createMockContext } from "../__mocks__/createMockContext";
 
-describe("updateItemSize functions", () => {
+function updateItemAndFlush(ctx: StateContext, itemKey: string, size: { height: number; width: number }) {
+    updateItemSizes(ctx, { itemKey, size });
+}
+
+describe("item size update functions", () => {
     let mockCtx: StateContext;
     let mockState: InternalState;
     let onItemSizeChangedCalls: any[];
@@ -233,7 +237,7 @@ describe("updateItemSize functions", () => {
         });
     });
 
-    describe("updateItemSize", () => {
+    describe("updateItemSizes", () => {
         it("treats modifier-only object options as all triggers", () => {
             const doMaintainScrollAtEndSpy = spyOn(
                 doMaintainScrollAtEndModule,
@@ -243,7 +247,7 @@ describe("updateItemSize functions", () => {
             mockState.sizesKnown.set("item_0", 100);
             mockState.sizes.set("item_0", 100);
 
-            updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
             expect(doMaintainScrollAtEndSpy).toHaveBeenCalledWith(mockCtx);
             doMaintainScrollAtEndSpy.mockRestore();
@@ -261,7 +265,7 @@ describe("updateItemSize functions", () => {
             mockState.sizesKnown.set("item_0", 100);
             mockState.sizes.set("item_0", 100);
 
-            updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
             expect(doMaintainScrollAtEndSpy).toHaveBeenCalledWith(mockCtx);
             doMaintainScrollAtEndSpy.mockRestore();
@@ -279,7 +283,7 @@ describe("updateItemSize functions", () => {
             mockState.sizesKnown.set("item_0", 100);
             mockState.sizes.set("item_0", 100);
 
-            updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
             expect(doMaintainScrollAtEndSpy).not.toHaveBeenCalled();
             doMaintainScrollAtEndSpy.mockRestore();
@@ -313,14 +317,14 @@ describe("updateItemSize functions", () => {
 
             expect(state.totalSize).toBe(20);
 
-            updateItemSize(ctx, "item_0", { height: 100, width: 400 });
+            updateItemSizes(ctx, { itemKey: "item_0", size: { height: 100, width: 400 } });
 
             expect(state.totalSize).toBe(100);
         });
 
         it("should update known sizes and total size tracking", () => {
             const prevTotal = mockState.totalSize;
-            updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
             expect(mockState.sizesKnown.get("item_0")).toBe(150);
             expect(onItemSizeChangedCalls.length).toBe(1);
@@ -331,7 +335,7 @@ describe("updateItemSize functions", () => {
         it("should respect early return when data is missing", () => {
             mockState.props.data = null as any;
 
-            expect(() => updateItemSize(mockCtx, "item_0", { height: 150, width: 400 })).not.toThrow();
+            expect(() => updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 })).not.toThrow();
             expect(mockState.sizesKnown.size).toBe(0);
             expect(onItemSizeChangedCalls.length).toBe(0);
         });
@@ -340,7 +344,7 @@ describe("updateItemSize functions", () => {
             mockState.needsOtherAxisSize = true;
             mockCtx.values.set("otherAxisSize", 400);
 
-            updateItemSize(mockCtx, "item_0", { height: 150, width: 420 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 420 });
 
             expect(mockCtx.values.get("otherAxisSize")).toBe(420);
         });
@@ -350,7 +354,7 @@ describe("updateItemSize functions", () => {
             mockState.needsOtherAxisSize = true;
             mockCtx.values.set("otherAxisSize", 32);
 
-            updateItemSize(mockCtx, "item_0", { height: 200, width: 150 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 200, width: 150 });
 
             expect(mockCtx.values.get("otherAxisSize")).toBe(200);
         });
@@ -362,7 +366,7 @@ describe("updateItemSize functions", () => {
             mockState.needsOtherAxisSize = true;
             mockCtx.values.set("otherAxisSize", 32);
 
-            updateItemSize(mockCtx, "item_0", { height: 200, width: 200 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 200, width: 200 });
 
             expect(mockCtx.values.get("otherAxisSize")).toBe(200);
             expect(onItemSizeChangedCalls.length).toBe(0);
@@ -382,7 +386,7 @@ describe("updateItemSize functions", () => {
                 return undefined;
             };
 
-            updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+            updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
             expect(getItemTypeCalls).toBe(1);
             expect(getFixedItemSizeCalls).toBe(1);
@@ -412,8 +416,8 @@ describe("updateItemSize functions", () => {
                         quietPasses: 0,
                     };
 
-                    updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
-                    updateItemSize(mockCtx, "item_0", { height: 170, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 170, width: 400 });
 
                     expect(calculateSpy).not.toHaveBeenCalled();
                     expect(rafCallbacks.length).toBe(1);
@@ -454,11 +458,11 @@ describe("updateItemSize functions", () => {
                         quietPasses: 0,
                     };
 
-                    updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
                     expect(mockState.queuedMVCPRecalculate).toBe(42);
 
                     mockState.mvcpAnchorLock = undefined;
-                    updateItemSize(mockCtx, "item_0", { height: 180, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 180, width: 400 });
 
                     expect(cancelCalls).toEqual([42]);
                     expect(calculateSpy).toHaveBeenCalledTimes(1);
@@ -490,8 +494,8 @@ describe("updateItemSize functions", () => {
                         mockState.sizesKnown.set("item_1", 100);
                         mockState.sizes.set("item_1", 100);
 
-                        updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
-                        updateItemSize(mockCtx, "item_1", { height: 170, width: 400 });
+                        updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
+                        updateItemAndFlush(mockCtx, "item_1", { height: 170, width: 400 });
 
                         expect(rafSpy).not.toHaveBeenCalled();
                         expect(calculateSpy).toHaveBeenCalledTimes(2);
@@ -528,8 +532,8 @@ describe("updateItemSize functions", () => {
                     mockState.sizesKnown.set("item_1", 100);
                     mockState.sizes.set("item_1", 100);
 
-                    updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
-                    updateItemSize(mockCtx, "item_1", { height: 170, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_1", { height: 170, width: 400 });
 
                     expect(calculateSpy).toHaveBeenCalledTimes(2);
                     expect(calculateSpy).toHaveBeenNthCalledWith(1, mockCtx);
@@ -565,8 +569,8 @@ describe("updateItemSize functions", () => {
                         mockState.sizes.set(`item_${i}`, 100);
                     }
 
-                    updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
-                    updateItemSize(mockCtx, "item_1", { height: 170, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_1", { height: 170, width: 400 });
 
                     expect(calculateSpy).toHaveBeenCalledTimes(2);
                     expect(rafCallbacks.length).toBe(0);
@@ -574,7 +578,7 @@ describe("updateItemSize functions", () => {
                     expect(mockState.queuedMVCPRecalculate).toBeUndefined();
 
                     for (let i = 2; i < 4; i++) {
-                        updateItemSize(mockCtx, `item_${i}`, { height: 150 + i * 10, width: 400 });
+                        updateItemAndFlush(mockCtx, `item_${i}`, { height: 150 + i * 10, width: 400 });
                     }
 
                     expect(calculateSpy).toHaveBeenCalledTimes(4);
@@ -608,8 +612,8 @@ describe("updateItemSize functions", () => {
                     mockState.sizesKnown.set("item_1", 100);
                     mockState.sizes.set("item_1", 100);
 
-                    updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
-                    updateItemSize(mockCtx, "item_1", { height: 170, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_1", { height: 170, width: 400 });
 
                     expect(calculateSpy).toHaveBeenCalledTimes(2);
                     expect(calculateSpy).toHaveBeenNthCalledWith(1, mockCtx);
@@ -643,7 +647,7 @@ describe("updateItemSize functions", () => {
                     mockState.sizesKnown.set("item_0", 100);
                     mockState.sizes.set("item_0", 100);
 
-                    updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+                    updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
                     expect(calculateSpy).toHaveBeenCalledTimes(1);
                     expect(calculateSpy).toHaveBeenCalledWith(mockCtx);
@@ -674,7 +678,7 @@ describe("updateItemSize functions", () => {
                         mockState.sizesKnown.set("item_1", 100);
                         mockState.sizes.set("item_1", 100);
 
-                        updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+                        updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
                         expect(rafSpy).not.toHaveBeenCalled();
                         expect(calculateSpy).toHaveBeenCalledTimes(1);
@@ -702,7 +706,7 @@ describe("updateItemSize functions", () => {
                         mockState.sizesKnown.set("item_0", 100);
                         mockState.sizes.set("item_0", 100);
 
-                        updateItemSize(mockCtx, "item_0", { height: 150, width: 400 });
+                        updateItemAndFlush(mockCtx, "item_0", { height: 150, width: 400 });
 
                         expect(rafSpy).not.toHaveBeenCalled();
                         expect(calculateSpy).toHaveBeenCalledTimes(1);
