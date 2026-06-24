@@ -17,6 +17,7 @@ import type {
     ViewStyle,
 } from "@/types.base";
 import type { StylesAsSharedValue } from "@/typesInternal";
+import type { DrawDistanceMode } from "@/utils/getEffectiveDrawDistance";
 
 export type { BaseScrollViewProps, LegendListPropsBase } from "@/types.base";
 
@@ -249,9 +250,11 @@ export interface InternalState {
     triggerCalculateItemsInView?: (params?: {
         doMVCP?: boolean;
         dataChanged?: boolean;
+        drawDistanceMode?: DrawDistanceMode;
         forceFullItemPositions?: boolean;
         scrollVelocity?: number;
     }) => void;
+    queuedFullDrawDistancePrewarm?: number;
     userScrollAnchorReset?: {
         keys: Set<string>;
     };

@@ -1,6 +1,6 @@
 import { setAdaptiveRender } from "@/core/adaptiveRender";
 import { peek$, type StateContext, set$ } from "@/state/state";
-import { INITIAL_DRAW_DISTANCE } from "@/utils/getEffectiveDrawDistance";
+import { INITIAL_DRAW_DISTANCE, scheduleFullDrawDistancePrewarm } from "@/utils/getEffectiveDrawDistance";
 
 export function setInitialRenderState(
     ctx: StateContext,
@@ -30,9 +30,7 @@ export function setInitialRenderState(
         setAdaptiveRender(ctx, "normal");
 
         if (state.props.drawDistance > INITIAL_DRAW_DISTANCE) {
-            requestAnimationFrame(() => {
-                state.triggerCalculateItemsInView?.();
-            });
+            scheduleFullDrawDistancePrewarm(ctx);
         }
 
         if (onLoad) {

@@ -4,6 +4,8 @@ import { resolvePendingNativeMVCPAdjust } from "@/core/mvcp";
 import { flushSync } from "@/platform/flushSync";
 import type { StateContext } from "@/state/state";
 import { checkThresholds } from "@/utils/checkThresholds";
+import type { DrawDistanceMode } from "@/utils/getEffectiveDrawDistance";
+import { scheduleFullDrawDistancePrewarm } from "@/utils/getEffectiveDrawDistance";
 import { getScrollVelocity } from "@/utils/getScrollVelocity";
 import { isInMVCPActiveMode } from "@/utils/isInMVCPActiveMode";
 
@@ -90,7 +92,18 @@ export function updateScroll(
 
         // Use velocity to predict scroll position
         const runCalculateItems = () => {
-            state.triggerCalculateItemsInView?.({ doMVCP: scrollingTo !== undefined, scrollVelocity });
+            const calculateItemsParams: {
+                doMVCP: boolean;
+                drawDistanceMode?: DrawDistanceMode;
+                scrollVelocity: number;
+            } = {
+                doMVCP: scrollingTo !== undefined,
+                scrollVelocity,
+            };
+            if (isLargeUserScrollJump) {
+                calculateItemsParams.drawDistanceMode = "visible-first";
+            }
+            state.triggerCalculateItemsInView?.(calculateItemsParams);
             checkThresholds(ctx);
         };
 
@@ -103,6 +116,7 @@ export function updateScroll(
                 state.queuedMVCPRecalculate = undefined;
             }
             flushSync(runCalculateItems);
+            scheduleFullDrawDistancePrewarm(ctx);
         } else {
             runCalculateItems();
         }

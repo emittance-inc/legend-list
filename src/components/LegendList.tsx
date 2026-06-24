@@ -350,6 +350,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 positions: [],
                 props: {} as any,
                 queuedCalculateItemsInView: 0,
+                queuedFullDrawDistancePrewarm: undefined,
                 refScroller: { current: null } as React.RefObject<LegendListScrollerRef | null>,
                 scroll: 0,
                 scrollAdjustHandler: new ScrollAdjustHandler(ctx),
@@ -747,6 +748,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     useEffect(() => {
         return () => {
+            if (state.queuedFullDrawDistancePrewarm !== undefined) {
+                cancelAnimationFrame(state.queuedFullDrawDistancePrewarm);
+                state.queuedFullDrawDistancePrewarm = undefined;
+            }
             for (const timeout of state.timeouts) {
                 clearTimeout(timeout);
             }

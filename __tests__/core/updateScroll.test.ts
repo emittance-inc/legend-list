@@ -13,6 +13,8 @@ import { createMockContext } from "../__mocks__/createMockContext";
 describe("updateScroll large user jumps", () => {
     let mockCtx: StateContext;
     let flushSyncSpy: ReturnType<typeof spyOn>;
+    let originalRequestAnimationFrame: typeof globalThis.requestAnimationFrame;
+    let rafCallbacks: Array<(time: number) => void>;
 
     beforeEach(() => {
         Platform.OS = "ios";
@@ -20,12 +22,19 @@ describe("updateScroll large user jumps", () => {
         flushSyncSpy = spyOn(flushSyncModule, "flushSync").mockImplementation((fn: () => void) => {
             fn();
         });
+        originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+        rafCallbacks = [];
+        globalThis.requestAnimationFrame = (callback: (time: number) => void) => {
+            rafCallbacks.push(callback);
+            return rafCallbacks.length;
+        };
     });
 
     afterEach(() => {
         for (const timeout of mockCtx.state.timeouts) {
             clearTimeout(timeout);
         }
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
         flushSyncSpy.mockRestore();
     });
 
@@ -167,7 +176,67 @@ describe("updateScroll large user jumps", () => {
         expect(peek$(mockCtx, "adaptiveRender")).toBe("light");
         expect(changes).toEqual(["light"]);
         expect(flushSyncSpy).toHaveBeenCalledTimes(1);
-        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: false, scrollVelocity: 0 });
+        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({
+            doMVCP: false,
+            drawDistanceMode: "visible-first",
+            scrollVelocity: 0,
+        });
+        triggerCalculateItemsInViewSpy.mockRestore();
+    });
+
+    it("uses visible-first drawDistance for large user scroll jumps and prewarms the full range", () => {
+        const triggerCalculateItemsInViewSpy = spyOn(mockCtx.state, "triggerCalculateItemsInView").mockImplementation(
+            () => undefined,
+        );
+        mockCtx.state.props.drawDistance = 1_000;
+
+        updateScroll(mockCtx, 150);
+
+        expect(triggerCalculateItemsInViewSpy.mock.calls[0]).toEqual([
+            {
+                doMVCP: false,
+                drawDistanceMode: "visible-first",
+                scrollVelocity: 0,
+            },
+        ]);
+        expect(rafCallbacks).toHaveLength(1);
+        expect(mockCtx.state.queuedFullDrawDistancePrewarm).toBe(1);
+
+        rafCallbacks[0](Date.now());
+
+        expect(triggerCalculateItemsInViewSpy.mock.calls[1]).toEqual([]);
+        expect(mockCtx.state.queuedFullDrawDistancePrewarm).toBeUndefined();
+        triggerCalculateItemsInViewSpy.mockRestore();
+    });
+
+    it("dedupes full drawDistance prewarm passes across repeated large user scroll jumps", () => {
+        const triggerCalculateItemsInViewSpy = spyOn(mockCtx.state, "triggerCalculateItemsInView").mockImplementation(
+            () => undefined,
+        );
+        mockCtx.state.props.drawDistance = 1_000;
+
+        updateScroll(mockCtx, 150);
+        updateScroll(mockCtx, 300);
+
+        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledTimes(2);
+        expect(triggerCalculateItemsInViewSpy.mock.calls).toEqual([
+            [
+                {
+                    doMVCP: false,
+                    drawDistanceMode: "visible-first",
+                    scrollVelocity: 0,
+                },
+            ],
+            [
+                {
+                    doMVCP: false,
+                    drawDistanceMode: "visible-first",
+                    scrollVelocity: 0,
+                },
+            ],
+        ]);
+        expect(rafCallbacks).toHaveLength(1);
+        expect(mockCtx.state.queuedFullDrawDistancePrewarm).toBe(1);
         triggerCalculateItemsInViewSpy.mockRestore();
     });
 

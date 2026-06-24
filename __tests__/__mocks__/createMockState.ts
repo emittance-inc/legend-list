@@ -69,6 +69,7 @@ export function createMockState(
         pendingNativeMVCPAdjust: undefined,
         positions: [],
         queuedCalculateItemsInView: undefined,
+        queuedFullDrawDistancePrewarm: undefined,
         queuedInitialLayout: false,
         refScroller: { current: null } as InternalState["refScroller"],
         reprocessCurrentScroll: () => {},

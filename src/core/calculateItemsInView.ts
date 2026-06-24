@@ -15,6 +15,7 @@ import type { InternalState } from "@/types.internal";
 import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
 import { getExpandedContainerPoolSize } from "@/utils/containerPool";
 import { findAvailableContainers } from "@/utils/findAvailableContainers";
+import type { DrawDistanceMode } from "@/utils/getEffectiveDrawDistance";
 import { getEffectiveDrawDistance } from "@/utils/getEffectiveDrawDistance";
 import { getId } from "@/utils/getId";
 import { getItemSize } from "@/utils/getItemSize";
@@ -289,7 +290,13 @@ function updateViewabilityForCachedRange(
 
 export function calculateItemsInView(
     ctx: StateContext,
-    params: { doMVCP?: boolean; dataChanged?: boolean; forceFullItemPositions?: boolean; scrollVelocity?: number } = {},
+    params: {
+        doMVCP?: boolean;
+        dataChanged?: boolean;
+        drawDistanceMode?: DrawDistanceMode;
+        forceFullItemPositions?: boolean;
+        scrollVelocity?: number;
+    } = {},
 ) {
     const state = ctx.state;
     batchedUpdates(() => {
@@ -313,7 +320,7 @@ export function calculateItemsInView(
         const stickyHeaderIndicesSet = state.props.stickyHeaderIndicesSet || new Set<number>();
         const alwaysRenderArr = alwaysRenderIndicesArr || [];
         const alwaysRenderSet = alwaysRenderIndicesSet || new Set<number>();
-        const drawDistance = getEffectiveDrawDistance(ctx);
+        const drawDistance = getEffectiveDrawDistance(ctx, params.drawDistanceMode);
         const { dataChanged, doMVCP, forceFullItemPositions } = params;
         const bootstrapInitialScrollState =
             state.initialScrollSession?.kind === "bootstrap" ? state.initialScrollSession.bootstrap : undefined;

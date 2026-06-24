@@ -146,6 +146,38 @@ describe("LegendList props behavior", () => {
         expect(state.timeouts.size).toBe(0);
     });
 
+    it("cancels queued full drawDistance prewarm on unmount", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const { LegendList } = await import("../../src/components/LegendList?props-test-draw-distance-cleanup");
+        const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+        const cancelCalls: number[] = [];
+        globalThis.cancelAnimationFrame = (id: number) => {
+            cancelCalls.push(id);
+        };
+
+        try {
+            const rendered = render(
+                <LegendList
+                    data={data}
+                    estimatedItemSize={100}
+                    keyExtractor={(item: { id: string }) => item.id}
+                    recycleItems={false}
+                    renderItem={renderItem}
+                />,
+            );
+            const state = await getStateFromRender();
+            state.queuedFullDrawDistancePrewarm = 123;
+
+            rendered.unmount();
+
+            expect(cancelCalls).toEqual([123]);
+            expect(state.queuedFullDrawDistancePrewarm).toBeUndefined();
+        } finally {
+            globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+        }
+    });
+
     it("stores the derived scroll-axis gap on context", async () => {
         const data = [{ id: "item-1", label: "Alpha" }];
         const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
