@@ -305,6 +305,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         if (!ctx.state) {
             const initialScrollLength = (estimatedListSize ??
                 (IsNewArchitecture ? { height: 0, width: 0 } : getWindowSize()))[horizontal ? "width" : "height"];
+            ctx.values.set("adaptiveRender", experimental_adaptiveRender?.initialMode ?? "normal");
 
             ctx.state = {
                 averageSizes: {},

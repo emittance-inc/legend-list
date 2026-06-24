@@ -183,7 +183,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             ["isNearEnd", false],
             ["isNearStart", false],
             ["isWithinMaintainScrollAtEndThreshold", false],
-            ["adaptiveRender", "light"],
+            ["adaptiveRender", "normal"],
             ["totalSize", 0],
             ["scrollAdjustPending", 0],
         ]),

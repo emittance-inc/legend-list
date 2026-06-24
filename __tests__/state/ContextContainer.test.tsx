@@ -61,11 +61,11 @@ describe("ContextContainer hooks", () => {
             );
 
             await act(async () => {
-                set$(capturedCtx!, "adaptiveRender", "normal");
+                set$(capturedCtx!, "adaptiveRender", "light");
             });
 
             expect(renders).toBe(2);
-            expect(modes).toEqual(["light", "normal"]);
+            expect(modes).toEqual(["normal", "light"]);
         });
     });
 
@@ -91,11 +91,11 @@ describe("ContextContainer hooks", () => {
 
             await flushAsync();
             await act(async () => {
-                set$(capturedCtx!, "adaptiveRender", "normal");
+                set$(capturedCtx!, "adaptiveRender", "light");
             });
 
             expect(renders).toBe(1);
-            expect(modes).toEqual(["normal"]);
+            expect(modes).toEqual(["light"]);
         });
     });
 

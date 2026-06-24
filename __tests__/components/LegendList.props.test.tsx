@@ -460,6 +460,39 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
+    it("uses the configured adaptive render initial mode before readyToRender", async () => {
+        const data = [
+            { id: "item-1", label: "Alpha" },
+            { id: "item-2", label: "Beta" },
+        ];
+        const { LegendList } = await import("../../src/components/LegendList?props-test-adaptive-render-initial-mode");
+
+        const rendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                experimental_adaptiveRender={{ initialMode: "light" }}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        const ctx = await getContextFromRender();
+        expect(ctx.values.get("readyToRender")).toBeUndefined();
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
+
+        await act(async () => {
+            setDidLayout(ctx);
+        });
+        await flushAsync();
+
+        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("adaptiveRender")).toBe("normal");
+
+        rendered.unmount();
+    });
+
     it("clears zero-valued initial scroll targets on mount", async () => {
         const data = [
             { id: "item-1", label: "Alpha" },

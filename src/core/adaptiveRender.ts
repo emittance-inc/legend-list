@@ -9,7 +9,7 @@ export const DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY = 6;
 export const DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY = 3;
 export const DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY = 250;
 
-function scheduleAdaptiveRenderExit(ctx: StateContext, exitDelay: number) {
+function clearAdaptiveRenderExitTimeout(ctx: StateContext) {
     const state = ctx.state;
     const previousTimeout = state.timeoutAdaptiveRender;
     if (previousTimeout !== undefined) {
@@ -17,7 +17,11 @@ function scheduleAdaptiveRenderExit(ctx: StateContext, exitDelay: number) {
         state.timeouts.delete(previousTimeout);
         state.timeoutAdaptiveRender = undefined;
     }
+}
 
+function scheduleAdaptiveRenderExit(ctx: StateContext, exitDelay: number) {
+    const state = ctx.state;
+    clearAdaptiveRenderExitTimeout(ctx);
     if (exitDelay <= 0) {
         setAdaptiveRender(ctx, "normal");
     } else {
@@ -42,27 +46,37 @@ export function setAdaptiveRender(ctx: StateContext, mode: AdaptiveRender) {
 export function updateAdaptiveRender(ctx: StateContext, scrollVelocity: number) {
     const state = ctx.state;
     const adaptiveRender = state.props.adaptiveRender;
-    const isWeb = Platform.OS === "web";
-    const enterVelocity =
-        adaptiveRender?.enterVelocity ??
-        (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY : DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY);
-    const exitVelocity =
-        adaptiveRender?.exitVelocity ??
-        (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY : DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY);
-    const exitDelay =
-        adaptiveRender?.exitDelay ??
-        (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY : DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
     const currentMode = peek$(ctx, "adaptiveRender");
-    const threshold = currentMode === "light" ? exitVelocity : enterVelocity;
-    const nextMode = Math.abs(scrollVelocity) > threshold ? "light" : "normal";
-    const previousMode = state.timeoutAdaptiveRender !== undefined ? "normal" : currentMode;
 
-    if (nextMode !== previousMode) {
-        if (nextMode === "light") {
-            setAdaptiveRender(ctx, "light");
-            scheduleAdaptiveRenderExit(ctx, exitDelay);
-        } else if (currentMode === "light") {
-            scheduleAdaptiveRenderExit(ctx, exitDelay);
+    if (peek$(ctx, "readyToRender")) {
+        if (adaptiveRender) {
+            const isWeb = Platform.OS === "web";
+            const enterVelocity =
+                adaptiveRender.enterVelocity ??
+                (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY : DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY);
+            const exitVelocity =
+                adaptiveRender.exitVelocity ??
+                (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY : DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY);
+            const exitDelay =
+                adaptiveRender.exitDelay ??
+                (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY : DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
+            const threshold = currentMode === "light" ? exitVelocity : enterVelocity;
+            const nextMode = Math.abs(scrollVelocity) > threshold ? "light" : "normal";
+            const previousMode = state.timeoutAdaptiveRender !== undefined ? "normal" : currentMode;
+
+            if (nextMode !== previousMode) {
+                if (nextMode === "light") {
+                    setAdaptiveRender(ctx, "light");
+                    scheduleAdaptiveRenderExit(ctx, exitDelay);
+                } else if (currentMode === "light") {
+                    scheduleAdaptiveRenderExit(ctx, exitDelay);
+                }
+            }
+        } else {
+            clearAdaptiveRenderExitTimeout(ctx);
+            if (currentMode !== "normal") {
+                setAdaptiveRender(ctx, "normal");
+            }
         }
     }
 }

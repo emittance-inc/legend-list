@@ -51,10 +51,35 @@ describe("updateAdaptiveRender", () => {
         }
     }
 
+    it("keeps normal mode when adaptive render is not configured", () => {
+        const ctx = createMockContext({ adaptiveRender: "normal" });
+
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
+
+        expect(peek$(ctx, "adaptiveRender")).toBe("normal");
+    });
+
+    it("keeps the configured initial mode until the list is ready to render", () => {
+        const ctx = createMockContext(
+            { adaptiveRender: "light" },
+            {
+                props: {
+                    adaptiveRender: {
+                        initialMode: "light",
+                    },
+                },
+            },
+        );
+
+        updateAdaptiveRender(ctx, 0);
+
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
+    });
+
     it("switches to light mode immediately when velocity exceeds the default enter velocity", () => {
         const changes: string[] = [];
         const ctx = createMockContext(
-            { adaptiveRender: "normal" },
+            { adaptiveRender: "normal", readyToRender: true },
             {
                 props: {
                     adaptiveRender: {
@@ -73,7 +98,7 @@ describe("updateAdaptiveRender", () => {
     it("waits for the default exit delay before returning to normal mode", () => {
         const changes: string[] = [];
         const ctx = createMockContext(
-            { adaptiveRender: "normal" },
+            { adaptiveRender: "normal", readyToRender: true },
             {
                 props: {
                     adaptiveRender: {
@@ -98,7 +123,14 @@ describe("updateAdaptiveRender", () => {
 
     it("uses less aggressive default thresholds on web", () => {
         Platform.OS = "web";
-        const ctx = createMockContext({ adaptiveRender: "normal" });
+        const ctx = createMockContext(
+            { adaptiveRender: "normal", readyToRender: true },
+            {
+                props: {
+                    adaptiveRender: {},
+                },
+            },
+        );
 
         updateAdaptiveRender(ctx, DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY - 1);
         expect(peek$(ctx, "adaptiveRender")).toBe("normal");
@@ -112,7 +144,14 @@ describe("updateAdaptiveRender", () => {
     });
 
     it("cancels a pending exit timeout when velocity crosses the exit velocity again", () => {
-        const ctx = createMockContext({ adaptiveRender: "normal" });
+        const ctx = createMockContext(
+            { adaptiveRender: "normal", readyToRender: true },
+            {
+                props: {
+                    adaptiveRender: {},
+                },
+            },
+        );
 
         updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
         updateAdaptiveRender(ctx, 0);
@@ -126,7 +165,14 @@ describe("updateAdaptiveRender", () => {
     });
 
     it("does not extend settling while velocity remains below the threshold", () => {
-        const ctx = createMockContext({ adaptiveRender: "normal" });
+        const ctx = createMockContext(
+            { adaptiveRender: "normal", readyToRender: true },
+            {
+                props: {
+                    adaptiveRender: {},
+                },
+            },
+        );
 
         updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
         updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY - 0.1);
@@ -142,7 +188,7 @@ describe("updateAdaptiveRender", () => {
 
     it("uses custom enter velocity, exit velocity, and exit delay values", () => {
         const ctx = createMockContext(
-            { adaptiveRender: "normal" },
+            { adaptiveRender: "normal", readyToRender: true },
             {
                 props: {
                     adaptiveRender: {

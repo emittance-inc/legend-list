@@ -36,20 +36,26 @@ export type AdaptiveRender = "normal" | "light";
 
 export interface AdaptiveRenderConfig {
     /**
+     * Mode to use before the list is ready to render.
+     * @default "normal"
+     */
+    initialMode?: AdaptiveRender;
+
+    /**
      * Scroll velocity in pixels per millisecond above which items should switch to light mode.
-     * @default 4 native, 16 web
+     * @default 3 native, 6 web
      */
     enterVelocity?: number;
 
     /**
      * Scroll velocity in pixels per millisecond below which items can return to normal mode.
-     * @default 1 native, 4 web
+     * @default 1 native, 3 web
      */
     exitVelocity?: number;
 
     /**
      * Time to wait without velocity above exitVelocity before returning to normal mode.
-     * @default 1000 native, 250 web
+     * @default 250
      */
     exitDelay?: number;
 
