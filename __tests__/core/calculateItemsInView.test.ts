@@ -152,6 +152,26 @@ describe("calculateItemsInView", () => {
             expect(mockState.idsInView).toEqual(["item_1"]);
         });
 
+        it("calls onFirstVisibleItemChanged only when the first visible item changes", () => {
+            const calls: Array<{ index: number; item: { id: number }; key: string }> = [];
+            mockState.props.onFirstVisibleItemChanged = (info) => {
+                calls.push(info);
+            };
+            setupFixedSizeItems(10, 50);
+            mockState.scrollLength = 100;
+
+            calculateItemsInView(mockCtx);
+            calculateItemsInView(mockCtx);
+
+            mockState.scroll = 51;
+            calculateItemsInView(mockCtx);
+
+            expect(calls).toEqual([
+                { index: 0, item: { id: 0 }, key: "item_0" },
+                { index: 1, item: { id: 1 }, key: "item_1" },
+            ]);
+        });
+
         it("tracks replacement container keys after a web user scroll anchor reset", () => {
             const prevPlatform = Platform.OS;
             Platform.OS = "web";
@@ -534,6 +554,57 @@ describe("calculateItemsInView", () => {
                 expect(mockState.endBuffered).toBe(5);
             } finally {
                 updateItemPositionsSpy.mockRestore();
+            }
+        });
+
+        it("updates the first visible item callback from the cached range without viewability", () => {
+            const firstVisibleCalls: Array<{ index: number; item: { id: number }; key: string }> = [];
+            const updateItemPositionsSpy = spyOn(updateItemPositionsModule, "updateItemPositions");
+            const updateViewableItemsSpy = spyOn(viewabilityModule, "updateViewableItems");
+
+            try {
+                mockState.props.data = Array.from({ length: 3 }, (_, i) => ({ id: i }));
+                mockState.props.drawDistance = 0;
+                mockState.props.getFixedItemSize = undefined;
+                mockState.props.onFirstVisibleItemChanged = (info) => {
+                    firstVisibleCalls.push(info);
+                };
+                mockState.scroll = 0;
+                mockState.scrollLength = 100;
+                mockCtx.values.set("numContainers", 3);
+                mockCtx.values.set("totalSize", 1_120);
+                mockState.totalSize = 1_120;
+
+                const layout = [
+                    { id: "item_0", position: 0, size: 20 },
+                    { id: "item_1", position: 20, size: 1_000 },
+                    { id: "item_2", position: 1_020, size: 100 },
+                ];
+                for (const { id, position, size } of layout) {
+                    const index = Number(id.split("_")[1]);
+                    mockState.idCache[index] = id;
+                    mockState.indexByKey.set(id, index);
+                    setLayoutValue(mockState, "positions", id, position);
+                    mockState.sizes.set(id, size);
+                    mockState.sizesKnown.set(id, size);
+                }
+
+                calculateItemsInView(mockCtx);
+                updateItemPositionsSpy.mockClear();
+                updateViewableItemsSpy.mockClear();
+
+                mockState.scroll = 21;
+                calculateItemsInView(mockCtx);
+
+                expect(updateItemPositionsSpy).not.toHaveBeenCalled();
+                expect(updateViewableItemsSpy).not.toHaveBeenCalled();
+                expect(firstVisibleCalls).toEqual([
+                    { index: 0, item: { id: 0 }, key: "item_0" },
+                    { index: 1, item: { id: 1 }, key: "item_1" },
+                ]);
+            } finally {
+                updateItemPositionsSpy.mockRestore();
+                updateViewableItemsSpy.mockRestore();
             }
         });
 
@@ -1165,12 +1236,16 @@ describe("calculateItemsInView", () => {
     });
 
     describe("bootstrap side-effect suppression", () => {
-        it("suppresses mvcp, didLayout, and viewability updates during bootstrap", () => {
+        it("suppresses mvcp, didLayout, viewability, and first-visible updates during bootstrap", () => {
             const prepareMVCPSpy = spyOn(mvcpModule, "prepareMVCP");
             const setDidLayoutSpy = spyOn(setDidLayoutModule, "setDidLayout");
             const updateViewableItemsSpy = spyOn(viewabilityModule, "updateViewableItems");
+            const firstVisibleCalls: Array<{ index: number; item: { id: number }; key: string }> = [];
 
             mockState.props.data = Array.from({ length: 10 }, (_, i) => ({ id: i }));
+            mockState.props.onFirstVisibleItemChanged = (info) => {
+                firstVisibleCalls.push(info);
+            };
             mockState.scrollLength = 200;
             mockState.queuedInitialLayout = false;
             mockState.initialScrollSession = {
@@ -1199,6 +1274,7 @@ describe("calculateItemsInView", () => {
             expect(prepareMVCPSpy).not.toHaveBeenCalled();
             expect(setDidLayoutSpy).not.toHaveBeenCalled();
             expect(updateViewableItemsSpy).not.toHaveBeenCalled();
+            expect(firstVisibleCalls).toEqual([]);
         });
     });
 

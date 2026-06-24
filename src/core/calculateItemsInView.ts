@@ -184,6 +184,49 @@ function getIdsInVisibleRange(state: InternalState, range: VisibleRangeState) {
     return idsInView;
 }
 
+function maybeEmitFirstVisibleItemChanged(state: InternalState, index: number | null) {
+    const onFirstVisibleItemChanged = state.props.onFirstVisibleItemChanged;
+    if (!onFirstVisibleItemChanged || index === null || index < 0 || index >= state.props.data.length) {
+        return;
+    }
+
+    const key = state.idCache[index] ?? getId(state, index);
+    const previous = state.lastFirstVisibleItemCallback;
+    if (previous?.index === index && previous.key === key) {
+        return;
+    }
+
+    state.lastFirstVisibleItemCallback = { index, key };
+    onFirstVisibleItemChanged({ index, item: state.props.data[index], key });
+}
+
+function findFirstVisibleIndexInCachedRange(ctx: StateContext, scroll: number) {
+    const state = ctx.state;
+    const {
+        endBuffered,
+        idCache,
+        positions,
+        props: { data },
+        sizes,
+        startBuffered,
+    } = state;
+
+    if (startBuffered === null || endBuffered === null || startBuffered < 0 || endBuffered < startBuffered) {
+        return null;
+    }
+
+    for (let i = startBuffered; i <= endBuffered && i < data.length; i++) {
+        const id = idCache[i] ?? getId(state, i);
+        const size = sizes.get(id) ?? getItemSize(ctx, id, i, data[i]);
+        const top = positions[i]!;
+        if (top + size > scroll) {
+            return i;
+        }
+    }
+
+    return null;
+}
+
 function updateViewabilityForCachedRange(
     ctx: StateContext,
     viewabilityConfigCallbackPairs: NonNullable<InternalState["viewabilityConfigCallbackPairs"]>,
@@ -227,6 +270,8 @@ function updateViewabilityForCachedRange(
         idsInView: getIdsInVisibleRange(state, visibleRange),
         startNoBuffer: visibleRange.startNoBuffer,
     });
+
+    maybeEmitFirstVisibleItemChanged(state, visibleRange.startNoBuffer);
 
     if (visibleRange.startNoBuffer !== null && visibleRange.endNoBuffer !== null) {
         updateViewableItems(
@@ -397,6 +442,8 @@ export function calculateItemsInView(
                             scroll,
                             scrollBottom,
                         );
+                    } else if (state.props.onFirstVisibleItemChanged) {
+                        maybeEmitFirstVisibleItemChanged(state, findFirstVisibleIndexInCachedRange(ctx, scroll));
                     }
                     stickyState?.finishCalculateItemsInView?.();
                     return;
@@ -786,6 +833,8 @@ export function calculateItemsInView(
             evaluateBootstrapInitialScroll(ctx);
             return;
         }
+
+        maybeEmitFirstVisibleItemChanged(state, visibleRange.startNoBuffer);
 
         if (!queuedInitialLayout && !state.didContainersLayout) {
             const isInitialLayoutReady = hasActiveInitialScroll(state)

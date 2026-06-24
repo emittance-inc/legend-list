@@ -37,19 +37,19 @@ export type AdaptiveRender = "normal" | "light";
 export interface AdaptiveRenderConfig {
     /**
      * Scroll velocity in pixels per millisecond above which items should switch to light mode.
-     * @default 4
+     * @default 4 native, 16 web
      */
     enterVelocity?: number;
 
     /**
      * Scroll velocity in pixels per millisecond below which items can return to normal mode.
-     * @default 1
+     * @default 1 native, 4 web
      */
     exitVelocity?: number;
 
     /**
      * Time to wait without velocity above exitVelocity before returning to normal mode.
-     * @default 1000
+     * @default 1000 native, 250 web
      */
     exitDelay?: number;
 
@@ -311,6 +311,12 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
      * Called when list layout metrics change.
      */
     onMetricsChange?: (metrics: LegendListMetrics) => void;
+
+    /**
+     * Called when the first visible item changes. This is emitted from the core range calculation and is cheaper than
+     * viewability tracking when you only need to follow the item at the top of the viewport.
+     */
+    onFirstVisibleItemChanged?: (info: { index: number; item: ItemT; key: string }) => void;
 
     /**
      * Configures the adaptive render signal. Items can use this to render a lighter version while scrolling quickly.

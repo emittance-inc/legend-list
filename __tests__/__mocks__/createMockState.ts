@@ -129,6 +129,7 @@ export function createMockState(
             numColumns: 1,
             onEndReached: undefined,
             onEndReachedThreshold: 0.1,
+            onFirstVisibleItemChanged: undefined,
             onItemSizeChanged: undefined,
             onLoad: undefined,
             onScroll: undefined,

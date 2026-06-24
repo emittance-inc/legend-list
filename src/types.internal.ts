@@ -178,6 +178,7 @@ export interface InternalState {
     isStartReached: boolean | null;
     lastBatchingAction: number;
     lastLayout: LayoutRectangle | undefined;
+    lastFirstVisibleItemCallback?: { index: number; key: string };
     lastNativeScroll?: number;
     lastNativeScrollTime?: number;
     lastScrollAdjustForHistory?: number;
@@ -289,6 +290,7 @@ export interface InternalState {
         onStartReached: LegendListPropsInternal["onStartReached"];
         onStartReachedThreshold: number | null | undefined;
         onStickyHeaderChange: LegendListPropsInternal["onStickyHeaderChange"];
+        onFirstVisibleItemChanged: LegendListPropsInternal["onFirstVisibleItemChanged"];
         overrideItemLayout: LegendListPropsInternal["overrideItemLayout"];
         recycleItems: boolean;
         renderItem: LegendListPropsInternal["renderItem"];
