@@ -3,6 +3,7 @@ import type React from "react";
 import LibraryBenchmarkExample from "../examples/LibraryBenchmarkExample";
 import AccurateScrollToExample from "./AccurateScrollToExample";
 import AccurateScrollToHugeExample from "./AccurateScrollToHugeExample";
+import AdaptiveRenderExample from "./AdaptiveRenderExample";
 import AddToEndExample from "./AddToEndExample";
 import AiChatFloatingComposerExample from "./AiChatFloatingComposerExample";
 import AlwaysRenderExample from "./AlwaysRenderExample";
@@ -47,6 +48,13 @@ export const FIXTURE_ROUTES: FixtureRoute[] = [
         group: "Scroll & Position",
         path: "accurate-scrollto-huge",
         title: "Accurate ScrollTo Huge",
+    },
+    {
+        description: "Shows rows switching to a cheaper render while scroll velocity is high.",
+        element: () => <AdaptiveRenderExample />,
+        group: "Data & Layout",
+        path: "adaptive-render",
+        title: "Adaptive Render",
     },
     {
         description: "Appends new rows while keeping the viewport stable at the end.",

@@ -50,6 +50,11 @@ export const FIXTURE_SECTIONS: CatalogSection[] = [
                 title: "Always Render",
             },
             {
+                description: "Shows rows switching to a cheaper render while scroll velocity is high.",
+                slug: "adaptive-render",
+                title: "Adaptive Render",
+            },
+            {
                 description: "Exercises prepend and append pagination in the same list.",
                 slug: "bidirectional-infinite-list",
                 title: "Bidirectional Infinite List",

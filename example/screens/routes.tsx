@@ -17,6 +17,7 @@ import { VideoFeedExample } from "~/screens/examples/VideoFeedExample";
 import AccurateScrollToFixture from "~/screens/fixtures/accurate-scrollto";
 import AccurateScrollTo2Fixture from "~/screens/fixtures/accurate-scrollto-2";
 import AccurateScrollToHugeFixture from "~/screens/fixtures/accurate-scrollto-huge";
+import AdaptiveRenderFixture from "~/screens/fixtures/adaptive-render";
 import AddToEndFixture from "~/screens/fixtures/add-to-end";
 import ActivityAiChatKeyboardFixture from "~/screens/fixtures/ai-chat-keyboard";
 import AlwaysRenderFixture from "~/screens/fixtures/always-render";
@@ -443,6 +444,15 @@ export const FIXTURE_ROUTES: FixtureRouteDefinition[] = [
         kind: "fixture",
         slug: "large-list-render-time",
         title: "Large List Render Time",
+    },
+    {
+        component: AdaptiveRenderFixture,
+        description: "Shows rows blanking expensive details while scroll velocity is high.",
+        groupKey: "data",
+        groupTitle: "Data & Layout",
+        kind: "fixture",
+        slug: "adaptive-render",
+        title: "Adaptive Render",
     },
     {
         component: CardsFlashListFixture,

@@ -1,9 +1,13 @@
+import { Platform } from "@/platform/Platform";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import type { AdaptiveRender } from "@/types.base";
 
-const DEFAULT_ENTER_VELOCITY = 4;
-const DEFAULT_EXIT_VELOCITY = 1;
-const DEFAULT_EXIT_DELAY = 1000;
+export const DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY = 3;
+export const DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY = 1;
+export const DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY = 250;
+export const DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY = 6;
+export const DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY = 3;
+export const DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY = 250;
 
 function scheduleAdaptiveRenderExit(ctx: StateContext, exitDelay: number) {
     const state = ctx.state;
@@ -38,9 +42,16 @@ export function setAdaptiveRender(ctx: StateContext, mode: AdaptiveRender) {
 export function updateAdaptiveRender(ctx: StateContext, scrollVelocity: number) {
     const state = ctx.state;
     const adaptiveRender = state.props.adaptiveRender;
-    const enterVelocity = adaptiveRender?.enterVelocity ?? DEFAULT_ENTER_VELOCITY;
-    const exitVelocity = adaptiveRender?.exitVelocity ?? DEFAULT_EXIT_VELOCITY;
-    const exitDelay = adaptiveRender?.exitDelay ?? DEFAULT_EXIT_DELAY;
+    const isWeb = Platform.OS === "web";
+    const enterVelocity =
+        adaptiveRender?.enterVelocity ??
+        (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY : DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY);
+    const exitVelocity =
+        adaptiveRender?.exitVelocity ??
+        (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY : DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY);
+    const exitDelay =
+        adaptiveRender?.exitDelay ??
+        (isWeb ? DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY : DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
     const currentMode = peek$(ctx, "adaptiveRender");
     const threshold = currentMode === "light" ? exitVelocity : enterVelocity;
     const nextMode = Math.abs(scrollVelocity) > threshold ? "light" : "normal";

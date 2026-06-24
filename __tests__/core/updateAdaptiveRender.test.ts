@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import "../setup";
 
-import { updateAdaptiveRender } from "@/core/adaptiveRender";
+import {
+    DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY,
+    DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY,
+    DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY,
+    DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY,
+    DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY,
+    DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY,
+    updateAdaptiveRender,
+} from "@/core/adaptiveRender";
+import { Platform } from "@/platform/Platform";
 import { peek$ } from "@/state/state";
 import { createMockContext } from "../__mocks__/createMockContext";
 
@@ -14,9 +23,11 @@ type TimeoutRecord = {
 describe("updateAdaptiveRender", () => {
     const originalClearTimeout = globalThis.clearTimeout;
     const originalSetTimeout = globalThis.setTimeout;
+    const originalPlatform = Platform.OS;
     let timers: TimeoutRecord[];
 
     beforeEach(() => {
+        Platform.OS = "ios";
         timers = [];
         globalThis.setTimeout = ((callback: () => void, delay: number) => {
             const timer = { callback, delay };
@@ -29,6 +40,7 @@ describe("updateAdaptiveRender", () => {
     });
 
     afterEach(() => {
+        Platform.OS = originalPlatform;
         globalThis.clearTimeout = originalClearTimeout;
         globalThis.setTimeout = originalSetTimeout;
     });
@@ -52,7 +64,7 @@ describe("updateAdaptiveRender", () => {
             },
         );
 
-        updateAdaptiveRender(ctx, 4.1);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
 
         expect(peek$(ctx, "adaptiveRender")).toBe("light");
         expect(changes).toEqual(["light"]);
@@ -71,12 +83,12 @@ describe("updateAdaptiveRender", () => {
             },
         );
 
-        updateAdaptiveRender(ctx, 5);
-        updateAdaptiveRender(ctx, 0.5);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY - 0.1);
 
         expect(peek$(ctx, "adaptiveRender")).toBe("light");
         expect(timers).toHaveLength(1);
-        expect(timers[0].delay).toBe(1000);
+        expect(timers[0].delay).toBe(DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
 
         runTimer(timers[0]);
 
@@ -84,14 +96,29 @@ describe("updateAdaptiveRender", () => {
         expect(changes).toEqual(["light", "normal"]);
     });
 
+    it("uses less aggressive default thresholds on web", () => {
+        Platform.OS = "web";
+        const ctx = createMockContext({ adaptiveRender: "normal" });
+
+        updateAdaptiveRender(ctx, DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY - 1);
+        expect(peek$(ctx, "adaptiveRender")).toBe("normal");
+
+        updateAdaptiveRender(ctx, DEFAULT_WEB_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
+
+        updateAdaptiveRender(ctx, DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_VELOCITY - 0.5);
+        expect(timers).toHaveLength(1);
+        expect(timers[0].delay).toBe(DEFAULT_WEB_ADAPTIVE_RENDER_EXIT_DELAY);
+    });
+
     it("cancels a pending exit timeout when velocity crosses the exit velocity again", () => {
         const ctx = createMockContext({ adaptiveRender: "normal" });
 
-        updateAdaptiveRender(ctx, 5);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
         updateAdaptiveRender(ctx, 0);
 
         const settleTimer = timers[0];
-        updateAdaptiveRender(ctx, 2);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY + 0.1);
         runTimer(settleTimer);
 
         expect(settleTimer.cleared).toBe(true);
@@ -101,12 +128,12 @@ describe("updateAdaptiveRender", () => {
     it("does not extend settling while velocity remains below the threshold", () => {
         const ctx = createMockContext({ adaptiveRender: "normal" });
 
-        updateAdaptiveRender(ctx, 5);
-        updateAdaptiveRender(ctx, 0.5);
-        updateAdaptiveRender(ctx, 0.25);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY - 0.1);
+        updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY - 0.25);
 
         expect(timers).toHaveLength(1);
-        expect(timers[0].delay).toBe(1000);
+        expect(timers[0].delay).toBe(DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
 
         runTimer(timers[0]);
 
