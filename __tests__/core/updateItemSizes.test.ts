@@ -106,6 +106,28 @@ describe("updateItemSizes", () => {
         calculateSpy.mockRestore();
     });
 
+    it("recalculates initial layout when the last unknown size matches the estimate", () => {
+        const calculateSpy = spyOn(calculateItemsInViewModule, "calculateItemsInView").mockImplementation(() => {});
+
+        mockState.didContainersLayout = false;
+        mockState.startBuffered = 0;
+        mockState.endBuffered = 1;
+        mockState.containerItemKeys.set("item_0", 0);
+        mockState.containerItemKeys.set("item_1", 1);
+        mockState.sizesKnown.set("item_0", 100);
+
+        updateItemSizes(mockCtx, {
+            itemKey: "item_1",
+            size: { height: 100, width: 400 },
+        });
+
+        expect(mockState.sizesKnown.get("item_1")).toBe(100);
+        expect(calculateSpy).toHaveBeenCalledTimes(1);
+        expect(calculateSpy).toHaveBeenCalledWith(mockCtx, { doMVCP: true });
+
+        calculateSpy.mockRestore();
+    });
+
     it("measures pending containers and applies all sizes in one recalc", () => {
         const calculateSpy = spyOn(calculateItemsInViewModule, "calculateItemsInView").mockImplementation(() => {});
 

@@ -83,7 +83,7 @@ function mergeItemSizeUpdateResult(result: ItemSizeUpdateResult, next: ItemSizeU
 
 function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
     const state = ctx.state;
-    if (result.didChange && result.needsRecalculate) {
+    if (result.needsRecalculate) {
         state.scrollForNextCalculateItemsInView = undefined;
         runOrScheduleMVCPRecalculate(ctx);
     } else if (result.didMeasureUserScrollAnchorResetItem && state.userScrollAnchorReset?.keys.size === 0) {

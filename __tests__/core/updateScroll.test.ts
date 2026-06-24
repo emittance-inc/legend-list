@@ -118,6 +118,7 @@ describe("updateScroll large user jumps", () => {
             mockCtx = createMockContext(
                 {
                     adaptiveRender: "normal",
+                    readyToRender: true,
                 },
                 {
                     props: {
