@@ -14,6 +14,7 @@ import { ListComponent } from "@/components/ListComponent";
 import { useDevChecks } from "@/components/useDevChecks";
 import { ENABLE_DEBUG_VIEW } from "@/constants";
 import { IsNewArchitecture } from "@/constants-platform";
+import { resetAdaptiveRender } from "@/core/adaptiveRender";
 import {
     handleBootstrapInitialScrollFooterLayout,
     handleBootstrapInitialScrollLayoutChange,
@@ -389,6 +390,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     const state = refState.current!;
     const isFirstLocal = state.isFirst;
+    const previousAdaptiveRender = state.props.adaptiveRender;
     const previousNumColumnsProp = state.props.numColumns;
     const didScrollAxisGapChange = !isFirstLocal && ctx.scrollAxisGap !== nextScrollAxisGap;
 
@@ -474,6 +476,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     };
 
     state.refScroller = refScroller as unknown as React.RefObject<LegendListScrollerRef | null>;
+
+    if (!isFirstLocal && previousAdaptiveRender && !experimental_adaptiveRender) {
+        resetAdaptiveRender(ctx);
+    }
 
     const memoizedLastItemKeys = useMemo(() => {
         if (!dataProp.length) return [];

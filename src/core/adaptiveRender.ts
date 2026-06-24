@@ -43,6 +43,13 @@ export function setAdaptiveRender(ctx: StateContext, mode: AdaptiveRender) {
     }
 }
 
+export function resetAdaptiveRender(ctx: StateContext) {
+    clearAdaptiveRenderExitTimeout(ctx);
+    if (peek$(ctx, "adaptiveRender") !== "normal") {
+        setAdaptiveRender(ctx, "normal");
+    }
+}
+
 export function updateAdaptiveRender(ctx: StateContext, scrollVelocity: number) {
     const state = ctx.state;
     const adaptiveRender = state.props.adaptiveRender;
@@ -73,10 +80,7 @@ export function updateAdaptiveRender(ctx: StateContext, scrollVelocity: number) 
                 }
             }
         } else {
-            clearAdaptiveRenderExitTimeout(ctx);
-            if (currentMode !== "normal") {
-                setAdaptiveRender(ctx, "normal");
-            }
+            resetAdaptiveRender(ctx);
         }
     }
 }

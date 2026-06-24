@@ -493,6 +493,41 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
+    it("resets adaptive render when the config is disabled", async () => {
+        const data = [
+            { id: "item-1", label: "Alpha" },
+            { id: "item-2", label: "Beta" },
+        ];
+        const { LegendList } = await import("../../src/components/LegendList?props-test-adaptive-render-disable");
+        const renderList = (experimental_adaptiveRender?: { initialMode?: "light"; exitDelay?: number }) => (
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                experimental_adaptiveRender={experimental_adaptiveRender}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />
+        );
+
+        const rendered = render(renderList({ exitDelay: 10_000, initialMode: "light" }));
+        const ctx = await getContextFromRender();
+        const timeout = setTimeout(() => {}, 10_000) as unknown as number;
+        ctx.state.timeoutAdaptiveRender = timeout;
+        ctx.state.timeouts.add(timeout);
+
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
+
+        rendered.rerender(renderList());
+        await flushAsync();
+
+        expect(ctx.values.get("adaptiveRender")).toBe("normal");
+        expect(ctx.state.timeoutAdaptiveRender).toBeUndefined();
+        expect(ctx.state.timeouts.has(timeout)).toBe(false);
+
+        rendered.unmount();
+    });
+
     it("clears zero-valued initial scroll targets on mount", async () => {
         const data = [
             { id: "item-1", label: "Alpha" },
