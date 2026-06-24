@@ -29,6 +29,7 @@ export function useOnLayoutSync<T extends View = View>(
     if (IsNewArchitecture) {
         useLayoutEffect(() => {
             if (ref.current) {
+                // measure is synchronous in new architecture
                 ref.current.measure((x, y, width, height) => {
                     onLayoutChange({ height, width, x, y }, true);
                 });

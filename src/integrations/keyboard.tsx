@@ -91,6 +91,7 @@ export function useKeyboardChatComposerInset(
     );
 
     useLayoutEffect(() => {
+        // measure is synchronous in new architecture
         composerRef.current?.measure((_x, _y, _width, height) => {
             reportHeight(height);
         });
