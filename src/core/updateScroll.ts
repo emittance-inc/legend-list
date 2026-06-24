@@ -47,9 +47,6 @@ export function updateScroll(
         scrollHistory.shift();
     }
 
-    const scrollVelocity = getScrollVelocity(state);
-    updateAdaptiveRender(ctx, scrollVelocity);
-
     // Ignore scroll events that are closer to the previous scroll position than the target position after MVCP
     // This prevents a race condition where MVCP adjusts the scroll position for the new items
     // and then a scroll event comes in that was relevant from before the MVCP adjustment.
@@ -71,6 +68,10 @@ export function updateScroll(
     const scrollDelta = Math.abs(newScroll - prevScroll);
     const didResolvePendingNativeMVCPAdjust = resolvePendingNativeMVCPAdjust(ctx, newScroll);
     const scrollLength = state.scrollLength;
+    const isLargeUserScrollJump =
+        scrollLength > 0 && scrollingTo === undefined && scrollDelta > scrollLength && !state.pendingNativeMVCPAdjust;
+    const scrollVelocity = getScrollVelocity(state);
+    updateAdaptiveRender(ctx, scrollVelocity, { forceLight: isLargeUserScrollJump });
     const lastCalculated = state.scrollLastCalculate;
     // During MVCP stabilization we cannot rely on the normal scroll delta threshold.
     const useAggressiveItemRecalculation = isInMVCPActiveMode(state);
@@ -93,12 +94,7 @@ export function updateScroll(
             checkThresholds(ctx);
         };
 
-        if (
-            scrollLength > 0 &&
-            scrollingTo === undefined &&
-            scrollDelta > scrollLength &&
-            !state.pendingNativeMVCPAdjust
-        ) {
+        if (isLargeUserScrollJump) {
             state.mvcpAnchorLock = undefined;
             state.pendingNativeMVCPAdjust = undefined;
             state.userScrollAnchorReset = { keys: new Set() };

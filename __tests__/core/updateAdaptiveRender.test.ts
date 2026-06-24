@@ -59,6 +59,15 @@ describe("updateAdaptiveRender", () => {
         expect(peek$(ctx, "adaptiveRender")).toBe("normal");
     });
 
+    it("keeps normal mode for forced light when adaptive render is not configured", () => {
+        const ctx = createMockContext({ adaptiveRender: "normal", readyToRender: true });
+
+        updateAdaptiveRender(ctx, 0, { forceLight: true });
+
+        expect(peek$(ctx, "adaptiveRender")).toBe("normal");
+        expect(timers).toHaveLength(0);
+    });
+
     it("keeps the configured initial mode until the list is ready to render", () => {
         const ctx = createMockContext(
             { adaptiveRender: "light" },
@@ -93,6 +102,27 @@ describe("updateAdaptiveRender", () => {
 
         expect(peek$(ctx, "adaptiveRender")).toBe("light");
         expect(changes).toEqual(["light"]);
+    });
+
+    it("switches to light mode immediately when forced even without velocity", () => {
+        const changes: string[] = [];
+        const ctx = createMockContext(
+            { adaptiveRender: "normal", readyToRender: true },
+            {
+                props: {
+                    adaptiveRender: {
+                        onChange: (mode) => changes.push(mode),
+                    },
+                },
+            },
+        );
+
+        updateAdaptiveRender(ctx, 0, { forceLight: true });
+
+        expect(peek$(ctx, "adaptiveRender")).toBe("light");
+        expect(changes).toEqual(["light"]);
+        expect(timers).toHaveLength(1);
+        expect(timers[0].delay).toBe(DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
     });
 
     it("waits for the default exit delay before returning to normal mode", () => {

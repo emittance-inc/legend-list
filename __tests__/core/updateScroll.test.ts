@@ -23,6 +23,9 @@ describe("updateScroll large user jumps", () => {
     });
 
     afterEach(() => {
+        for (const timeout of mockCtx.state.timeouts) {
+            clearTimeout(timeout);
+        }
         flushSyncSpy.mockRestore();
     });
 
@@ -144,6 +147,51 @@ describe("updateScroll large user jumps", () => {
             }
             Date.now = originalDateNow;
         }
+    });
+
+    it("enters adaptive light mode for large user scroll jumps even without velocity", () => {
+        const changes: string[] = [];
+        const triggerCalculateItemsInViewSpy = spyOn(mockCtx.state, "triggerCalculateItemsInView").mockImplementation(
+            () => undefined,
+        );
+        mockCtx.values.set("adaptiveRender", "normal");
+        mockCtx.values.set("readyToRender", true);
+        mockCtx.state.props.adaptiveRender = {
+            enterVelocity: 10_000,
+            onChange: (mode) => changes.push(mode),
+        };
+        mockCtx.state.scrollHistory = [];
+
+        updateScroll(mockCtx, 150);
+
+        expect(peek$(mockCtx, "adaptiveRender")).toBe("light");
+        expect(changes).toEqual(["light"]);
+        expect(flushSyncSpy).toHaveBeenCalledTimes(1);
+        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: false, scrollVelocity: 0 });
+        triggerCalculateItemsInViewSpy.mockRestore();
+    });
+
+    it("does not force adaptive light mode for large programmatic scroll jumps", () => {
+        const changes: string[] = [];
+        const triggerCalculateItemsInViewSpy = spyOn(mockCtx.state, "triggerCalculateItemsInView").mockImplementation(
+            () => undefined,
+        );
+        mockCtx.values.set("adaptiveRender", "normal");
+        mockCtx.values.set("readyToRender", true);
+        mockCtx.state.props.adaptiveRender = {
+            enterVelocity: 10_000,
+            onChange: (mode) => changes.push(mode),
+        };
+        mockCtx.state.scrollingTo = { offset: 150 } as any;
+        mockCtx.state.scrollHistory = [];
+
+        updateScroll(mockCtx, 150);
+
+        expect(peek$(mockCtx, "adaptiveRender")).toBe("normal");
+        expect(changes).toEqual([]);
+        expect(flushSyncSpy).not.toHaveBeenCalled();
+        expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({ doMVCP: true, scrollVelocity: 0 });
+        triggerCalculateItemsInViewSpy.mockRestore();
     });
 
     it("uses flushSync for large non-web user scroll jumps", () => {
