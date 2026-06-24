@@ -1,3 +1,9 @@
+## 3.2.0
+
+- Feat: Add `onFirstVisibleItemChanged` so apps can track the item at the top of the viewport without setting up full viewability callbacks.
+- Feat: Add `experimental_adaptiveRender.initialMode` for choosing whether adaptive rendering starts in `normal` or `light` mode before the list is ready.
+- Perf: On Fabric, replacement container measurements are batched into the same layout pass, so scroll anchoring and item positioning recalculate once instead of once per pending row.
+
 ## 3.1.2
 
 - Fix: On Android, end-aligned lists could double apply scroll clamping during MVCP and be slightly underscrolled
