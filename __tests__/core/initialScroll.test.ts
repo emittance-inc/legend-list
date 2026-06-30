@@ -255,7 +255,7 @@ describe("initialScroll", () => {
         );
 
         setInitialScrollTarget(
-            ctx.state,
+            ctx,
             {
                 contentOffset: 220,
                 index: 0,
@@ -265,6 +265,7 @@ describe("initialScroll", () => {
         );
 
         expect(ctx.state.didFinishInitialScroll).toBe(false);
+        expect(ctx.values.get("readyToRender")).toBe(false);
         expect(ctx.state.initialScrollSession).toMatchObject({
             kind: "offset",
         });

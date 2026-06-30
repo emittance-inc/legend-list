@@ -43,10 +43,10 @@ export function setAdaptiveRender(ctx: StateContext, mode: AdaptiveRender) {
     }
 }
 
-export function resetAdaptiveRender(ctx: StateContext) {
+export function resetAdaptiveRender(ctx: StateContext, mode: AdaptiveRender = "normal") {
     clearAdaptiveRenderExitTimeout(ctx);
-    if (peek$(ctx, "adaptiveRender") !== "normal") {
-        setAdaptiveRender(ctx, "normal");
+    if (peek$(ctx, "adaptiveRender") !== mode) {
+        setAdaptiveRender(ctx, mode);
     }
 }
 

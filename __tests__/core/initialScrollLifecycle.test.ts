@@ -40,8 +40,12 @@ describe("initialScrollLifecycle", () => {
 
     it("replays finished offset-only initial scrolls when data arrives after an empty mount", () => {
         const ctx = createMockContext(
-            {},
             {
+                adaptiveRender: "normal",
+                readyToRender: true,
+            },
+            {
+                didContainersLayout: true,
                 didFinishInitialScroll: true,
                 initialScroll: {
                     contentOffset: 250,
@@ -53,6 +57,9 @@ describe("initialScrollLifecycle", () => {
                     previousDataLength: 0,
                 } as StateContext["state"]["initialScrollSession"],
                 props: {
+                    adaptiveRender: {
+                        initialMode: "light",
+                    },
                     data: Array.from({ length: 5 }, (_, index) => ({ id: `item-${index}` })),
                 },
                 queuedInitialLayout: true,
@@ -69,7 +76,10 @@ describe("initialScrollLifecycle", () => {
             useBootstrapInitialScroll: false,
         });
 
+        expect(ctx.state.didContainersLayout).toBe(true);
         expect(ctx.state.didFinishInitialScroll).toBe(false);
+        expect(ctx.values.get("readyToRender")).toBe(false);
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
         expect(ctx.state.initialScrollSession).toMatchObject({
             kind: "offset",
             previousDataLength: ctx.state.props.data.length,

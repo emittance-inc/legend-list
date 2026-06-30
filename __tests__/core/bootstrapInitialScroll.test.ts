@@ -30,6 +30,59 @@ describe("bootstrapInitialScroll", () => {
         rafHandle = 0;
     });
 
+    it("resets render readiness when finished bootstrap initial scroll is replayed for arriving data", () => {
+        const data = Array.from({ length: 5 }, (_, index) => ({ id: `item-${index}` }));
+        const ctx = createMockContext(
+            {
+                adaptiveRender: "normal",
+                footerSize: 0,
+                readyToRender: true,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                initialScroll: {
+                    index: 0,
+                    viewOffset: 0,
+                    viewPosition: 1,
+                } as StateContext["state"]["initialScroll"],
+                initialScrollSession: {
+                    kind: "bootstrap",
+                    previousDataLength: 0,
+                } as StateContext["state"]["initialScrollSession"],
+                props: {
+                    adaptiveRender: {
+                        initialMode: "light",
+                    },
+                    data,
+                    estimatedItemSize: 50,
+                    stylePaddingBottom: 0,
+                },
+                scrollLength: 100,
+            },
+        );
+
+        handleBootstrapInitialScrollDataChange(ctx, {
+            dataLength: data.length,
+            didDataChange: true,
+            initialScrollAtEnd: true,
+            previousDataLength: 0,
+            stylePaddingBottom: 0,
+        });
+
+        expect(ctx.state.didContainersLayout).toBe(true);
+        expect(ctx.state.didFinishInitialScroll).toBe(false);
+        expect(ctx.values.get("readyToRender")).toBe(false);
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
+        expect(ctx.state.initialScrollSession).toMatchObject({
+            bootstrap: {
+                passCount: 0,
+                targetIndexSeed: data.length - 1,
+            },
+            kind: "bootstrap",
+        });
+    });
+
     it("preserves footer relayout tracking across repeated end-target rebuilds", () => {
         const data = Array.from({ length: 3 }, (_, index) => ({ id: `item-${index}` }));
         const ctx = createMockContext(

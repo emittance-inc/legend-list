@@ -8,7 +8,7 @@ import { clearPreservedInitialScrollTarget, finishInitialScroll } from "@/core/f
 import { advanceCurrentInitialScrollSession, setInitialScrollTarget } from "@/core/initialScroll";
 import { setInitialScrollSession } from "@/core/initialScrollSession";
 import type { StateContext } from "@/state/state";
-import { setInitialRenderState } from "@/utils/setInitialRenderState";
+import { resetInitialRenderState, setInitialRenderState } from "@/utils/setInitialRenderState";
 
 export function retargetActiveInitialScrollAtEnd(ctx: StateContext) {
     const state = ctx.state;
@@ -75,7 +75,7 @@ export function initializeInitialScrollOnMount(
             (!!initialScroll.preserveForFooterLayout !== preserveForFooterLayout &&
                 state.initialScrollSession?.kind !== "offset"))
     ) {
-        setInitialScrollTarget(state, {
+        setInitialScrollTarget(ctx, {
             ...initialScroll,
             contentOffset: resolvedInitialContentOffset,
             preserveForFooterLayout,
@@ -108,6 +108,7 @@ export function handleInitialScrollDataChange(
     options: {
         dataLength: number;
         didDataChange: boolean;
+        didStartFreshData?: boolean;
         initialScrollAtEnd: boolean;
         latestInitialScroll: StateContext["state"]["initialScroll"];
         latestInitialScrollSessionKind: "bootstrap" | "offset";
@@ -118,6 +119,7 @@ export function handleInitialScrollDataChange(
     const {
         dataLength,
         didDataChange,
+        didStartFreshData,
         initialScrollAtEnd,
         latestInitialScroll,
         latestInitialScrollSessionKind,
@@ -125,19 +127,19 @@ export function handleInitialScrollDataChange(
         useBootstrapInitialScroll,
     } = options;
     const state = ctx.state;
-    const previousDataLength = state.initialScrollSession?.previousDataLength ?? 0;
-    const isFirstNonEmptyData = !state.hasHadNonEmptyData && dataLength > 0;
+    const previousInitialScrollDataLength = state.initialScrollSession?.previousDataLength ?? 0;
+    const shouldUseLatestInitialScroll = dataLength > 0 && (!state.hasHadNonEmptyData || didStartFreshData);
 
     if (dataLength > 0) {
         state.hasHadNonEmptyData = true;
     }
 
-    if (isFirstNonEmptyData) {
+    if (shouldUseLatestInitialScroll) {
         if (latestInitialScroll) {
-            setInitialScrollTarget(state, latestInitialScroll);
+            setInitialScrollTarget(ctx, latestInitialScroll);
             setInitialScrollSession(state, {
                 kind: latestInitialScrollSessionKind,
-                previousDataLength,
+                previousDataLength: previousInitialScrollDataLength,
             });
         } else {
             clearPreservedInitialScrollTarget(state);
@@ -154,21 +156,21 @@ export function handleInitialScrollDataChange(
             dataLength,
             didDataChange,
             initialScrollAtEnd,
-            previousDataLength,
+            previousDataLength: previousInitialScrollDataLength,
             stylePaddingBottom,
         });
         return;
     }
 
     const shouldReplayFinishedOffsetInitialScroll =
-        previousDataLength === 0 &&
+        previousInitialScrollDataLength === 0 &&
         dataLength > 0 &&
         !!state.initialScroll &&
         ctx.state.initialScrollSession?.kind === "offset" &&
         !!state.didFinishInitialScroll;
 
     if (
-        previousDataLength !== 0 ||
+        previousInitialScrollDataLength !== 0 ||
         dataLength === 0 ||
         !state.initialScroll ||
         !state.queuedInitialLayout ||
@@ -178,7 +180,7 @@ export function handleInitialScrollDataChange(
     }
 
     if (shouldReplayFinishedOffsetInitialScroll) {
-        state.didFinishInitialScroll = false;
+        resetInitialRenderState(ctx, { resetInitialScroll: true });
     }
 
     advanceCurrentInitialScrollSession(ctx);

@@ -64,6 +64,7 @@ import { normalizeMaintainScrollAtEnd } from "@/utils/normalizeMaintainScrollAtE
 import { normalizeMaintainVisibleContentPosition } from "@/utils/normalizeMaintainVisibleContentPosition";
 import { requestAdjust } from "@/utils/requestAdjust";
 import { isHorizontalRTLProps } from "@/utils/rtl";
+import { resetInitialRenderState } from "@/utils/setInitialRenderState";
 import { setPaddingTop } from "@/utils/setPaddingTop";
 import { useThrottledOnScroll } from "@/utils/throttledOnScroll";
 import { updateSnapToOffsets } from "@/utils/updateSnapToOffsets";
@@ -397,11 +398,18 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     ctx.scrollAxisGap = nextScrollAxisGap;
     state.didColumnsChange = numColumnsProp !== previousNumColumnsProp || didScrollAxisGapChange;
+    const previousDataLength = state.props.data?.length ?? 0;
     const didDataReferenceChangeLocal = state.props.data !== dataProp;
     const didDataVersionChangeLocal = state.props.dataVersion !== dataVersion;
     const didDataChangeLocal =
         didDataVersionChangeLocal ||
         (didDataReferenceChangeLocal && checkStructuralDataChange(state, dataProp, state.props.data));
+    const shouldResetFreshDataLayout =
+        !isFirstLocal &&
+        didDataChangeLocal &&
+        state.hasHadNonEmptyData &&
+        previousDataLength === 0 &&
+        dataProp.length > 0;
     if (
         didDataChangeLocal &&
         !initialScrollAtEnd &&
@@ -480,6 +488,12 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     if (!isFirstLocal && previousAdaptiveRender && !experimental_adaptiveRender) {
         resetAdaptiveRender(ctx);
+    }
+    if (shouldResetFreshDataLayout) {
+        resetInitialRenderState(ctx, {
+            resetInitialScroll: !!initialScrollProp,
+            resetLayout: true,
+        });
     }
 
     const memoizedLastItemKeys = useMemo(() => {
@@ -568,13 +582,21 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         handleInitialScrollDataChange(ctx, {
             dataLength: dataProp.length,
             didDataChange: didDataChangeLocal,
+            didStartFreshData: shouldResetFreshDataLayout,
             initialScrollAtEnd,
             latestInitialScroll: initialScrollProp,
             latestInitialScrollSessionKind: initialScrollUsesOffsetOnly ? "offset" : "bootstrap",
             stylePaddingBottom: stylePaddingBottomState,
             useBootstrapInitialScroll: usesBootstrapInitialScroll,
         });
-    }, [dataProp.length, didDataChangeLocal, initialScrollAtEnd, stylePaddingBottomState, usesBootstrapInitialScroll]);
+    }, [
+        dataProp.length,
+        didDataChangeLocal,
+        shouldResetFreshDataLayout,
+        initialScrollAtEnd,
+        stylePaddingBottomState,
+        usesBootstrapInitialScroll,
+    ]);
 
     useLayoutEffect(() => {
         if (didAnchoredEndSpaceAnchorIndexChange) {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import "../setup";
 
-import { setInitialRenderState } from "../../src/utils/setInitialRenderState";
+import { resetInitialRenderState, setInitialRenderState } from "../../src/utils/setInitialRenderState";
 import { createMockContext } from "../__mocks__/createMockContext";
 
 describe("setInitialRenderState", () => {
@@ -82,5 +82,45 @@ describe("setInitialRenderState", () => {
         setInitialRenderState(ctx, { didInitialScroll: true });
 
         expect(rafCallbacks).toHaveLength(0);
+    });
+
+    it("resets readiness and adaptive render before a replayed initial render", () => {
+        const ctx = createMockContext(
+            {
+                adaptiveRender: "normal",
+                readyToRender: true,
+            },
+            {
+                didContainersLayout: true,
+                didFinishInitialScroll: true,
+                props: {
+                    adaptiveRender: {
+                        initialMode: "light",
+                    },
+                },
+                timeoutAdaptiveRender: 123 as any,
+                timeouts: new Set([123 as any]),
+            },
+        );
+
+        resetInitialRenderState(ctx, {
+            resetInitialScroll: true,
+            resetLayout: true,
+        });
+
+        expect(ctx.state.didContainersLayout).toBe(false);
+        expect(ctx.state.didFinishInitialScroll).toBe(false);
+        expect(ctx.values.get("readyToRender")).toBe(false);
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
+        expect(ctx.state.timeoutAdaptiveRender).toBeUndefined();
+        expect(ctx.state.timeouts.size).toBe(0);
+
+        setInitialRenderState(ctx, { didLayout: true });
+        expect(ctx.values.get("readyToRender")).toBe(false);
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
+
+        setInitialRenderState(ctx, { didInitialScroll: true });
+        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("adaptiveRender")).toBe("normal");
     });
 });

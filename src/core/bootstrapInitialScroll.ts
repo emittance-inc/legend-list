@@ -345,7 +345,6 @@ function clearPendingInitialScrollFooterLayout(
     },
 ) {
     const { dataLength, stylePaddingBottom, target } = options;
-    const state = ctx.state;
     /*
      * Only initialScrollAtEnd creates a footer-preserved target. Plain
      * bottom-aligned targets do not need this downgrade step.
@@ -366,7 +365,7 @@ function clearPendingInitialScrollFooterLayout(
         stylePaddingBottom,
     });
 
-    setInitialScrollTarget(state, clearedFooterTarget);
+    setInitialScrollTarget(ctx, clearedFooterTarget);
 }
 
 function clearFinishedViewportRetargetableInitialScroll(state: InternalState) {
@@ -655,8 +654,7 @@ export function handleBootstrapInitialScrollDataChange(
             shouldResetDidFinish ||
             didDataChange
         ) {
-            setInitialScrollTarget(state, updatedInitialScroll, {
-                ctx,
+            setInitialScrollTarget(ctx, updatedInitialScroll, {
                 resetDidFinish: shouldResetDidFinish,
             });
             rearmBootstrapInitialScroll(ctx, {
@@ -684,8 +682,7 @@ export function handleBootstrapInitialScrollDataChange(
      * bootstrap session against the current preserved target.
      */
     if (bootstrapInitialScroll || shouldResetDidFinish) {
-        setInitialScrollTarget(state, initialScroll, {
-            ctx,
+        setInitialScrollTarget(ctx, initialScroll, {
             resetDidFinish: shouldResetDidFinish,
         });
         rearmBootstrapInitialScroll(ctx, {
@@ -778,8 +775,7 @@ export function handleBootstrapInitialScrollFooterLayout(
              * reset finished state and converge again against the new target.
              */
             const didFinishInitialScroll = !!state.didFinishInitialScroll;
-            setInitialScrollTarget(state, updatedInitialScroll, {
-                ctx,
+            setInitialScrollTarget(ctx, updatedInitialScroll, {
                 resetDidFinish: didFinishInitialScroll,
             });
             rearmBootstrapInitialScroll(ctx, {

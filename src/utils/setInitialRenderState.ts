@@ -1,6 +1,28 @@
-import { setAdaptiveRender } from "@/core/adaptiveRender";
+import { resetAdaptiveRender, setAdaptiveRender } from "@/core/adaptiveRender";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import { INITIAL_DRAW_DISTANCE, scheduleFullDrawDistancePrewarm } from "@/utils/getEffectiveDrawDistance";
+
+export function resetInitialRenderState(
+    ctx: StateContext,
+    {
+        resetLayout,
+        resetInitialScroll,
+    }: {
+        resetLayout?: boolean;
+        resetInitialScroll?: boolean;
+    },
+) {
+    const { state } = ctx;
+    if (resetLayout) {
+        state.didContainersLayout = false;
+    }
+    if (resetInitialScroll) {
+        state.didFinishInitialScroll = false;
+    }
+
+    set$(ctx, "readyToRender", false);
+    resetAdaptiveRender(ctx, state.props.adaptiveRender?.initialMode ?? "normal");
+}
 
 export function setInitialRenderState(
     ctx: StateContext,

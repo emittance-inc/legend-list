@@ -7,6 +7,7 @@ import { clampScrollIndex } from "@/core/scrollToIndex";
 import type { StateContext } from "@/state/state";
 import type { ScrollIndexWithOffset, ScrollIndexWithOffsetAndContentOffset } from "@/types.base";
 import { getItemSizeAtIndex } from "@/utils/getItemSize";
+import { resetInitialRenderState } from "@/utils/setInitialRenderState";
 
 type InternalInitialScrollTarget = NonNullable<StateContext["state"]["initialScroll"]>;
 
@@ -40,13 +41,13 @@ export function dispatchInitialScroll(
 }
 
 export function setInitialScrollTarget(
-    state: StateContext["state"],
+    ctx: StateContext,
     target: InternalInitialScrollTarget,
     options?: {
-        ctx?: StateContext;
         resetDidFinish?: boolean;
     },
 ) {
+    const { state } = ctx;
     state.clearPreservedInitialScrollOnNextFinish = undefined;
     if (state.timeoutPreservedInitialScrollClear !== undefined) {
         clearTimeout(state.timeoutPreservedInitialScrollClear);
@@ -54,8 +55,8 @@ export function setInitialScrollTarget(
     }
     state.initialScroll = target;
 
-    if (options?.resetDidFinish && state.didFinishInitialScroll) {
-        state.didFinishInitialScroll = false;
+    if (options?.resetDidFinish) {
+        resetInitialRenderState(ctx, { resetInitialScroll: true });
     }
 
     setInitialScrollSession(state, {
@@ -139,7 +140,7 @@ function advanceMeasuredInitialScroll(
     }
 
     if (didOffsetChange && state.initialScrollSession?.kind !== "offset") {
-        setInitialScrollTarget(state, { ...initialScroll, contentOffset: resolvedOffset });
+        setInitialScrollTarget(ctx, { ...initialScroll, contentOffset: resolvedOffset });
     }
 
     const forceScroll =

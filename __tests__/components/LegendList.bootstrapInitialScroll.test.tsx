@@ -364,11 +364,12 @@ describe("LegendList bootstrap initial scroll", () => {
 
         const state = await getStateFromRender();
         expect(state.didFinishInitialScroll).toBe(false);
-        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("readyToRender")).toBe(false);
         expect(getBootstrapSession(state)).toBeDefined();
 
         seedMeasuredLayout(state, nextData.length, 50);
         await act(async () => {
+            setDidLayout(ctx);
             state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
             state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
         });
@@ -419,7 +420,7 @@ describe("LegendList bootstrap initial scroll", () => {
 
         const state = await getStateFromRender();
         expect(state.didFinishInitialScroll).toBe(false);
-        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("readyToRender")).toBe(false);
         expect(getBootstrapSession(state)).toBeDefined();
 
         seedMeasuredLayout(state, nextData.length, 50);
@@ -519,6 +520,56 @@ describe("LegendList bootstrap initial scroll", () => {
         expect(state.initialScroll?.index).toBe(4);
         expect(state.didFinishInitialScroll).toBe(false);
         expect(getBootstrapSession(state)).toBeDefined();
+    });
+
+    it("uses the latest initialScrollIndex after a previous dataset is cleared", async () => {
+        const initialData = Array.from({ length: 5 }, (_, index) => ({
+            id: `initial-${index}`,
+            label: `Initial ${index}`,
+        }));
+        const nextData = Array.from({ length: 5 }, (_, index) => ({
+            id: `next-${index}`,
+            label: `Next ${index}`,
+        }));
+        const { LegendList } = await import("../../src/components/LegendList?bootstrap-cleared-replace-index");
+        const renderList = (data: typeof initialData, initialScrollIndex?: number) => (
+            <LegendList
+                data={data}
+                estimatedItemSize={50}
+                estimatedListSize={{ height: 200, width: 320 }}
+                initialScrollIndex={initialScrollIndex}
+                keyExtractor={(item: { id: string }) => item.id}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />
+        );
+        const rendered = render(renderList(initialData, 1));
+
+        const ctx = await getContextFromRender();
+        const state = await getStateFromRender();
+        seedMeasuredLayout(state, initialData.length, 50);
+        await act(async () => {
+            setDidLayout(ctx);
+            state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
+            state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
+        });
+        if (state.scrollingTo?.isInitialScroll) {
+            await act(async () => {
+                finishScrollTo(ctx);
+            });
+        }
+
+        expect(state.didFinishInitialScroll).toBe(true);
+        expect(ctx.values.get("readyToRender")).toBe(true);
+
+        rendered.rerender(renderList([]));
+        await flushAsync();
+
+        rendered.rerender(renderList(nextData, 3));
+        await flushAsync();
+
+        expect(state.initialScroll?.index).toBe(3);
+        expect(state.didFinishInitialScroll).toBe(false);
+        expect(ctx.values.get("readyToRender")).toBe(false);
     });
 
     it("preserves the native seed when bootstrap bounds are exceeded", async () => {
@@ -892,7 +943,7 @@ describe("LegendList bootstrap initial scroll", () => {
         expect(getBootstrapSession(state)).toBeUndefined();
     });
 
-    it("keeps rendered content visible when footer layout retargets a finished end alignment", async () => {
+    it("resets render readiness when footer layout retargets a finished end alignment", async () => {
         const data = Array.from({ length: 6 }, (_, index) => ({
             id: `item-${index}`,
             label: `Item ${index}`,
@@ -935,7 +986,7 @@ describe("LegendList bootstrap initial scroll", () => {
         });
 
         expect(state.didFinishInitialScroll).toBe(false);
-        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("readyToRender")).toBe(false);
 
         await act(async () => {
             state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
