@@ -84,6 +84,31 @@ describe("setInitialRenderState", () => {
         expect(rafCallbacks).toHaveLength(0);
     });
 
+    it("calls onLoad only once across replayed readiness transitions", () => {
+        const onLoad = mock(() => {});
+        const ctx = createMockContext(
+            {},
+            {
+                didContainersLayout: true,
+                props: {
+                    onLoad,
+                },
+            },
+        );
+
+        setInitialRenderState(ctx, { didInitialScroll: true });
+
+        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.state.didLoad).toBe(true);
+        expect(onLoad).toHaveBeenCalledTimes(1);
+
+        resetInitialRenderState(ctx, { resetLayout: true });
+        setInitialRenderState(ctx, { didLayout: true });
+
+        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(onLoad).toHaveBeenCalledTimes(1);
+    });
+
     it("resets readiness and adaptive render before a replayed initial render", () => {
         const changes: Array<[string, string]> = [];
         const ctx = createMockContext(

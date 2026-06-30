@@ -322,6 +322,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 dataChangeNeedsScrollUpdate: false,
                 didColumnsChange: false,
                 didDataChange: false,
+                didLoad: false,
                 enableScrollForNextCalculateItemsInView: true,
                 endBuffered: -1,
                 endNoBuffer: -1,

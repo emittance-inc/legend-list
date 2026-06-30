@@ -56,8 +56,11 @@ export function setInitialRenderState(
             scheduleFullDrawDistancePrewarm(ctx);
         }
 
-        if (onLoad) {
-            onLoad({ elapsedTimeInMs: Date.now() - loadStartTime });
+        if (!state.didLoad) {
+            state.didLoad = true;
+            if (onLoad) {
+                onLoad({ elapsedTimeInMs: Date.now() - loadStartTime });
+            }
         }
     }
 }
