@@ -122,7 +122,7 @@ describe("updateScroll large user jumps", () => {
 
     it("updates adaptive render from the current scroll sample", () => {
         const originalDateNow = Date.now;
-        const changes: string[] = [];
+        const changes: Array<[string, string]> = [];
         const now = 1000;
         Date.now = () => now;
 
@@ -136,7 +136,7 @@ describe("updateScroll large user jumps", () => {
                     props: {
                         adaptiveRender: {
                             enterVelocity: 1,
-                            onChange: (mode) => changes.push(mode),
+                            onChange: (mode, reason) => changes.push([mode, reason]),
                         },
                     },
                     scroll: 0,
@@ -149,7 +149,7 @@ describe("updateScroll large user jumps", () => {
             updateScroll(mockCtx, 200);
 
             expect(peek$(mockCtx, "adaptiveRender")).toBe("light");
-            expect(changes).toEqual(["light"]);
+            expect(changes).toEqual([["light", "scroll"]]);
         } finally {
             for (const timeout of mockCtx.state.timeouts) {
                 clearTimeout(timeout);
@@ -159,7 +159,7 @@ describe("updateScroll large user jumps", () => {
     });
 
     it("enters adaptive light mode for large user scroll jumps even without velocity", () => {
-        const changes: string[] = [];
+        const changes: Array<[string, string]> = [];
         const triggerCalculateItemsInViewSpy = spyOn(mockCtx.state, "triggerCalculateItemsInView").mockImplementation(
             () => undefined,
         );
@@ -167,14 +167,14 @@ describe("updateScroll large user jumps", () => {
         mockCtx.values.set("readyToRender", true);
         mockCtx.state.props.adaptiveRender = {
             enterVelocity: 10_000,
-            onChange: (mode) => changes.push(mode),
+            onChange: (mode, reason) => changes.push([mode, reason]),
         };
         mockCtx.state.scrollHistory = [];
 
         updateScroll(mockCtx, 150);
 
         expect(peek$(mockCtx, "adaptiveRender")).toBe("light");
-        expect(changes).toEqual(["light"]);
+        expect(changes).toEqual([["light", "scroll"]]);
         expect(flushSyncSpy).toHaveBeenCalledTimes(1);
         expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledWith({
             doMVCP: false,

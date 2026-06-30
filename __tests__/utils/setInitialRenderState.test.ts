@@ -85,6 +85,7 @@ describe("setInitialRenderState", () => {
     });
 
     it("resets readiness and adaptive render before a replayed initial render", () => {
+        const changes: Array<[string, string]> = [];
         const ctx = createMockContext(
             {
                 adaptiveRender: "normal",
@@ -96,6 +97,7 @@ describe("setInitialRenderState", () => {
                 props: {
                     adaptiveRender: {
                         initialMode: "light",
+                        onChange: (mode, reason) => changes.push([mode, reason]),
                     },
                 },
                 timeoutAdaptiveRender: 123 as any,
@@ -114,13 +116,19 @@ describe("setInitialRenderState", () => {
         expect(ctx.values.get("adaptiveRender")).toBe("light");
         expect(ctx.state.timeoutAdaptiveRender).toBeUndefined();
         expect(ctx.state.timeouts.size).toBe(0);
+        expect(changes).toEqual([["light", "initial"]]);
 
         setInitialRenderState(ctx, { didLayout: true });
         expect(ctx.values.get("readyToRender")).toBe(false);
         expect(ctx.values.get("adaptiveRender")).toBe("light");
+        expect(changes).toEqual([["light", "initial"]]);
 
         setInitialRenderState(ctx, { didInitialScroll: true });
         expect(ctx.values.get("readyToRender")).toBe(true);
         expect(ctx.values.get("adaptiveRender")).toBe("normal");
+        expect(changes).toEqual([
+            ["light", "initial"],
+            ["normal", "ready"],
+        ]);
     });
 });

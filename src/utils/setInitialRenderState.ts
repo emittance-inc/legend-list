@@ -21,7 +21,7 @@ export function resetInitialRenderState(
     }
 
     set$(ctx, "readyToRender", false);
-    resetAdaptiveRender(ctx, state.props.adaptiveRender?.initialMode ?? "normal");
+    resetAdaptiveRender(ctx);
 }
 
 export function setInitialRenderState(
@@ -49,7 +49,7 @@ export function setInitialRenderState(
     const isReadyToRender = Boolean(state.didContainersLayout && state.didFinishInitialScroll);
     if (isReadyToRender && !peek$(ctx, "readyToRender")) {
         set$(ctx, "readyToRender", true);
-        setAdaptiveRender(ctx, "normal");
+        setAdaptiveRender(ctx, "normal", "ready");
 
         if (state.props.drawDistance > INITIAL_DRAW_DISTANCE) {
             scheduleFullDrawDistancePrewarm(ctx);

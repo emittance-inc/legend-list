@@ -33,6 +33,7 @@ export type ViewStyle = Record<string, unknown>;
 export type StyleProp<T> = T | T[] | null | undefined | false;
 
 export type AdaptiveRender = "normal" | "light";
+export type AdaptiveRenderChangeReason = "initial" | "ready" | "scroll";
 
 export interface AdaptiveRenderConfig {
     /**
@@ -62,7 +63,7 @@ export interface AdaptiveRenderConfig {
     /**
      * Called when the list-level adaptive render changes.
      */
-    onChange?: (mode: AdaptiveRender) => void;
+    onChange?: (mode: AdaptiveRender, reason: AdaptiveRenderChangeReason) => void;
 }
 
 // Base ScrollView props with exclusions

@@ -530,8 +530,13 @@ describe("LegendList props behavior", () => {
             { id: "item-1", label: "Alpha" },
             { id: "item-2", label: "Beta" },
         ];
+        const changes: Array<[string, string]> = [];
         const { LegendList } = await import("../../src/components/LegendList?props-test-adaptive-render-disable");
-        const renderList = (experimental_adaptiveRender?: { initialMode?: "light"; exitDelay?: number }) => (
+        const renderList = (experimental_adaptiveRender?: {
+            exitDelay?: number;
+            initialMode?: "light";
+            onChange?: (mode: "normal" | "light", reason: string) => void;
+        }) => (
             <LegendList
                 data={data}
                 estimatedItemSize={100}
@@ -542,7 +547,13 @@ describe("LegendList props behavior", () => {
             />
         );
 
-        const rendered = render(renderList({ exitDelay: 10_000, initialMode: "light" }));
+        const rendered = render(
+            renderList({
+                exitDelay: 10_000,
+                initialMode: "light",
+                onChange: (mode, reason) => changes.push([mode, reason]),
+            }),
+        );
         const ctx = await getContextFromRender();
         const timeout = setTimeout(() => {}, 10_000) as unknown as number;
         ctx.state.timeoutAdaptiveRender = timeout;
@@ -556,6 +567,7 @@ describe("LegendList props behavior", () => {
         expect(ctx.values.get("adaptiveRender")).toBe("normal");
         expect(ctx.state.timeoutAdaptiveRender).toBeUndefined();
         expect(ctx.state.timeouts.has(timeout)).toBe(false);
+        expect(changes).toEqual([]);
 
         rendered.unmount();
     });

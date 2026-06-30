@@ -86,13 +86,13 @@ describe("updateAdaptiveRender", () => {
     });
 
     it("switches to light mode immediately when velocity exceeds the default enter velocity", () => {
-        const changes: string[] = [];
+        const changes: Array<[string, string]> = [];
         const ctx = createMockContext(
             { adaptiveRender: "normal", readyToRender: true },
             {
                 props: {
                     adaptiveRender: {
-                        onChange: (mode) => changes.push(mode),
+                        onChange: (mode, reason) => changes.push([mode, reason]),
                     },
                 },
             },
@@ -101,17 +101,17 @@ describe("updateAdaptiveRender", () => {
         updateAdaptiveRender(ctx, DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY + 0.1);
 
         expect(peek$(ctx, "adaptiveRender")).toBe("light");
-        expect(changes).toEqual(["light"]);
+        expect(changes).toEqual([["light", "scroll"]]);
     });
 
     it("switches to light mode immediately when forced even without velocity", () => {
-        const changes: string[] = [];
+        const changes: Array<[string, string]> = [];
         const ctx = createMockContext(
             { adaptiveRender: "normal", readyToRender: true },
             {
                 props: {
                     adaptiveRender: {
-                        onChange: (mode) => changes.push(mode),
+                        onChange: (mode, reason) => changes.push([mode, reason]),
                     },
                 },
             },
@@ -120,19 +120,19 @@ describe("updateAdaptiveRender", () => {
         updateAdaptiveRender(ctx, 0, { forceLight: true });
 
         expect(peek$(ctx, "adaptiveRender")).toBe("light");
-        expect(changes).toEqual(["light"]);
+        expect(changes).toEqual([["light", "scroll"]]);
         expect(timers).toHaveLength(1);
         expect(timers[0].delay).toBe(DEFAULT_ADAPTIVE_RENDER_EXIT_DELAY);
     });
 
     it("waits for the default exit delay before returning to normal mode", () => {
-        const changes: string[] = [];
+        const changes: Array<[string, string]> = [];
         const ctx = createMockContext(
             { adaptiveRender: "normal", readyToRender: true },
             {
                 props: {
                     adaptiveRender: {
-                        onChange: (mode) => changes.push(mode),
+                        onChange: (mode, reason) => changes.push([mode, reason]),
                     },
                 },
             },
@@ -148,7 +148,10 @@ describe("updateAdaptiveRender", () => {
         runTimer(timers[0]);
 
         expect(peek$(ctx, "adaptiveRender")).toBe("normal");
-        expect(changes).toEqual(["light", "normal"]);
+        expect(changes).toEqual([
+            ["light", "scroll"],
+            ["normal", "scroll"],
+        ]);
     });
 
     it("uses less aggressive default thresholds on web", () => {

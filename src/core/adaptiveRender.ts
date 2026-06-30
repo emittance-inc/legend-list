@@ -1,6 +1,6 @@
 import { Platform } from "@/platform/Platform";
 import { peek$, type StateContext, set$ } from "@/state/state";
-import type { AdaptiveRender } from "@/types.base";
+import type { AdaptiveRender, AdaptiveRenderChangeReason } from "@/types.base";
 
 export const DEFAULT_ADAPTIVE_RENDER_ENTER_VELOCITY = 3;
 export const DEFAULT_ADAPTIVE_RENDER_EXIT_VELOCITY = 1;
@@ -23,30 +23,31 @@ function scheduleAdaptiveRenderExit(ctx: StateContext, exitDelay: number) {
     const state = ctx.state;
     clearAdaptiveRenderExitTimeout(ctx);
     if (exitDelay <= 0) {
-        setAdaptiveRender(ctx, "normal");
+        setAdaptiveRender(ctx, "normal", "scroll");
     } else {
         const timeout: any = setTimeout(() => {
             state.timeouts.delete(timeout);
             state.timeoutAdaptiveRender = undefined;
-            setAdaptiveRender(ctx, "normal");
+            setAdaptiveRender(ctx, "normal", "scroll");
         }, exitDelay);
         state.timeoutAdaptiveRender = timeout;
         state.timeouts.add(timeout);
     }
 }
 
-export function setAdaptiveRender(ctx: StateContext, mode: AdaptiveRender) {
+export function setAdaptiveRender(ctx: StateContext, mode: AdaptiveRender, reason: AdaptiveRenderChangeReason) {
     const previousMode = peek$(ctx, "adaptiveRender");
     if (previousMode !== mode) {
         set$(ctx, "adaptiveRender", mode);
-        ctx.state.props.adaptiveRender?.onChange?.(mode);
+        ctx.state.props.adaptiveRender?.onChange?.(mode, reason);
     }
 }
 
-export function resetAdaptiveRender(ctx: StateContext, mode: AdaptiveRender = "normal") {
+export function resetAdaptiveRender(ctx: StateContext) {
     clearAdaptiveRenderExitTimeout(ctx);
+    const mode = ctx.state.props.adaptiveRender?.initialMode ?? "normal";
     if (peek$(ctx, "adaptiveRender") !== mode) {
-        setAdaptiveRender(ctx, mode);
+        setAdaptiveRender(ctx, mode, "initial");
     }
 }
 
@@ -73,7 +74,7 @@ export function updateAdaptiveRender(ctx: StateContext, scrollVelocity: number, 
 
             if (nextMode !== previousMode) {
                 if (nextMode === "light") {
-                    setAdaptiveRender(ctx, "light");
+                    setAdaptiveRender(ctx, "light", "scroll");
                     scheduleAdaptiveRenderExit(ctx, exitDelay);
                 } else if (currentMode === "light") {
                     scheduleAdaptiveRenderExit(ctx, exitDelay);

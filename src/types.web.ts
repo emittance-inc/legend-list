@@ -13,6 +13,7 @@ import type { LegendListPropsBase } from "@/types.internal";
 
 export type {
     AdaptiveRender,
+    AdaptiveRenderChangeReason,
     AdaptiveRenderConfig,
     AlwaysRenderConfig,
     ColumnWrapperStyle,
