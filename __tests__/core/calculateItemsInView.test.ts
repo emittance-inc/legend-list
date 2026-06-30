@@ -11,6 +11,7 @@ import { getExpandedContainerPoolSize } from "../../src/utils/containerPool";
 import { getAlwaysRenderIndices } from "../../src/utils/getAlwaysRenderIndices";
 import { normalizeMaintainVisibleContentPosition } from "../../src/utils/normalizeMaintainVisibleContentPosition";
 import * as setDidLayoutModule from "../../src/utils/setDidLayout";
+import { resetInitialRenderState } from "../../src/utils/setInitialRenderState";
 import { createMockContext } from "../__mocks__/createMockContext";
 import { clearLayoutValues, countLayoutValues, setLayoutValue } from "../helpers/layoutArrays";
 
@@ -1330,6 +1331,40 @@ describe("calculateItemsInView", () => {
             expect(mockState.startNoBuffer).toBe(0);
             expect(mockState.endNoBuffer).toBe(1);
             expect(setDidLayoutSpy).not.toHaveBeenCalled();
+        });
+
+        it("recovers layout readiness automatically after a fresh dataset layout reset", () => {
+            const setDidLayoutSpy = spyOn(setDidLayoutModule, "setDidLayout");
+
+            mockCtx.values.set("readyToRender", true);
+            mockState.props.data = Array.from({ length: 4 }, (_, i) => ({ id: i }));
+            mockState.scrollLength = 60;
+            mockState.didContainersLayout = true;
+            mockState.didFinishInitialScroll = true;
+            mockState.queuedInitialLayout = true;
+
+            for (let i = 0; i < 4; i++) {
+                const id = `item_${i}`;
+                mockState.idCache[i] = id;
+                mockState.indexByKey.set(id, i);
+                mockState.containerItemKeys.set(id, i);
+                setLayoutValue(mockState, "positions", id, i * 50);
+                mockState.sizes.set(id, 50);
+                mockState.sizesKnown.set(id, 50);
+            }
+
+            resetInitialRenderState(mockCtx, { resetLayout: true });
+
+            expect(mockState.didContainersLayout).toBe(false);
+            expect(mockState.queuedInitialLayout).toBe(false);
+            expect(mockCtx.values.get("readyToRender")).toBe(false);
+
+            calculateItemsInView(mockCtx);
+
+            expect(setDidLayoutSpy).toHaveBeenCalledTimes(1);
+            expect(mockState.didContainersLayout).toBe(true);
+            expect(mockState.queuedInitialLayout).toBe(true);
+            expect(mockCtx.values.get("readyToRender")).toBe(true);
         });
 
         it("still waits for mounted buffered items while initial scroll is active", () => {

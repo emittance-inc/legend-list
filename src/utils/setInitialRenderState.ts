@@ -15,6 +15,7 @@ export function resetInitialRenderState(
     const { state } = ctx;
     if (resetLayout) {
         state.didContainersLayout = false;
+        state.queuedInitialLayout = false;
     }
     if (resetInitialScroll) {
         state.didFinishInitialScroll = false;

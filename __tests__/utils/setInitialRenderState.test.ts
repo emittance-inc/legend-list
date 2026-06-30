@@ -112,6 +112,7 @@ describe("setInitialRenderState", () => {
 
         expect(ctx.state.didContainersLayout).toBe(false);
         expect(ctx.state.didFinishInitialScroll).toBe(false);
+        expect(ctx.state.queuedInitialLayout).toBe(false);
         expect(ctx.values.get("readyToRender")).toBe(false);
         expect(ctx.values.get("adaptiveRender")).toBe("light");
         expect(ctx.state.timeoutAdaptiveRender).toBeUndefined();
