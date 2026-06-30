@@ -24,10 +24,9 @@ export function doMaintainScrollAtEnd(ctx: StateContext) {
         return false;
     }
 
-    state.pendingMaintainScrollAtEnd = false;
-
     // Run this only if scroll is at the bottom and after initial layout
     if (shouldMaintainScrollAtEnd) {
+        state.pendingMaintainScrollAtEnd = false;
         // Set scroll to the bottom of the list so that checkAtTop/checkAtBottom is correct
         const contentSize = getContentSize(ctx);
         if (contentSize < state.scrollLength) {
@@ -64,6 +63,9 @@ export function doMaintainScrollAtEnd(ctx: StateContext) {
                         () => {
                             if (state.maintainingScrollAtEnd === activeState) {
                                 state.maintainingScrollAtEnd = undefined;
+                                if (state.pendingMaintainScrollAtEnd) {
+                                    doMaintainScrollAtEnd(ctx);
+                                }
                             }
                         },
                         maintainScrollAtEnd.animated ? 500 : 0,
@@ -72,10 +74,14 @@ export function doMaintainScrollAtEnd(ctx: StateContext) {
                     state.maintainingScrollAtEnd = undefined;
                 }
             });
+        } else {
+            // Coalesce follow-up requests while the current maintain pass is still settling.
+            state.pendingMaintainScrollAtEnd = true;
         }
 
         return true;
     }
 
+    state.pendingMaintainScrollAtEnd = false;
     return false;
 }
