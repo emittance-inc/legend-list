@@ -270,6 +270,7 @@ export interface InternalState {
         alwaysRenderIndicesSet: Set<number>;
         contentInset: Insets | undefined;
         data: readonly any[];
+        dataKey: Key | undefined;
         dataVersion: Key | undefined;
         drawDistance: number;
         contentInsetEndAdjustment: number | undefined;

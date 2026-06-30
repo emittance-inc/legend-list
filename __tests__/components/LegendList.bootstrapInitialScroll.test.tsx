@@ -572,6 +572,54 @@ describe("LegendList bootstrap initial scroll", () => {
         expect(ctx.values.get("readyToRender")).toBe(false);
     });
 
+    it("uses the latest initialScrollIndex when dataKey changes with non-empty data", async () => {
+        const initialData = Array.from({ length: 5 }, (_, index) => ({
+            id: `initial-${index}`,
+            label: `Initial ${index}`,
+        }));
+        const nextData = Array.from({ length: 5 }, (_, index) => ({
+            id: `next-${index}`,
+            label: `Next ${index}`,
+        }));
+        const { LegendList } = await import("../../src/components/LegendList?bootstrap-data-key-replace-index");
+        const renderList = (data: typeof initialData, dataKey: string, initialScrollIndex?: number) => (
+            <LegendList
+                data={data}
+                dataKey={dataKey}
+                estimatedItemSize={50}
+                estimatedListSize={{ height: 200, width: 320 }}
+                initialScrollIndex={initialScrollIndex}
+                keyExtractor={(item: { id: string }) => item.id}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />
+        );
+        const rendered = render(renderList(initialData, "dataset-1", 1));
+
+        const ctx = await getContextFromRender();
+        const state = await getStateFromRender();
+        seedMeasuredLayout(state, initialData.length, 50);
+        await act(async () => {
+            setDidLayout(ctx);
+            state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
+            state.triggerCalculateItemsInView?.({ forceFullItemPositions: true });
+        });
+        if (state.scrollingTo?.isInitialScroll) {
+            await act(async () => {
+                finishScrollTo(ctx);
+            });
+        }
+
+        expect(state.didFinishInitialScroll).toBe(true);
+        expect(ctx.values.get("readyToRender")).toBe(true);
+
+        rendered.rerender(renderList(nextData, "dataset-2", 3));
+        await flushAsync();
+
+        expect(state.initialScroll?.index).toBe(3);
+        expect(state.didFinishInitialScroll).toBe(false);
+        expect(ctx.values.get("readyToRender")).toBe(false);
+    });
+
     it("preserves the native seed when bootstrap bounds are exceeded", async () => {
         const data = Array.from({ length: 10 }, (_, index) => ({
             id: `item-${index}`,

@@ -115,6 +115,7 @@ export function createMockState(
             contentInset: DEFAULT_CONTENT_INSET,
             contentInsetEndAdjustment: undefined,
             data: [],
+            dataKey: undefined,
             dataVersion: undefined,
             drawDistance: 100,
             estimatedItemSize: undefined,

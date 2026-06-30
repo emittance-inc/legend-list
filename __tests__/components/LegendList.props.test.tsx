@@ -616,6 +616,58 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
+    it("restarts layout readiness when dataKey changes with non-empty data", async () => {
+        const initialData = [
+            { id: "item-1", label: "Alpha" },
+            { id: "item-2", label: "Beta" },
+        ];
+        const nextData = [
+            { id: "item-3", label: "Gamma" },
+            { id: "item-4", label: "Delta" },
+        ];
+        const { LegendList } = await import("../../src/components/LegendList?props-test-data-key-fresh-dataset");
+        const renderList = (data: typeof initialData, dataKey: string) => (
+            <LegendList
+                data={data}
+                dataKey={dataKey}
+                estimatedItemSize={100}
+                experimental_adaptiveRender={{ initialMode: "light" }}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />
+        );
+
+        const rendered = render(renderList(initialData, "conversation-1"));
+        const ctx = await getContextFromRender();
+
+        await act(async () => {
+            setDidLayout(ctx);
+        });
+        await flushAsync();
+
+        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("adaptiveRender")).toBe("normal");
+
+        rendered.rerender(renderList(nextData, "conversation-2"));
+        await flushAsync();
+
+        expect(ctx.state.didContainersLayout).toBe(false);
+        expect(ctx.state.didFinishInitialScroll).toBe(true);
+        expect(ctx.values.get("readyToRender")).toBe(false);
+        expect(ctx.values.get("adaptiveRender")).toBe("light");
+
+        await act(async () => {
+            setDidLayout(ctx);
+        });
+        await flushAsync();
+
+        expect(ctx.values.get("readyToRender")).toBe(true);
+        expect(ctx.values.get("adaptiveRender")).toBe("normal");
+
+        rendered.unmount();
+    });
+
     it("clears zero-valued initial scroll targets on mount", async () => {
         const data = [
             { id: "item-1", label: "Alpha" },

@@ -127,6 +127,12 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
     columnWrapperStyle?: ColumnWrapperStyle;
 
     /**
+     * Identity token for the dataset represented by `data`.
+     * Change this when replacing the current dataset with a different logical dataset.
+     */
+    dataKey?: Key;
+
+    /**
      * Version token that forces the list to treat data as updated even when the array reference is stable.
      * Increment or change this when mutating the data array in place.
      */

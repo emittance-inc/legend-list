@@ -126,6 +126,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         contentContainerStyle: contentContainerStyleProp,
         contentInset,
         data: dataProp = [],
+        dataKey,
         dataVersion,
         drawDistance = 250,
         contentInsetEndAdjustment,
@@ -291,6 +292,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         alwaysRender?.indices?.join(","),
         alwaysRender?.keys?.join(","),
         dataProp,
+        dataKey,
         dataVersion,
         keyExtractor,
     ]);
@@ -400,15 +402,17 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     state.didColumnsChange = numColumnsProp !== previousNumColumnsProp || didScrollAxisGapChange;
     const previousDataLength = state.props.data?.length ?? 0;
     const didDataReferenceChangeLocal = state.props.data !== dataProp;
+    const didDataKeyChangeLocal = state.props.dataKey !== dataKey;
     const didDataVersionChangeLocal = state.props.dataVersion !== dataVersion;
     const didDataChangeLocal =
+        didDataKeyChangeLocal ||
         didDataVersionChangeLocal ||
         (didDataReferenceChangeLocal && checkStructuralDataChange(state, dataProp, state.props.data));
     const shouldResetFreshDataLayout =
         !isFirstLocal &&
         didDataChangeLocal &&
         state.hasHadNonEmptyData &&
-        previousDataLength === 0 &&
+        (didDataKeyChangeLocal || previousDataLength === 0) &&
         dataProp.length > 0;
     if (
         didDataChangeLocal &&
@@ -447,6 +451,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         contentInset,
         contentInsetEndAdjustment: contentInsetEndAdjustmentResolved,
         data: dataProp,
+        dataKey,
         dataVersion,
         drawDistance,
         estimatedItemSize,
@@ -501,7 +506,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         return Array.from({ length: Math.min(numColumnsProp, dataProp.length) }, (_, i) =>
             getId(state, dataProp.length - 1 - i),
         );
-    }, [dataProp, dataVersion, numColumnsProp]);
+    }, [dataProp, dataKey, dataVersion, numColumnsProp]);
 
     // Run first time and whenever data changes
     const initializeStateVars = (shouldAdjustPadding: boolean) => {
@@ -591,6 +596,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         });
     }, [
         dataProp.length,
+        dataKey,
         didDataChangeLocal,
         shouldResetFreshDataLayout,
         initialScrollAtEnd,
@@ -671,6 +677,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     useLayoutEffect(
         () => initializeStateVars(true),
         [
+            dataKey,
             dataVersion,
             memoizedLastItemKeys.join(","),
             numColumnsProp,
@@ -701,7 +708,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         state.didColumnsChange = false;
         state.didDataChange = false;
         state.isFirst = false;
-    }, [dataProp, dataVersion, numColumnsProp, nextScrollAxisGap]);
+    }, [dataProp, dataKey, dataVersion, numColumnsProp, nextScrollAxisGap]);
 
     useLayoutEffect(() => {
         set$(ctx, "extraData", extraData);
