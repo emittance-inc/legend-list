@@ -53,7 +53,7 @@ describe("setInitialRenderState", () => {
             {
                 didContainersLayout: true,
                 props: {
-                    drawDistance: 100,
+                    drawDistance: 50,
                 },
             },
         );

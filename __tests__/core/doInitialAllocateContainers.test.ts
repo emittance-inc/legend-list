@@ -113,8 +113,8 @@ describe("doInitialAllocateContainers", () => {
 
             doInitialAllocateContainers(mockCtx);
 
-            // Expected: ceil((600 + 100*2) / 150) * 1 = 6 containers
-            expect(mockCtx.values.get("numContainers")).toBe(6);
+            // Expected: ceil((600 + 50*2) / 150) * 1 = 5 containers
+            expect(mockCtx.values.get("numContainers")).toBe(5);
         });
 
         it("should handle getFixedItemSize returning undefined", () => {
@@ -125,8 +125,8 @@ describe("doInitialAllocateContainers", () => {
 
             doInitialAllocateContainers(mockCtx);
 
-            // Expected: ceil((600 + 100*2) / 100) * 1 = 8 containers
-            expect(mockCtx.values.get("numContainers")).toBe(8);
+            // Expected: ceil((600 + 50*2) / 100) * 1 = 7 containers
+            expect(mockCtx.values.get("numContainers")).toBe(7);
         });
 
         it("should handle multi-column layouts", () => {
@@ -170,8 +170,8 @@ describe("doInitialAllocateContainers", () => {
 
             doInitialAllocateContainers(mockCtx);
 
-            // Expected: ceil((500 + 100*2) / 100) * 1 = 7 containers
-            expect(mockCtx.values.get("numContainers")).toBe(7);
+            // Expected: ceil((500 + 50*2) / 100) * 1 = 6 containers
+            expect(mockCtx.values.get("numContainers")).toBe(6);
         });
 
         it("uses the configured drawDistance after the list is ready to render", () => {

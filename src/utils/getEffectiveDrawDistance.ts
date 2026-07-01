@@ -1,6 +1,6 @@
 import { peek$, type StateContext } from "@/state/state";
 
-export const INITIAL_DRAW_DISTANCE = 100;
+export const INITIAL_DRAW_DISTANCE = 50;
 
 export type DrawDistanceMode = "full" | "visible-first";
 
