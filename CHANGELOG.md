@@ -1,3 +1,11 @@
+## 3.3.0
+
+- Feat: Add `dataKey` so apps can tell the list when the current array represents a different dataset, such as switching conversations or feeds without remounting `LegendList`.
+- Feat: `experimental_adaptiveRender.onChange` now receives a reason (`initial`, `ready`, or `scroll`) so item components can tell why the render mode changed.
+- Fix: Large user scroll jumps render the visible rows first and fill the normal draw distance on the next frame, making long jumps less likely to land on a blank range.
+- Fix: `maintainScrollAtEnd` reruns a pending keep-at-end request after the current one settles, so a footer resize and a new message arriving together keep chat-style lists pinned to the end.
+- Fix: Replacing data after clearing the list, or changing `dataKey` for a non-empty replacement, resets layout readiness and uses the latest initial scroll target for the new dataset.
+
 ## 3.2.0
 
 - Feat: Add `onFirstVisibleItemChanged` so apps can track the item at the top of the viewport without setting up full viewability callbacks.
