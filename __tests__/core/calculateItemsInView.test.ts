@@ -1065,8 +1065,8 @@ describe("calculateItemsInView", () => {
 
             expect(mockCtx.values.get("totalSize")).toBe(1200);
             expect(mockState.scrollForNextCalculateItemsInView).toEqual({
-                bottom: 1100,
-                top: 550,
+                bottom: 1050,
+                top: 600,
             });
         });
 
@@ -1304,7 +1304,7 @@ describe("calculateItemsInView", () => {
             expect(mockState.startNoBuffer).toBe(0);
             expect(mockState.endNoBuffer).toBe(1);
             expect(mockState.startBuffered).toBe(0);
-            expect(mockState.endBuffered).toBe(3);
+            expect(mockState.endBuffered).toBe(2);
             expect(setDidLayoutSpy).toHaveBeenCalledTimes(1);
         });
 
@@ -1396,7 +1396,7 @@ describe("calculateItemsInView", () => {
             expect(mockState.startNoBuffer).toBe(0);
             expect(mockState.endNoBuffer).toBe(1);
             expect(mockState.startBuffered).toBe(0);
-            expect(mockState.endBuffered).toBe(3);
+            expect(mockState.endBuffered).toBe(2);
             expect(setDidLayoutSpy).not.toHaveBeenCalled();
         });
     });
