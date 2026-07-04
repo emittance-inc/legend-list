@@ -1676,6 +1676,79 @@ describe("calculateItemsInView", () => {
             expect(mockState.containerItemKeys.has("item_58")).toBe(true);
             expect(mockState.containerItemKeys.has("item_59")).toBe(true);
         });
+
+        it("mounts internal pinned ranges outside the buffered viewport", () => {
+            setupList(60, 10);
+            mockState.scrollTargetPinnedRange = { end: 32, start: 30 };
+
+            mockState.scroll = 0;
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.containerItemKeys.has("item_30")).toBe(true);
+            expect(mockState.containerItemKeys.has("item_31")).toBe(true);
+            expect(mockState.containerItemKeys.has("item_32")).toBe(true);
+        });
+
+        it("mounts pinned index 0 when using default numeric keys", () => {
+            mockState.props.data = Array.from({ length: 60 }, (_, i) => ({ id: i }));
+            mockState.props.drawDistance = 0;
+            mockState.props.keyExtractor = undefined;
+            mockState.scrollLength = 100;
+            mockCtx.values.set("numContainers", 12);
+            mockCtx.values.set("totalSize", 600);
+
+            mockState.idCache.length = 0;
+            mockState.indexByKey.clear();
+            clearLayoutValues(mockState, "positions");
+            mockState.sizes.clear();
+
+            for (let i = 0; i < 60; i++) {
+                mockState.positions[i] = i * 10;
+                mockState.sizes.set(i as any, 10);
+            }
+
+            mockState.scroll = 300;
+            mockState.scrollTargetPinnedRange = { end: 0, start: 0 };
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.containerItemKeys.has(0 as any)).toBe(true);
+        });
+
+        it("keeps internal pinned containers protected while visible containers recycle", () => {
+            setupList(60, 10);
+            mockCtx.values.set("numContainers", 11);
+            mockCtx.values.set("numContainersPooled", 14);
+            mockState.scrollTargetPinnedRange = { end: 32, start: 30 };
+
+            mockState.scroll = 0;
+            calculateItemsInView(mockCtx);
+
+            const pinnedContainerKeys = ["item_30", "item_31", "item_32"] as const;
+            const pinnedContainers = pinnedContainerKeys.map((key) => mockState.containerItemKeys.get(key));
+
+            expect(pinnedContainers.every((containerIndex) => containerIndex !== undefined)).toBe(true);
+            expect(
+                pinnedContainers.every(
+                    (containerIndex) =>
+                        containerIndex !== undefined && mockState.stickyContainerPool.has(containerIndex),
+                ),
+            ).toBe(true);
+
+            mockState.scroll = 500;
+            calculateItemsInView(mockCtx);
+
+            for (const [index, key] of pinnedContainerKeys.entries()) {
+                const containerIndex = pinnedContainers[index];
+                expect(mockState.containerItemKeys.get(key)).toBe(containerIndex);
+                expect(containerIndex === undefined ? false : mockState.stickyContainerPool.has(containerIndex)).toBe(
+                    true,
+                );
+            }
+            expect(mockState.containerItemKeys.has("item_50")).toBe(true);
+
+            mockState.scrollTargetPinnedRange = undefined;
+        });
     });
 
     describe("edge cases and error handling", () => {

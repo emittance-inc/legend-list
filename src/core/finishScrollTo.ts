@@ -15,6 +15,7 @@ export function finishScrollTo(ctx: StateContext) {
 
         state.scrollHistory.length = 0;
         state.scrollingTo = undefined;
+        state.scrollTargetPinnedRange = undefined;
 
         if (state.pendingTotalSize !== undefined) {
             addTotalSize(ctx, null, state.pendingTotalSize);

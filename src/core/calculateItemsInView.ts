@@ -126,14 +126,14 @@ function handleStickyRecycling(
     drawDistance: number,
     currentStickyIdx: number,
     pendingRemoval: number[],
-    alwaysRenderIndicesSet: Set<number>,
+    isPinnedRenderIndex: (itemIndex: number) => boolean,
 ): void {
     const state = ctx.state;
     for (const containerIndex of state.stickyContainerPool) {
         const itemKey = peek$(ctx, `containerItemKey${containerIndex}`);
         const itemIndex = itemKey ? state.indexByKey.get(itemKey) : undefined;
         if (itemIndex === undefined) continue;
-        if (alwaysRenderIndicesSet.has(itemIndex)) continue;
+        if (isPinnedRenderIndex(itemIndex)) continue;
 
         const arrayIdx = stickyArray.indexOf(itemIndex);
         if (arrayIdx === -1) {
@@ -349,8 +349,6 @@ export function calculateItemsInView(
         const { data } = state.props;
         const stickyHeaderIndicesArr = state.props.stickyHeaderIndicesArr || [];
         const stickyHeaderIndicesSet = state.props.stickyHeaderIndicesSet || new Set<number>();
-        const alwaysRenderArr = alwaysRenderIndicesArr || [];
-        const alwaysRenderSet = alwaysRenderIndicesSet || new Set<number>();
         const drawDistance = getEffectiveDrawDistance(ctx, params.drawDistanceMode);
         const { dataChanged, doMVCP, forceFullItemPositions } = params;
         const bootstrapInitialScrollState =
@@ -696,12 +694,39 @@ export function calculateItemsInView(
             }
         }
 
+        const scrollTargetPinnedRange = state.scrollTargetPinnedRange;
+        let scrollTargetPinnedStart = 0;
+        let scrollTargetPinnedEnd = -1;
+        if (scrollTargetPinnedRange) {
+            scrollTargetPinnedStart = Math.max(0, Math.min(scrollTargetPinnedRange.start, scrollTargetPinnedRange.end));
+            scrollTargetPinnedEnd = Math.min(
+                dataLength - 1,
+                Math.max(scrollTargetPinnedRange.start, scrollTargetPinnedRange.end),
+            );
+        }
+        const hasScrollTargetPinnedRange = scrollTargetPinnedStart <= scrollTargetPinnedEnd;
+        const isPinnedRenderIndex = (index: number) =>
+            alwaysRenderIndicesSet.has(index) ||
+            (hasScrollTargetPinnedRange && index >= scrollTargetPinnedStart && index <= scrollTargetPinnedEnd);
+
         // Place newly added items into containers
         if (startBuffered !== null && endBuffered !== null) {
             const needNewContainers: number[] = [];
             const needNewContainersSet = new Set<number>();
+            const addPinnedIndex = (index: number) => {
+                if (index >= 0 && index < dataLength) {
+                    const id = idCache[index] ?? getId(state, index);
+                    const containerIndex = containerItemKeys.get(id);
+                    if (containerIndex !== undefined) {
+                        state.stickyContainerPool.add(containerIndex);
+                    } else if (!isNullOrUndefined(id) && !needNewContainersSet.has(index)) {
+                        needNewContainersSet.add(index);
+                        needNewContainers.push(index);
+                    }
+                }
+            };
 
-            for (let i = startBuffered!; i <= endBuffered; i++) {
+            for (let i = startBuffered; i <= endBuffered; i++) {
                 const id = idCache[i] ?? getId(state, i);
                 if (!containerItemKeys.has(id)) {
                     needNewContainersSet.add(i);
@@ -709,14 +734,12 @@ export function calculateItemsInView(
                 }
             }
 
-            if (alwaysRenderArr.length > 0) {
-                for (const index of alwaysRenderArr) {
-                    if (index < 0 || index >= dataLength) continue;
-                    const id = idCache[index] ?? getId(state, index);
-                    if (id && !containerItemKeys.has(id) && !needNewContainersSet.has(index)) {
-                        needNewContainersSet.add(index);
-                        needNewContainers.push(index);
-                    }
+            for (const index of alwaysRenderIndicesArr) {
+                addPinnedIndex(index);
+            }
+            if (hasScrollTargetPinnedRange) {
+                for (let index = scrollTargetPinnedStart; index <= scrollTargetPinnedEnd; index++) {
+                    addPinnedIndex(index);
                 }
             }
 
@@ -786,7 +809,7 @@ export function calculateItemsInView(
                     const containerSticky = `containerSticky${containerIndex}` as const;
                     // Mark as sticky if this item is in stickyHeaderIndices
                     const isSticky = stickyHeaderIndicesSet.has(i);
-                    const isAlwaysRender = alwaysRenderSet.has(i);
+                    const isPinnedRender = isPinnedRenderIndex(i);
                     if (isSticky) {
                         set$(ctx, containerSticky, true);
                         // Add container to sticky pool
@@ -795,9 +818,10 @@ export function calculateItemsInView(
                         if (peek$(ctx, containerSticky)) {
                             set$(ctx, containerSticky, false);
                         }
-                        if (isAlwaysRender) {
+                        if (isPinnedRender) {
+                            // This pool also protects alwaysRender/internal pin containers from reuse.
                             state.stickyContainerPool.add(containerIndex);
-                        } else if (state.stickyContainerPool.has(containerIndex)) {
+                        } else {
                             state.stickyContainerPool.delete(containerIndex);
                         }
                     }
@@ -815,21 +839,8 @@ export function calculateItemsInView(
                 }
             }
 
-            if (state.userScrollAnchorReset) {
-                if (state.userScrollAnchorReset.keys.size === 0) {
-                    state.userScrollAnchorReset = undefined;
-                }
-            }
-
-            if (alwaysRenderArr.length > 0) {
-                for (const index of alwaysRenderArr) {
-                    if (index < 0 || index >= dataLength) continue;
-                    const id = idCache[index] ?? getId(state, index);
-                    const containerIndex = containerItemKeys.get(id);
-                    if (containerIndex !== undefined) {
-                        state.stickyContainerPool.add(containerIndex);
-                    }
-                }
+            if (state.userScrollAnchorReset?.keys.size === 0) {
+                state.userScrollAnchorReset = undefined;
             }
         }
 
@@ -842,7 +853,7 @@ export function calculateItemsInView(
                 drawDistance,
                 stickyState?.currentStickyIdx ?? -1,
                 pendingRemoval,
-                alwaysRenderSet,
+                isPinnedRenderIndex,
             );
         }
 

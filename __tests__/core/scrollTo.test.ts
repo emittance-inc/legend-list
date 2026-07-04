@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import "../setup";
 
 import * as doScrollToModule from "@/core/doScrollTo";
@@ -132,6 +132,13 @@ describe("scrollTo", () => {
     });
 
     it("precomputes the target range for non-animated imperative scrolls", () => {
+        mockCtx.state.props.data = Array.from({ length: 10 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 80;
+        mockCtx.state.scrollLength = 300;
+        for (let index = 0; index < 10; index++) {
+            mockCtx.state.positions[index] = index * 80;
+        }
+
         scrollTo(mockCtx, {
             animated: false,
             index: 5,
@@ -139,7 +146,11 @@ describe("scrollTo", () => {
             offset: 200,
         });
 
-        expect(updateScrollSpy).toHaveBeenCalledWith(mockCtx, 200, false, {
+        expect(mockCtx.state.scrollTargetPinnedRange).toEqual({
+            end: 6,
+            start: 2,
+        });
+        expect(updateScrollSpy).toHaveBeenCalledWith(mockCtx, 200, true, {
             markHasScrolled: false,
         });
         expect(doScrollToSpy).toHaveBeenCalledWith(mockCtx, {
@@ -150,15 +161,144 @@ describe("scrollTo", () => {
         });
     });
 
-    it("does not precompute the target range for animated scrolls", () => {
+    it("pins and prewarms the target range for animated scrolls without moving state scroll", () => {
+        const triggerCalculateItemsInView = mock(() => undefined);
+        mockCtx.state.props.data = Array.from({ length: 20 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 50;
+        mockCtx.state.scrollLength = 100;
+        mockCtx.state.triggerCalculateItemsInView = triggerCalculateItemsInView;
+        for (let index = 0; index < 20; index++) {
+            mockCtx.state.positions[index] = index * 50;
+        }
+
         scrollTo(mockCtx, {
             animated: true,
-            index: 5,
-            itemSize: 80,
-            offset: 200,
+            index: 6,
+            itemSize: 50,
+            offset: 300,
         });
 
+        expect(mockCtx.state.scrollTargetPinnedRange).toEqual({
+            end: 8,
+            start: 6,
+        });
         expect(updateScrollSpy).not.toHaveBeenCalled();
+        expect(triggerCalculateItemsInView).toHaveBeenCalledWith();
+        expect(mockCtx.state.scroll).toBe(25);
+    });
+
+    it("does not expand scroll target pins through uncomputed tail positions", () => {
+        const triggerCalculateItemsInView = mock(() => undefined);
+        mockCtx.state.props.data = Array.from({ length: 10_000 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 50;
+        mockCtx.state.scrollLength = 100;
+        mockCtx.state.triggerCalculateItemsInView = triggerCalculateItemsInView;
+        mockCtx.state.positions[900] = 45_000;
+
+        scrollTo(mockCtx, {
+            animated: true,
+            index: 900,
+            itemSize: 50,
+            offset: 45_000,
+        });
+
+        expect(mockCtx.state.scrollTargetPinnedRange).toEqual({
+            end: 900,
+            start: 900,
+        });
+        expect(triggerCalculateItemsInView).toHaveBeenCalledWith();
+    });
+
+    it("pins only the target index when its position is not computed yet", () => {
+        const triggerCalculateItemsInView = mock(() => undefined);
+        mockCtx.state.props.data = Array.from({ length: 10_000 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 50;
+        mockCtx.state.scrollLength = 100;
+        mockCtx.state.triggerCalculateItemsInView = triggerCalculateItemsInView;
+
+        scrollTo(mockCtx, {
+            animated: true,
+            index: 900,
+            itemSize: 50,
+            offset: 45_000,
+        });
+
+        expect(mockCtx.state.scrollTargetPinnedRange).toEqual({
+            end: 900,
+            start: 900,
+        });
+        expect(triggerCalculateItemsInView).toHaveBeenCalledWith();
+    });
+
+    it("pins the whole target viewport for bottom-aligned index scrolls", () => {
+        const triggerCalculateItemsInView = mock(() => undefined);
+        mockCtx.state.props.data = Array.from({ length: 20 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 50;
+        mockCtx.state.scrollLength = 100;
+        mockCtx.state.triggerCalculateItemsInView = triggerCalculateItemsInView;
+        for (let index = 0; index < 20; index++) {
+            mockCtx.state.positions[index] = index * 50;
+        }
+
+        scrollTo(mockCtx, {
+            animated: true,
+            index: 9,
+            itemSize: 50,
+            offset: 450,
+            viewPosition: 1,
+        });
+
+        expect(mockCtx.state.scrollTargetPinnedRange).toEqual({
+            end: 10,
+            start: 8,
+        });
+        expect(updateScrollSpy).not.toHaveBeenCalled();
+        expect(triggerCalculateItemsInView).toHaveBeenCalledWith();
+    });
+
+    it("pins offset-only animated scroll targets from the position table", () => {
+        const triggerCalculateItemsInView = mock(() => undefined);
+        mockCtx.state.props.data = Array.from({ length: 20 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 50;
+        mockCtx.state.scrollForNextCalculateItemsInView = { bottom: 250, top: 50 };
+        mockCtx.state.scrollLength = 100;
+        mockCtx.state.triggerCalculateItemsInView = triggerCalculateItemsInView;
+        for (let index = 0; index < 20; index++) {
+            mockCtx.state.positions[index] = index * 50;
+        }
+
+        scrollTo(mockCtx, {
+            animated: true,
+            offset: 175,
+        });
+
+        expect(mockCtx.state.scrollTargetPinnedRange).toEqual({
+            end: 5,
+            start: 3,
+        });
+        expect(mockCtx.state.scrollForNextCalculateItemsInView).toBeUndefined();
+        expect(updateScrollSpy).not.toHaveBeenCalled();
+        expect(triggerCalculateItemsInView).toHaveBeenCalledWith();
+    });
+
+    it("skips offset-only target pinning when known positions do not cover the target offset", () => {
+        const triggerCalculateItemsInView = mock(() => undefined);
+        mockCtx.state.props.data = Array.from({ length: 10_000 }, (_, index) => ({ id: index }));
+        mockCtx.state.props.estimatedItemSize = 50;
+        mockCtx.state.scrollLength = 100;
+        mockCtx.state.triggerCalculateItemsInView = triggerCalculateItemsInView;
+        mockCtx.state.totalSize = 500_000;
+        for (let index = 0; index < 100; index++) {
+            mockCtx.state.positions[index] = index * 50;
+        }
+
+        scrollTo(mockCtx, {
+            animated: true,
+            offset: 45_000,
+        });
+
+        expect(mockCtx.state.scrollTargetPinnedRange).toBeUndefined();
+        expect(triggerCalculateItemsInView).not.toHaveBeenCalled();
     });
 
     it("does not precompute the target range for synthetic noScrollingTo scrolls", () => {
