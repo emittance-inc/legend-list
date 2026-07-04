@@ -409,6 +409,30 @@ describe("calculateItemsInView", () => {
                 "item_10",
             ]);
         });
+
+        it("does not treat the resting leading content inset as overscroll", () => {
+            setupFixedSizeItems(20, 100);
+            mockState.props.contentInset = { bottom: 0, left: 0, right: 0, top: 150 };
+            mockState.scroll = -150;
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(0);
+            expect(mockState.endNoBuffer).toBe(10);
+            expect(getRenderedContainerKeys()).toEqual([
+                "item_0",
+                "item_1",
+                "item_2",
+                "item_3",
+                "item_4",
+                "item_5",
+                "item_6",
+                "item_7",
+                "item_8",
+                "item_9",
+                "item_10",
+            ]);
+        });
     });
 
     describe("scroll buffer handling", () => {
