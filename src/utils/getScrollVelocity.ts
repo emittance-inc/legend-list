@@ -1,5 +1,8 @@
 import type { InternalState } from "@/types.internal";
 
+const MAX_SCROLL_VELOCITY_WINDOW_MS = 1000;
+const SCROLL_VELOCITY_HALF_LIFE_MS = 200;
+
 export const getScrollVelocity = (state: InternalState) => {
     const { scrollHistory } = state;
     const newestIndex = scrollHistory.length - 1;
@@ -8,43 +11,44 @@ export const getScrollVelocity = (state: InternalState) => {
     }
 
     const newest = scrollHistory[newestIndex];
-    const now = Date.now();
-
-    // Find the most recent non-zero movement to establish direction
-    let direction = 0;
-    for (let i = newestIndex; i > 0; i--) {
-        const delta = scrollHistory[i].scroll - scrollHistory[i - 1].scroll;
-        if (delta !== 0) {
-            direction = Math.sign(delta);
-            break;
-        }
-    }
-
-    if (direction === 0) {
+    if (Date.now() - newest.time > MAX_SCROLL_VELOCITY_WINDOW_MS) {
         return 0;
     }
 
-    let oldest = newest;
+    let direction = 0;
+    let weightedVelocity = 0;
+    let totalWeight = 0;
 
-    // Walk backwards until we hit a direction change or exit the 1s window
-    for (let i = newestIndex - 1; i >= 0; i--) {
+    // Walk backwards over recent same-direction segments. Newer segments carry
+    // more weight, but older samples still contribute when JS scroll events are delayed.
+    for (let i = newestIndex; i > 0; i--) {
         const current = scrollHistory[i];
-        const next = scrollHistory[i + 1];
-        const delta = next.scroll - current.scroll;
-        const deltaSign = Math.sign(delta);
+        const previous = scrollHistory[i - 1];
+        const scrollDiff = current.scroll - previous.scroll;
+        const timeDiff = current.time - previous.time;
+        const deltaSign = Math.sign(scrollDiff);
 
-        if (deltaSign !== 0 && deltaSign !== direction) {
+        if (deltaSign !== 0) {
+            if (direction === 0) {
+                direction = deltaSign;
+            } else if (deltaSign !== direction) {
+                break;
+            }
+        }
+
+        if (newest.time - previous.time > MAX_SCROLL_VELOCITY_WINDOW_MS) {
             break;
         }
 
-        if (now - current.time > 1000) {
-            break;
+        if (scrollDiff === 0 || timeDiff <= 0) {
+            continue;
         }
 
-        oldest = current;
+        const age = newest.time - current.time;
+        const weight = Math.exp(-age / SCROLL_VELOCITY_HALF_LIFE_MS);
+        weightedVelocity += (scrollDiff / timeDiff) * weight;
+        totalWeight += weight;
     }
 
-    const scrollDiff = newest.scroll - oldest.scroll;
-    const timeDiff = newest.time - oldest.time;
-    return timeDiff > 0 ? scrollDiff / timeDiff : 0;
+    return totalWeight > 0 ? weightedVelocity / totalWeight : 0;
 };
