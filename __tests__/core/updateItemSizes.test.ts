@@ -252,6 +252,58 @@ describe("updateItemSizes", () => {
         calculateSpy.mockRestore();
     });
 
+    it("ignores stale fallback frames after a new measurement batch starts", () => {
+        const calculateSpy = spyOn(calculateItemsInViewModule, "calculateItemsInView").mockImplementation(() => {});
+        const originalRaf = globalThis.requestAnimationFrame;
+        const rafCallbacks: Array<(time: number) => void> = [];
+        globalThis.requestAnimationFrame = ((callback: (time: number) => void) => {
+            rafCallbacks.push(callback);
+            return rafCallbacks.length;
+        }) as typeof requestAnimationFrame;
+
+        try {
+            mockState.pendingLayoutEffectMeasurements = new Set(["item_0", "item_1"]);
+
+            updateItemSizes(mockCtx, {
+                containerId: 0,
+                fromLayoutEffect: true,
+                itemKey: "item_0",
+                size: { height: 150, width: 400 },
+            });
+            expect(rafCallbacks.length).toBe(1);
+            expect(calculateSpy).not.toHaveBeenCalled();
+
+            updateItemSizes(mockCtx, {
+                containerId: 1,
+                fromLayoutEffect: true,
+                itemKey: "item_1",
+                size: { height: 220, width: 400 },
+            });
+            expect(calculateSpy).toHaveBeenCalledTimes(1);
+
+            mockState.pendingLayoutEffectMeasurements = new Set(["item_2", "item_0"]);
+            updateItemSizes(mockCtx, {
+                containerId: 2,
+                fromLayoutEffect: true,
+                itemKey: "item_2",
+                size: { height: 300, width: 400 },
+            });
+            expect(rafCallbacks.length).toBe(2);
+            expect(calculateSpy).toHaveBeenCalledTimes(1);
+
+            rafCallbacks[0](performance.now());
+            expect(mockState.pendingLayoutEffectMeasurements).toEqual(new Set(["item_0"]));
+            expect(calculateSpy).toHaveBeenCalledTimes(1);
+
+            rafCallbacks[1](performance.now());
+            expect(mockState.pendingLayoutEffectMeasurements).toBeUndefined();
+            expect(calculateSpy).toHaveBeenCalledTimes(2);
+        } finally {
+            globalThis.requestAnimationFrame = originalRaf;
+            calculateSpy.mockRestore();
+        }
+    });
+
     it("ignores a synchronous measurement when the container was recycled before callback", () => {
         const calculateSpy = spyOn(calculateItemsInViewModule, "calculateItemsInView").mockImplementation(() => {});
 

@@ -1,4 +1,5 @@
 import { ENABLE_DEBUG_VIEW, POSITION_OUT_OF_VIEW } from "@/constants";
+import { IsNewArchitecture } from "@/constants-platform";
 import { evaluateBootstrapInitialScroll } from "@/core/bootstrapInitialScroll";
 import { resolveInitialScrollOffset } from "@/core/initialScroll";
 import { handleInitialScrollLayoutReady } from "@/core/initialScrollLifecycle";
@@ -728,6 +729,13 @@ export function calculateItemsInView(
                     // Update cache when adding new item
                     containerItemKeys!.set(id, containerIndex);
                     state.userScrollAnchorReset?.keys.add(id);
+                    if (IsNewArchitecture) {
+                        // Fabric reports the replacement item's real size from a layout effect.
+                        // Defer size-driven recalculation until those expected measurements drain,
+                        // otherwise recycled containers can briefly render with stale positions.
+                        state.pendingLayoutEffectMeasurements ??= new Set();
+                        state.pendingLayoutEffectMeasurements.add(id);
+                    }
 
                     const containerSticky = `containerSticky${containerIndex}` as const;
                     // Mark as sticky if this item is in stickyHeaderIndices

@@ -207,6 +207,7 @@ export interface InternalState {
     };
     pendingMaintainScrollAtEnd?: boolean;
     pendingDataComparison?: PendingDataComparison;
+    pendingLayoutEffectMeasurements?: Set<string>;
     pendingScrollToEnd?: {
         options?: ScrollToEndOptions;
         resolve: () => void;
