@@ -4,12 +4,21 @@ import { StyleSheet, View } from "react-native";
 import type { LegendListRenderItemProps } from "@legendapp/list/react-native";
 import { FlashList, type FlashListRef, type ListRenderItemInfo } from "@shopify/flash-list";
 import { DRAW_DISTANCE, RECYCLE_ITEMS } from "~/constants/constants";
-import renderItem, { type Item } from "~/screens/fixtures/shared/cardsRenderItem";
+import {
+    type Item,
+    renderItem as renderCardItem,
+    renderFixedCardItem,
+} from "~/screens/fixtures/shared/cardsRenderItem";
 
-export default function HomeScreen() {
+interface CardsFlashListProps {
+    fixedItemSize?: number;
+}
+
+export default function CardsFlashList({ fixedItemSize }: CardsFlashListProps) {
     const data = Array.from({ length: 1000 }, (_, i) => ({ id: i.toString() }));
 
     const scrollRef = useRef<FlashListRef<Item>>(null);
+    const renderSharedCardItem = fixedItemSize !== undefined ? renderFixedCardItem : renderCardItem;
 
     const renderItemFn = (info: ListRenderItemInfo<Item>) => {
         const legendListProps = {
@@ -21,9 +30,9 @@ export default function HomeScreen() {
         } satisfies LegendListRenderItemProps<Item>;
 
         return RECYCLE_ITEMS ? (
-            renderItem(legendListProps)
+            renderSharedCardItem(legendListProps)
         ) : (
-            <Fragment key={info.item.id}>{renderItem(legendListProps)}</Fragment>
+            <Fragment key={info.item.id}>{renderSharedCardItem(legendListProps)}</Fragment>
         );
     };
 

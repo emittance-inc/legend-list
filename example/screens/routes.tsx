@@ -24,6 +24,8 @@ import AlwaysRenderFixture from "~/screens/fixtures/always-render";
 import BidirectionalInfiniteListFixture from "~/screens/fixtures/bidirectional-infinite-list";
 import CardsFixture from "~/screens/fixtures/cards";
 import CardsColumnsFixture from "~/screens/fixtures/cards-columns";
+import CardsFixedFixture from "~/screens/fixtures/cards-fixed";
+import CardsFixedFlashListFixture from "~/screens/fixtures/cards-fixed-flashlist";
 import CardsFlashListFixture from "~/screens/fixtures/cards-flashlist";
 import CardsFlatListFixture from "~/screens/fixtures/cards-flatlist";
 import CardsNoRecycleFixture from "~/screens/fixtures/cards-no-recycle";
@@ -462,6 +464,24 @@ export const FIXTURE_ROUTES: FixtureRouteDefinition[] = [
         kind: "fixture",
         slug: "cards-flashlist",
         title: "Cards FlashList",
+    },
+    {
+        component: CardsFixedFixture,
+        description: "Runs the card feed with fixed-size LegendList rows.",
+        groupKey: "comparison",
+        groupTitle: "Comparisons & Media",
+        kind: "fixture",
+        slug: "cards-fixed",
+        title: "Cards Fixed",
+    },
+    {
+        component: CardsFixedFlashListFixture,
+        description: "Compares fixed-size card rows against FlashList.",
+        groupKey: "comparison",
+        groupTitle: "Comparisons & Media",
+        kind: "fixture",
+        slug: "cards-fixed-flashlist",
+        title: "Cards Fixed FlashList",
     },
     {
         component: CardsFlatListFixture,

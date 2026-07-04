@@ -10,6 +10,7 @@ export interface Item {
     id: string;
 }
 const demoNestedList = false;
+export const FIXED_CARD_ITEM_SIZE = 240;
 
 // Generate random metadata
 const randomAvatars = Array.from({ length: 20 }, (_, i) => `https://i.pravatar.cc/150?img=${i + 1}`);
@@ -132,8 +133,12 @@ export const ItemCard = memo(
         item,
         index,
         extraData,
+        fixedHeight,
         numSentences: numSentencesProp,
-    }: LegendListRenderItemProps<Item> & { numSentences?: number | ((index: number) => number) }) => {
+    }: LegendListRenderItemProps<Item> & {
+        fixedHeight?: number;
+        numSentences?: number | ((index: number) => number);
+    }) => {
         const refSwipeable = useRef<Swipeable | null>(null);
 
         // A useState that resets when the item is recycled
@@ -267,7 +272,7 @@ export const ItemCard = memo(
         }
 
         return (
-            <View style={styles.itemOuterContainer}>
+            <View style={[styles.itemOuterContainer, fixedHeight !== undefined && { height: fixedHeight }]}>
                 <Swipeable
                     containerStyle={styles.swipeableContainer}
                     onSwipeableWillClose={() => {
@@ -330,6 +335,9 @@ export const ItemCard = memo(
 );
 
 export const renderItem = (props: LegendListRenderItemProps<Item>) => <ItemCard {...props} />;
+export const renderFixedCardItem = (props: LegendListRenderItemProps<Item>) => (
+    <ItemCard {...props} fixedHeight={FIXED_CARD_ITEM_SIZE} numSentences={1} />
+);
 
 const styles = StyleSheet.create({
     authorName: {
