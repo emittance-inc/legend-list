@@ -175,6 +175,7 @@ export interface InternalState {
     initialScroll: InternalInitialScrollTarget | undefined;
     timeoutPreservedInitialScrollClear?: any;
     timeoutAdaptiveRender?: any;
+    timeoutRenderRangeProjectionSettle?: any;
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;

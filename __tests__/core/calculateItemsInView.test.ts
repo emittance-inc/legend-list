@@ -1,5 +1,5 @@
 import { Platform } from "@/platform/Platform";
-import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { calculateItemsInView } from "../../src/core/calculateItemsInView";
 import { finishScrollTo } from "../../src/core/finishScrollTo";
 import * as mvcpModule from "../../src/core/mvcp";
@@ -67,6 +67,13 @@ describe("calculateItemsInView", () => {
         );
 
         mockState = mockCtx.state;
+    });
+
+    afterEach(() => {
+        for (const timeout of mockState.timeouts) {
+            clearTimeout(timeout);
+        }
+        mockState.timeouts.clear();
     });
 
     function measureSteadyStateDuration(run: () => void) {
@@ -475,6 +482,73 @@ describe("calculateItemsInView", () => {
             expect(mockState.startBuffered).toBe(mockState.startNoBuffer);
             expect(mockState.endBuffered).toBe(mockState.endNoBuffer);
         });
+
+        it("redistributes buffered range forward while keeping total buffer size stable when scrolling down", () => {
+            const now = Date.now();
+            setupFixedSizeItems(20, 100);
+            mockCtx.values.set("readyToRender", true);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 300;
+            mockState.scrollLength = 300;
+            mockState.scrollHistory = [
+                { scroll: 100, time: now - 16 },
+                { scroll: 300, time: now },
+            ];
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(3);
+            expect(mockState.endNoBuffer).toBe(6);
+            expect(mockState.idsInView).toEqual(["item_3", "item_4", "item_5", "item_6"]);
+            expect(mockState.startBuffered).toBe(3);
+            expect(mockState.endBuffered).toBe(8);
+            expect(mockState.scrollForNextCalculateItemsInView).toEqual({
+                bottom: 900,
+                top: 300,
+            });
+            expect(mockState.timeoutRenderRangeProjectionSettle).not.toBeUndefined();
+        });
+
+        it("redistributes buffered range backward while keeping total buffer size stable when scrolling up", () => {
+            const now = Date.now();
+            setupFixedSizeItems(20, 100);
+            mockCtx.values.set("readyToRender", true);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 300;
+            mockState.scrollLength = 300;
+            mockState.scrollHistory = [
+                { scroll: 500, time: now - 16 },
+                { scroll: 300, time: now },
+            ];
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(3);
+            expect(mockState.endNoBuffer).toBe(6);
+            expect(mockState.idsInView).toEqual(["item_3", "item_4", "item_5", "item_6"]);
+            expect(mockState.startBuffered).toBe(1);
+            expect(mockState.endBuffered).toBe(6);
+        });
+
+        it("does not project buffered range before the list is ready to render", () => {
+            const now = Date.now();
+            setupFixedSizeItems(20, 100);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 300;
+            mockState.scrollLength = 300;
+            mockState.scrollHistory = [
+                { scroll: 100, time: now - 16 },
+                { scroll: 300, time: now },
+            ];
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(3);
+            expect(mockState.endNoBuffer).toBe(6);
+            expect(mockState.startBuffered).toBe(2);
+            expect(mockState.endBuffered).toBe(6);
+            expect(mockState.timeoutRenderRangeProjectionSettle).toBeUndefined();
+        });
     });
 
     describe("column layout support", () => {
@@ -514,6 +588,37 @@ describe("calculateItemsInView", () => {
 
             // Should return early due to optimization
             expect(result).toBeUndefined();
+        });
+
+        it("uses cached range while projecting when the projected bounds stay cached", () => {
+            const updateItemPositionsSpy = spyOn(updateItemPositionsModule, "updateItemPositions");
+
+            try {
+                const now = Date.now();
+                setupFixedSizeItems(20, 100);
+                mockCtx.values.set("readyToRender", true);
+                mockState.props.drawDistance = 100;
+                mockState.scroll = 300;
+                mockState.scrollLength = 300;
+                mockState.scrollHistory = [
+                    { scroll: 100, time: now - 16 },
+                    { scroll: 300, time: now },
+                ];
+                mockState.scrollForNextCalculateItemsInView = {
+                    bottom: 1000,
+                    top: -500,
+                };
+
+                calculateItemsInView(mockCtx);
+
+                expect(updateItemPositionsSpy).not.toHaveBeenCalled();
+                expect(mockState.scrollForNextCalculateItemsInView).toEqual({
+                    bottom: 1000,
+                    top: -500,
+                });
+            } finally {
+                updateItemPositionsSpy.mockRestore();
+            }
         });
 
         it("uses provided scroll velocity for item position updates", () => {

@@ -26,6 +26,36 @@ import { isNullOrUndefined } from "@/utils/helpers";
 import { isInMVCPActiveMode } from "@/utils/isInMVCPActiveMode";
 import { setDidLayout } from "@/utils/setDidLayout";
 
+const RENDER_RANGE_PROJECTION_FULL_VELOCITY = 4;
+const RENDER_RANGE_PROJECTION_SETTLE_DELAY = 100;
+
+function getProjectedBufferAdjustment(scrollVelocity: number, trailingBuffer: number) {
+    if (trailingBuffer <= 0) {
+        return 0;
+    }
+
+    const velocityProgress = Math.min(1, Math.abs(scrollVelocity) / RENDER_RANGE_PROJECTION_FULL_VELOCITY);
+    return Math.sign(scrollVelocity) * trailingBuffer * velocityProgress;
+}
+
+function scheduleRenderRangeProjectionSettle(ctx: StateContext) {
+    const state = ctx.state;
+    const previousTimeout = state.timeoutRenderRangeProjectionSettle;
+    if (previousTimeout !== undefined) {
+        clearTimeout(previousTimeout);
+        state.timeouts.delete(previousTimeout);
+    }
+
+    const timeout: any = setTimeout(() => {
+        state.timeoutRenderRangeProjectionSettle = undefined;
+        state.timeouts.delete(timeout);
+        state.scrollHistory.length = 0;
+        state.triggerCalculateItemsInView?.();
+    }, RENDER_RANGE_PROJECTION_SETTLE_DELAY);
+    state.timeoutRenderRangeProjectionSettle = timeout;
+    state.timeouts.add(timeout);
+}
+
 function findCurrentStickyIndex(stickyArray: number[], scroll: number, state: InternalState): number {
     const positions = state.positions;
     for (let i = stickyArray.length - 1; i >= 0; i--) {
@@ -414,16 +444,32 @@ export function calculateItemsInView(
             scrollBufferBottom = drawDistance * 0.5;
         }
 
+        const shouldProjectRenderRange =
+            !dataChanged &&
+            !forceFullItemPositions &&
+            !suppressInitialScrollSideEffects &&
+            !hasActiveInitialScroll(state) &&
+            !state.scrollingTo &&
+            !state.pendingNativeMVCPAdjust &&
+            !!peek$(ctx, "readyToRender");
+        const projectedBufferAdjustment = shouldProjectRenderRange
+            ? getProjectedBufferAdjustment(speed, Math.min(scrollBufferTop, scrollBufferBottom))
+            : 0;
+
         const updateScrollRange = () => {
             const scrollStart = Math.max(0, scroll);
             // Preserve a full item-space viewport during native overscroll without
             // treating header/padding offset as visible item space.
             const overscrollBeforeContent = Math.max(0, -nativeScrollState);
-            scrollTopBuffered = scrollStart - scrollBufferTop;
             scrollBottom = Math.max(scrollStart, scroll + scrollLength + overscrollBeforeContent);
-            scrollBottomBuffered = scrollBottom + scrollBufferBottom;
+            scrollTopBuffered = scrollStart - scrollBufferTop + projectedBufferAdjustment;
+            scrollBottomBuffered = scrollBottom + scrollBufferBottom + projectedBufferAdjustment;
         };
         updateScrollRange();
+
+        if (projectedBufferAdjustment !== 0) {
+            scheduleRenderRangeProjectionSettle(ctx);
+        }
 
         // Check precomputed scroll range to see if we can skip this check
         if (
