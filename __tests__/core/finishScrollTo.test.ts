@@ -30,6 +30,22 @@ describe("finishScrollTo", () => {
             expect(mockCtx.state.scrollHistory.length).toBe(0);
         });
 
+        it("clears temporary target render pins when finishing", () => {
+            const mockCtx = createMockContext(
+                {
+                    scrollingTo: { animated: true, offset: 100 },
+                },
+                {
+                    scrollingTo: { animated: true, offset: 100 } as any,
+                    scrollTargetPinnedRange: { end: 6, start: 4 },
+                },
+            );
+
+            finishScrollTo(mockCtx);
+
+            expect(mockCtx.state.scrollTargetPinnedRange).toBeUndefined();
+        });
+
         it("recalculates items and thresholds when a non-initial imperative scroll finishes", () => {
             const triggerCalculateItemsInView = mock(() => undefined);
             const checkThresholdsSpy = spyOn(thresholdsModule, "checkThresholds").mockImplementation(() => undefined);

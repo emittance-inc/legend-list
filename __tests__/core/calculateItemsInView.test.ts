@@ -1,5 +1,5 @@
 import { Platform } from "@/platform/Platform";
-import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { calculateItemsInView } from "../../src/core/calculateItemsInView";
 import { finishScrollTo } from "../../src/core/finishScrollTo";
 import * as mvcpModule from "../../src/core/mvcp";
@@ -67,6 +67,13 @@ describe("calculateItemsInView", () => {
         );
 
         mockState = mockCtx.state;
+    });
+
+    afterEach(() => {
+        for (const timeout of mockState.timeouts) {
+            clearTimeout(timeout);
+        }
+        mockState.timeouts.clear();
     });
 
     function measureSteadyStateDuration(run: () => void) {
@@ -409,6 +416,30 @@ describe("calculateItemsInView", () => {
                 "item_10",
             ]);
         });
+
+        it("does not treat the resting leading content inset as overscroll", () => {
+            setupFixedSizeItems(20, 100);
+            mockState.props.contentInset = { bottom: 0, left: 0, right: 0, top: 150 };
+            mockState.scroll = -150;
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(0);
+            expect(mockState.endNoBuffer).toBe(10);
+            expect(getRenderedContainerKeys()).toEqual([
+                "item_0",
+                "item_1",
+                "item_2",
+                "item_3",
+                "item_4",
+                "item_5",
+                "item_6",
+                "item_7",
+                "item_8",
+                "item_9",
+                "item_10",
+            ]);
+        });
     });
 
     describe("scroll buffer handling", () => {
@@ -451,6 +482,73 @@ describe("calculateItemsInView", () => {
             expect(mockState.startBuffered).toBe(mockState.startNoBuffer);
             expect(mockState.endBuffered).toBe(mockState.endNoBuffer);
         });
+
+        it("redistributes buffered range forward while keeping total buffer size stable when scrolling down", () => {
+            const now = Date.now();
+            setupFixedSizeItems(20, 100);
+            mockCtx.values.set("readyToRender", true);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 300;
+            mockState.scrollLength = 300;
+            mockState.scrollHistory = [
+                { scroll: 100, time: now - 16 },
+                { scroll: 300, time: now },
+            ];
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(3);
+            expect(mockState.endNoBuffer).toBe(6);
+            expect(mockState.idsInView).toEqual(["item_3", "item_4", "item_5", "item_6"]);
+            expect(mockState.startBuffered).toBe(3);
+            expect(mockState.endBuffered).toBe(8);
+            expect(mockState.scrollForNextCalculateItemsInView).toEqual({
+                bottom: 900,
+                top: 300,
+            });
+            expect(mockState.timeoutRenderRangeProjectionSettle).not.toBeUndefined();
+        });
+
+        it("redistributes buffered range backward while keeping total buffer size stable when scrolling up", () => {
+            const now = Date.now();
+            setupFixedSizeItems(20, 100);
+            mockCtx.values.set("readyToRender", true);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 300;
+            mockState.scrollLength = 300;
+            mockState.scrollHistory = [
+                { scroll: 500, time: now - 16 },
+                { scroll: 300, time: now },
+            ];
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(3);
+            expect(mockState.endNoBuffer).toBe(6);
+            expect(mockState.idsInView).toEqual(["item_3", "item_4", "item_5", "item_6"]);
+            expect(mockState.startBuffered).toBe(1);
+            expect(mockState.endBuffered).toBe(6);
+        });
+
+        it("does not project buffered range before the list is ready to render", () => {
+            const now = Date.now();
+            setupFixedSizeItems(20, 100);
+            mockState.props.drawDistance = 100;
+            mockState.scroll = 300;
+            mockState.scrollLength = 300;
+            mockState.scrollHistory = [
+                { scroll: 100, time: now - 16 },
+                { scroll: 300, time: now },
+            ];
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.startNoBuffer).toBe(3);
+            expect(mockState.endNoBuffer).toBe(6);
+            expect(mockState.startBuffered).toBe(2);
+            expect(mockState.endBuffered).toBe(6);
+            expect(mockState.timeoutRenderRangeProjectionSettle).toBeUndefined();
+        });
     });
 
     describe("column layout support", () => {
@@ -490,6 +588,37 @@ describe("calculateItemsInView", () => {
 
             // Should return early due to optimization
             expect(result).toBeUndefined();
+        });
+
+        it("uses cached range while projecting when the projected bounds stay cached", () => {
+            const updateItemPositionsSpy = spyOn(updateItemPositionsModule, "updateItemPositions");
+
+            try {
+                const now = Date.now();
+                setupFixedSizeItems(20, 100);
+                mockCtx.values.set("readyToRender", true);
+                mockState.props.drawDistance = 100;
+                mockState.scroll = 300;
+                mockState.scrollLength = 300;
+                mockState.scrollHistory = [
+                    { scroll: 100, time: now - 16 },
+                    { scroll: 300, time: now },
+                ];
+                mockState.scrollForNextCalculateItemsInView = {
+                    bottom: 1000,
+                    top: -500,
+                };
+
+                calculateItemsInView(mockCtx);
+
+                expect(updateItemPositionsSpy).not.toHaveBeenCalled();
+                expect(mockState.scrollForNextCalculateItemsInView).toEqual({
+                    bottom: 1000,
+                    top: -500,
+                });
+            } finally {
+                updateItemPositionsSpy.mockRestore();
+            }
         });
 
         it("uses provided scroll velocity for item position updates", () => {
@@ -1546,6 +1675,79 @@ describe("calculateItemsInView", () => {
 
             expect(mockState.containerItemKeys.has("item_58")).toBe(true);
             expect(mockState.containerItemKeys.has("item_59")).toBe(true);
+        });
+
+        it("mounts internal pinned ranges outside the buffered viewport", () => {
+            setupList(60, 10);
+            mockState.scrollTargetPinnedRange = { end: 32, start: 30 };
+
+            mockState.scroll = 0;
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.containerItemKeys.has("item_30")).toBe(true);
+            expect(mockState.containerItemKeys.has("item_31")).toBe(true);
+            expect(mockState.containerItemKeys.has("item_32")).toBe(true);
+        });
+
+        it("mounts pinned index 0 when using default numeric keys", () => {
+            mockState.props.data = Array.from({ length: 60 }, (_, i) => ({ id: i }));
+            mockState.props.drawDistance = 0;
+            mockState.props.keyExtractor = undefined;
+            mockState.scrollLength = 100;
+            mockCtx.values.set("numContainers", 12);
+            mockCtx.values.set("totalSize", 600);
+
+            mockState.idCache.length = 0;
+            mockState.indexByKey.clear();
+            clearLayoutValues(mockState, "positions");
+            mockState.sizes.clear();
+
+            for (let i = 0; i < 60; i++) {
+                mockState.positions[i] = i * 10;
+                mockState.sizes.set(i as any, 10);
+            }
+
+            mockState.scroll = 300;
+            mockState.scrollTargetPinnedRange = { end: 0, start: 0 };
+
+            calculateItemsInView(mockCtx);
+
+            expect(mockState.containerItemKeys.has(0 as any)).toBe(true);
+        });
+
+        it("keeps internal pinned containers protected while visible containers recycle", () => {
+            setupList(60, 10);
+            mockCtx.values.set("numContainers", 11);
+            mockCtx.values.set("numContainersPooled", 14);
+            mockState.scrollTargetPinnedRange = { end: 32, start: 30 };
+
+            mockState.scroll = 0;
+            calculateItemsInView(mockCtx);
+
+            const pinnedContainerKeys = ["item_30", "item_31", "item_32"] as const;
+            const pinnedContainers = pinnedContainerKeys.map((key) => mockState.containerItemKeys.get(key));
+
+            expect(pinnedContainers.every((containerIndex) => containerIndex !== undefined)).toBe(true);
+            expect(
+                pinnedContainers.every(
+                    (containerIndex) =>
+                        containerIndex !== undefined && mockState.stickyContainerPool.has(containerIndex),
+                ),
+            ).toBe(true);
+
+            mockState.scroll = 500;
+            calculateItemsInView(mockCtx);
+
+            for (const [index, key] of pinnedContainerKeys.entries()) {
+                const containerIndex = pinnedContainers[index];
+                expect(mockState.containerItemKeys.get(key)).toBe(containerIndex);
+                expect(containerIndex === undefined ? false : mockState.stickyContainerPool.has(containerIndex)).toBe(
+                    true,
+                );
+            }
+            expect(mockState.containerItemKeys.has("item_50")).toBe(true);
+
+            mockState.scrollTargetPinnedRange = undefined;
         });
     });
 

@@ -51,7 +51,7 @@ describe("getScrollVelocity", () => {
             expect(velocity).toBe(-2); // -200 pixels / 100ms = -2 pixels/ms
         });
 
-        it("should use oldest entry within time window", () => {
+        it("should weight recent entries within the time window", () => {
             const now = Date.now();
             mockState.scrollHistory = [
                 { scroll: 0, time: now - 500 }, // Oldest within 1000ms window
@@ -62,7 +62,7 @@ describe("getScrollVelocity", () => {
 
             const velocity = getScrollVelocity(mockState);
 
-            expect(velocity).toBe(0.4); // (200 - 0) / (500) = 0.4 pixels/ms
+            expect(velocity).toBeCloseTo(0.417, 3);
         });
     });
 
@@ -127,8 +127,8 @@ describe("getScrollVelocity", () => {
 
             const velocity = getScrollVelocity(mockState);
 
-            // Should consider from direction change point (150 -> 200 over 200ms)
-            expect(velocity).toBe(0.25); // (200 - 150) / 200 = 0.25 pixels/ms
+            // Should consider only the newest same-direction chain, with more weight on the latest segment.
+            expect(velocity).toBeCloseTo(0.262, 3);
         });
     });
 
@@ -157,6 +157,18 @@ describe("getScrollVelocity", () => {
             const velocity = getScrollVelocity(mockState);
 
             expect(velocity).toBe(0); // No valid old entry within time window
+        });
+
+        it("should return 0 when the newest entry is stale", () => {
+            const now = Date.now();
+            mockState.scrollHistory = [
+                { scroll: 0, time: now - 1600 },
+                { scroll: 200, time: now - 1500 },
+            ];
+
+            const velocity = getScrollVelocity(mockState);
+
+            expect(velocity).toBe(0);
         });
 
         it("should handle entries at exactly 1000ms boundary", () => {
@@ -261,7 +273,7 @@ describe("getScrollVelocity", () => {
 
             const velocity = getScrollVelocity(mockState);
 
-            expect(velocity).toBe(100); // (5000 - 0) / 50 = 100 pixels/ms
+            expect(velocity).toBeCloseTo(100); // Every same-direction segment is 100 pixels/ms.
         });
 
         it("should handle slow scrolling pattern", () => {
@@ -308,7 +320,7 @@ describe("getScrollVelocity", () => {
 
             const velocity = getScrollVelocity(mockState);
 
-            expect(velocity).toBe(0.925); // (185 - 0) / 200 = 0.925 pixels/ms
+            expect(velocity).toBeCloseTo(0.749, 3);
         });
     });
 

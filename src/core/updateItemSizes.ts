@@ -81,6 +81,49 @@ function mergeItemSizeUpdateResult(result: ItemSizeUpdateResult, next: ItemSizeU
     result.shouldMaintainScrollAtEnd ||= next.shouldMaintainScrollAtEnd;
 }
 
+const batchedItemSizeRecalculates = new WeakMap<StateContext, ItemSizeUpdateResult>();
+
+// Measurements update size maps immediately, but position/range recalculation is held
+// until the expected Fabric layout-effect measurements complete. This keeps the
+// recalculation in the same layout-effect turn when possible, while avoiding one
+// recalculation per recycled container. The frame fallback prevents a missed layout
+// callback from leaving positions stale indefinitely.
+function flushBatchedItemSizeRecalculate(
+    ctx: StateContext,
+    didFallback = false,
+    expectedResult?: ItemSizeUpdateResult,
+) {
+    const result = batchedItemSizeRecalculates.get(ctx);
+    if (!result || (expectedResult && result !== expectedResult)) {
+        return;
+    }
+
+    batchedItemSizeRecalculates.delete(ctx);
+    if (didFallback) {
+        ctx.state.pendingLayoutEffectMeasurements = undefined;
+    }
+    flushItemSizeUpdates(ctx, result);
+}
+
+function queueItemSizeRecalculate(ctx: StateContext, result: ItemSizeUpdateResult) {
+    const batch = batchedItemSizeRecalculates.get(ctx);
+    if (batch) {
+        mergeItemSizeUpdateResult(batch, result);
+    } else {
+        const nextBatch = { ...result };
+        batchedItemSizeRecalculates.set(ctx, nextBatch);
+        if (ctx.state.pendingLayoutEffectMeasurements?.size) {
+            requestAnimationFrame(() => {
+                flushBatchedItemSizeRecalculate(ctx, true, nextBatch);
+            });
+        }
+    }
+
+    if (!ctx.state.pendingLayoutEffectMeasurements?.size) {
+        flushBatchedItemSizeRecalculate(ctx);
+    }
+}
+
 function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
     const state = ctx.state;
     if (result.needsRecalculate) {
@@ -100,13 +143,26 @@ function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
  */
 export function updateItemSizes(ctx: StateContext, measurement: ItemSizeMeasurement) {
     const state = ctx.state;
+    let didDrainLayoutEffectMeasurements = false;
+    if (IsNewArchitecture && measurement.fromLayoutEffect) {
+        const pendingLayoutEffectMeasurements = state.pendingLayoutEffectMeasurements;
+        if (
+            pendingLayoutEffectMeasurements?.delete(measurement.itemKey) &&
+            pendingLayoutEffectMeasurements.size === 0
+        ) {
+            state.pendingLayoutEffectMeasurements = undefined;
+            didDrainLayoutEffectMeasurements = true;
+        }
+    }
     const pendingKeys = state.userScrollAnchorReset?.keys;
     const shouldBatchPendingMeasurements = IsNewArchitecture && measurement.fromLayoutEffect && !!pendingKeys?.size;
+    const shouldQueueRecalculate = IsNewArchitecture && !!measurement.fromLayoutEffect;
+    let result: ItemSizeUpdateResult;
 
     if (!shouldBatchPendingMeasurements) {
-        flushItemSizeUpdates(ctx, applyItemSize(ctx, measurement.itemKey, measurement.size));
+        result = applyItemSize(ctx, measurement.itemKey, measurement.size);
     } else {
-        const result: ItemSizeUpdateResult = {};
+        result = {};
 
         const updateContainerItemSize = (
             itemKey: string,
@@ -131,8 +187,16 @@ export function updateItemSizes(ctx: StateContext, measurement: ItemSizeMeasurem
                 });
             }
         }
+    }
 
+    if (shouldQueueRecalculate && result.needsRecalculate) {
+        queueItemSizeRecalculate(ctx, result);
+    } else {
         flushItemSizeUpdates(ctx, result);
+    }
+
+    if (didDrainLayoutEffectMeasurements) {
+        flushBatchedItemSizeRecalculate(ctx);
     }
 }
 

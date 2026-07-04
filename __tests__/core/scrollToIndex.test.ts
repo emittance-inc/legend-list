@@ -156,17 +156,17 @@ describe("scrollToIndex", () => {
         it("should extend max offset for negative viewOffset", () => {
             mockState.scrollLength = 400;
             mockState.totalSize = 1200;
-            const desiredOffset = (mockState.positions[9] ?? 0) - -50;
+            const desiredOffset = (mockState.positions[9] ?? 0) - -150;
 
-            scrollToIndex(mockCtx, { index: 9, viewOffset: -50, viewPosition: 0 });
+            scrollToIndex(mockCtx, { index: 9, viewOffset: -150, viewPosition: 0 });
 
             expect(mockScrollCalls.length).toBe(1);
             const contentSize = getContentSize(mockCtx);
             const baseMaxOffset = Math.max(0, contentSize - mockState.scrollLength);
-            const extendedMaxOffset = baseMaxOffset + 50;
-            expect(mockScrollCalls[0].y).toBe(extendedMaxOffset);
+            const extendedMaxOffset = baseMaxOffset + 150;
+            expect(mockScrollCalls[0].y).toBe(desiredOffset);
             expect(mockScrollCalls[0].y).toBeGreaterThan(baseMaxOffset);
-            expect(mockScrollCalls[0].y).toBeLessThanOrEqual(desiredOffset);
+            expect(mockScrollCalls[0].y).toBeLessThanOrEqual(extendedMaxOffset);
         });
     });
 

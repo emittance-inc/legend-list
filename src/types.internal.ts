@@ -175,6 +175,7 @@ export interface InternalState {
     initialScroll: InternalInitialScrollTarget | undefined;
     timeoutPreservedInitialScrollClear?: any;
     timeoutAdaptiveRender?: any;
+    timeoutRenderRangeProjectionSettle?: any;
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;
@@ -207,6 +208,7 @@ export interface InternalState {
     };
     pendingMaintainScrollAtEnd?: boolean;
     pendingDataComparison?: PendingDataComparison;
+    pendingLayoutEffectMeasurements?: Set<string>;
     pendingScrollToEnd?: {
         options?: ScrollToEndOptions;
         resolve: () => void;
@@ -227,6 +229,7 @@ export interface InternalState {
     scrollForNextCalculateItemsInView: { top: number | null; bottom: number | null } | undefined;
     scrollHistory: Array<{ scroll: number; time: number }>;
     scrollingTo?: InternalScrollTarget | undefined;
+    scrollTargetPinnedRange?: { end: number; start: number };
     horizontalRTLScrollType?: "normal" | "inverted" | "negative";
     scrollLastCalculate?: number;
     scrollLength: number;
