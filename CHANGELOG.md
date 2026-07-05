@@ -1,3 +1,10 @@
+## 3.3.1
+
+- Perf: Animated `scrollToIndex` and `scrollToOffset` calls now mount the destination rows before native scrolling starts, so long programmatic jumps are less likely to show blank space at the target.
+- Perf: Fast scrolling shifts more of the render buffer in the direction of travel and settles back after scrolling stops, so rows ahead of the user are ready sooner without keeping the buffer displaced afterward.
+- Perf: Scroll velocity favors recent movement and ignores stale samples, preventing old scroll events from keeping the render buffer pointed in the wrong direction after scrolling slows or stops.
+- Perf: On Fabric, row measurements wait for all expected layout-effect measurements before recalculating positions, reducing the number of computations while scrolling quickly.
+
 ## 3.3.0
 
 - Feat: Add `dataKey` so apps can tell the list when the current array represents a different dataset, such as switching conversations or feeds without remounting `LegendList`.
