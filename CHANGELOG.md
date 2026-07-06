@@ -1,3 +1,8 @@
+## 3.3.2
+
+- Perf: Recycled rows update their current item without changing the container context, so recycling hooks avoid extra rerenders during scroll.
+- Perf: Internal signal hooks recreate subscriptions less often
+
 ## 3.3.1
 
 - Perf: Animated `scrollToIndex` and `scrollToOffset` calls now mount the destination rows before native scrolling starts, so long programmatic jumps are less likely to show blank space at the target.
