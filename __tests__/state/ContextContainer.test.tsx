@@ -16,7 +16,7 @@ import {
     useViewability,
     useViewabilityAmount,
 } from "../../src/state/ContextContainer";
-import { StateProvider, set$, useStateContext } from "../../src/state/state";
+import { StateProvider, set$, useArr$, useStateContext } from "../../src/state/state";
 import type { ViewAmountToken, ViewToken } from "../../src/types.base";
 import { act, render } from "../helpers/testingLibrary";
 
@@ -39,6 +39,73 @@ async function flushAsync() {
 }
 
 describe("ContextContainer hooks", () => {
+    describe("useArr$", () => {
+        it("should keep inline signal arrays stable when signal names do not change", async () => {
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let renders = 0;
+
+            const TestComponent = ({ label }: { label: string }) => {
+                const ctx = useStateContext();
+                const [mode] = useArr$(["adaptiveRender"]);
+                capturedCtx = ctx;
+                renders++;
+                return <Text>{`${label}:${mode}`}</Text>;
+            };
+
+            const screen = render(
+                <StateProvider>
+                    <TestComponent label="first" />
+                </StateProvider>,
+            );
+            await flushAsync();
+
+            const listeners = capturedCtx!.listeners.get("adaptiveRender");
+            const listener = listeners ? [...listeners][0] : undefined;
+            expect(listener).toBeDefined();
+
+            screen.rerender(
+                <StateProvider>
+                    <TestComponent label="second" />
+                </StateProvider>,
+            );
+            await flushAsync();
+
+            expect(renders).toBe(2);
+            expect(capturedCtx!.listeners.get("adaptiveRender")?.size).toBe(1);
+            expect([...(capturedCtx!.listeners.get("adaptiveRender") ?? [])][0]).toBe(listener);
+        });
+
+        it("should resubscribe inline signal arrays when signal names change", async () => {
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+
+            const TestComponent = ({ id }: { id: number }) => {
+                const ctx = useStateContext();
+                const [itemKey] = useArr$([`containerItemKey${id}`]);
+                capturedCtx = ctx;
+                return <Text>{itemKey}</Text>;
+            };
+
+            const screen = render(
+                <StateProvider>
+                    <TestComponent id={0} />
+                </StateProvider>,
+            );
+            await flushAsync();
+
+            expect(capturedCtx!.listeners.get("containerItemKey0")?.size).toBe(1);
+
+            screen.rerender(
+                <StateProvider>
+                    <TestComponent id={1} />
+                </StateProvider>,
+            );
+            await flushAsync();
+
+            expect(capturedCtx!.listeners.get("containerItemKey0")?.size).toBe(0);
+            expect(capturedCtx!.listeners.get("containerItemKey1")?.size).toBe(1);
+        });
+    });
+
     describe("useAdaptiveRender", () => {
         it("should re-render when the adaptive render changes", async () => {
             let capturedCtx: ReturnType<typeof useStateContext> | undefined;

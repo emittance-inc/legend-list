@@ -154,6 +154,8 @@ export interface StateContext {
 }
 
 const ContextState = React.createContext<StateContext | null>(null);
+const SIGNAL_NAMES_SEPARATOR = "\0";
+type NonEmptySignalNames = readonly [ListenerType, ...ListenerType[]];
 
 let contextNum = 0;
 
@@ -196,7 +198,7 @@ export function useStateContext() {
     return React.useContext(ContextState)!;
 }
 
-function createSelectorFunctionsArr(ctx: StateContext, signalNames: ListenerType[]) {
+function createSelectorFunctionsArr(ctx: StateContext, signalNames: readonly ListenerType[]) {
     let lastValues: any[] = [];
     let lastSignalValues: any[] = [];
 
@@ -237,6 +239,14 @@ function createSelectorFunctionsArr(ctx: StateContext, signalNames: ListenerType
             };
         },
     };
+}
+
+function getSignalNamesKey(signalNames: NonEmptySignalNames): string {
+    return signalNames.length === 1 ? signalNames[0] : signalNames.join(SIGNAL_NAMES_SEPARATOR);
+}
+
+function getSignalNamesFromKey(signalNamesKey: string): NonEmptySignalNames {
+    return signalNamesKey.split(SIGNAL_NAMES_SEPARATOR) as unknown as NonEmptySignalNames;
 }
 
 export function listen$<T extends ListenerType>(
@@ -398,9 +408,13 @@ export function useArr$<
     ListenerTypeValueMap[T7],
     ListenerTypeValueMap[T8],
 ];
-export function useArr$<T extends ListenerType>(signalNames: T[]): ListenerTypeValueMap[T][] {
+export function useArr$<T extends ListenerType>(signalNames: readonly [T, ...T[]]): ListenerTypeValueMap[T][] {
     const ctx = React.useContext(ContextState)!;
-    const { subscribe, get } = React.useMemo(() => createSelectorFunctionsArr(ctx, signalNames), [ctx, signalNames]);
+    const signalNamesKey = getSignalNamesKey(signalNames);
+    const { subscribe, get } = React.useMemo(
+        () => createSelectorFunctionsArr(ctx, getSignalNamesFromKey(signalNamesKey)),
+        [ctx, signalNamesKey],
+    );
     const value = useSyncExternalStore(subscribe, get, get);
 
     return value;
