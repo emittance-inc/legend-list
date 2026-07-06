@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import "../setup";
 
+import { memo, type ReactNode, useMemo } from "react";
 import { Text } from "react-native";
 
 import {
@@ -20,16 +21,47 @@ import { StateProvider, set$, useArr$, useStateContext } from "../../src/state/s
 import type { ViewAmountToken, ViewToken } from "../../src/types.base";
 import { act, render } from "../helpers/testingLibrary";
 
-// Helper to create a mock context value
-function createMockContextValue(overrides?: Partial<ContextContainerType>): ContextContainerType {
+type ContainerSignals = {
+    containerId: number;
+    index: number;
+    itemKey: string;
+    triggerLayout: () => void;
+    value: any;
+};
+
+const noopTriggerLayout = () => {};
+
+function createContainerSignals(overrides?: Partial<ContainerSignals>): ContainerSignals {
     return {
         containerId: 0,
         index: 0,
         itemKey: "item-0",
-        triggerLayout: () => {},
+        triggerLayout: noopTriggerLayout,
         value: { id: 0, text: "Item 0" },
         ...overrides,
     };
+}
+
+function SignalBackedContainerProvider({ children, signals }: { children: ReactNode; signals: ContainerSignals }) {
+    const ctx = useStateContext();
+    const { containerId, index, itemKey, value } = signals;
+    const providerValue = useMemo<ContextContainerType>(
+        () => ({
+            containerId,
+            triggerLayout: signals.triggerLayout,
+        }),
+        [containerId, signals.triggerLayout],
+    );
+
+    ctx.values.set(`containerItemKey${containerId}`, itemKey);
+    ctx.values.set(`containerItemData${containerId}`, value);
+    ctx.values.set(`containerItemInfo${containerId}`, {
+        index,
+        itemKey,
+        value,
+    });
+
+    return <ContextContainer.Provider value={providerValue}>{children}</ContextContainer.Provider>;
 }
 
 async function flushAsync() {
@@ -172,7 +204,7 @@ describe("ContextContainer hooks", () => {
                 expect(token).toBeDefined();
             };
 
-            const contextValue = createMockContextValue();
+            const signals = createContainerSignals();
             let capturedCtx: any;
 
             const TestComponent = () => {
@@ -184,16 +216,16 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
             await flushAsync();
 
             // Verify callback was registered
-            const key = `${contextValue.containerId}`;
+            const key = `${signals.containerId}`;
             expect(capturedCtx.mapViewabilityCallbacks.has(key)).toBe(true);
             expect(capturedCtx.mapViewabilityCallbacks.get(key)).toBe(callback);
 
@@ -224,7 +256,7 @@ describe("ContextContainer hooks", () => {
         it("should handle configId parameter", async () => {
             const callback = () => {};
             const configId = "custom-config";
-            const contextValue = createMockContextValue();
+            const signals = createContainerSignals();
             let capturedCtx: any;
 
             const TestComponent = () => {
@@ -236,22 +268,22 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
             await flushAsync();
 
-            const key = contextValue.containerId + configId;
+            const key = signals.containerId + configId;
             expect(capturedCtx.mapViewabilityCallbacks.has(key)).toBe(true);
 
             unmount();
         });
 
         it("should call callback with initial value if available", async () => {
-            const contextValue = createMockContextValue();
+            const signals = createContainerSignals();
             const mockToken: ViewToken = {
                 index: 0,
                 isViewable: true,
@@ -272,16 +304,16 @@ describe("ContextContainer hooks", () => {
                 const ctx = useStateContext();
                 _capturedCtx = ctx;
                 // Set initial value before hook runs
-                ctx.mapViewabilityValues.set(`${contextValue.containerId}`, mockToken);
+                ctx.mapViewabilityValues.set(`${signals.containerId}`, mockToken);
                 useViewability(callback);
                 return <Text>Test</Text>;
             };
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -301,7 +333,7 @@ describe("ContextContainer hooks", () => {
                 expect(token).toBeDefined();
             };
 
-            const contextValue = createMockContextValue();
+            const signals = createContainerSignals();
             let capturedCtx: any;
 
             const TestComponent = () => {
@@ -313,17 +345,17 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
             await flushAsync();
 
             // Verify callback was registered
-            expect(capturedCtx.mapViewabilityAmountCallbacks.has(contextValue.containerId)).toBe(true);
-            expect(capturedCtx.mapViewabilityAmountCallbacks.get(contextValue.containerId)).toBe(callback);
+            expect(capturedCtx.mapViewabilityAmountCallbacks.has(signals.containerId)).toBe(true);
+            expect(capturedCtx.mapViewabilityAmountCallbacks.get(signals.containerId)).toBe(callback);
 
             unmount();
         });
@@ -350,7 +382,7 @@ describe("ContextContainer hooks", () => {
         });
 
         it("should call callback with initial value if available", async () => {
-            const contextValue = createMockContextValue();
+            const signals = createContainerSignals();
             const mockToken: ViewAmountToken = {
                 containerId: 0,
                 index: 0,
@@ -377,16 +409,16 @@ describe("ContextContainer hooks", () => {
                 const ctx = useStateContext();
                 _capturedCtx = ctx;
                 // Set initial value before hook runs
-                ctx.mapViewabilityAmountValues.set(contextValue.containerId, mockToken);
+                ctx.mapViewabilityAmountValues.set(signals.containerId, mockToken);
                 useViewabilityAmount(callback);
                 return <Text>Test</Text>;
             };
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -408,7 +440,7 @@ describe("ContextContainer hooks", () => {
                 effectCalls.push(info);
             };
 
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 index: 0,
                 itemKey: "item-0",
                 value: { id: 0, text: "Item 0" },
@@ -421,9 +453,9 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -431,6 +463,88 @@ describe("ContextContainer hooks", () => {
 
             // First render - no effect should run (no previous value)
             expect(effectCalls).toHaveLength(0);
+
+            unmount();
+        });
+
+        it("should run from container signal changes without changing context value", async () => {
+            const signals = createContainerSignals();
+            const effectCalls: any[] = [];
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let syncLayoutRenders = 0;
+
+            const SyncLayoutConsumer = memo(() => {
+                syncLayoutRenders++;
+                useSyncLayout();
+                return <Text>Sync layout</Text>;
+            });
+
+            const TestComponent = () => {
+                const ctx = useStateContext();
+                capturedCtx = ctx;
+                useRecyclingEffect((info) => {
+                    effectCalls.push(info);
+                });
+                return <Text>Test</Text>;
+            };
+
+            const StableProvider = () => {
+                const ctx = useStateContext();
+                const providerValue = useMemo<ContextContainerType>(
+                    () => ({
+                        containerId: signals.containerId,
+                        triggerLayout: signals.triggerLayout,
+                    }),
+                    [],
+                );
+
+                ctx.values.set(`containerItemKey${signals.containerId}`, signals.itemKey);
+                ctx.values.set(`containerItemData${signals.containerId}`, signals.value);
+                ctx.values.set(`containerItemInfo${signals.containerId}`, {
+                    index: signals.index,
+                    itemKey: signals.itemKey,
+                    value: signals.value,
+                });
+
+                return (
+                    <ContextContainer.Provider value={providerValue}>
+                        <SyncLayoutConsumer />
+                        <TestComponent />
+                    </ContextContainer.Provider>
+                );
+            };
+
+            const { unmount } = render(
+                <StateProvider>
+                    <StableProvider />
+                </StateProvider>,
+            );
+
+            await flushAsync();
+
+            expect(effectCalls).toEqual([]);
+            expect(syncLayoutRenders).toBe(1);
+
+            await act(async () => {
+                set$(capturedCtx!, `containerItemKey${signals.containerId}`, "item-1");
+                set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
+                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
+                    index: 1,
+                    itemKey: "item-1",
+                    value: { id: 1, text: "Item 1" },
+                });
+            });
+            await flushAsync();
+
+            expect(effectCalls).toEqual([
+                {
+                    index: 1,
+                    item: { id: 1, text: "Item 1" },
+                    prevIndex: 0,
+                    prevItem: { id: 0, text: "Item 0" },
+                },
+            ]);
+            expect(syncLayoutRenders).toBe(1);
 
             unmount();
         });
@@ -459,7 +573,7 @@ describe("ContextContainer hooks", () => {
 
     describe("useRecyclingState", () => {
         it("should initialize state with value when used inside context", () => {
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 index: 0,
                 itemKey: "item-0",
                 value: { id: 0, text: "Item 0" },
@@ -475,9 +589,9 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -487,7 +601,7 @@ describe("ContextContainer hooks", () => {
         });
 
         it("should initialize state with function when used inside context", () => {
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 index: 0,
                 itemKey: "item-0",
                 value: { id: 0, text: "Item 0" },
@@ -503,9 +617,9 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -515,7 +629,7 @@ describe("ContextContainer hooks", () => {
         });
 
         it("should update state when setState is called inside context", () => {
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 index: 0,
                 itemKey: "item-0",
                 value: { id: 0, text: "Item 0" },
@@ -525,7 +639,7 @@ describe("ContextContainer hooks", () => {
             let setStateFn: any;
             let triggerLayoutCalled = false;
 
-            contextValue.triggerLayout = () => {
+            signals.triggerLayout = () => {
                 triggerLayoutCalled = true;
             };
 
@@ -538,9 +652,9 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -559,7 +673,7 @@ describe("ContextContainer hooks", () => {
         });
 
         it("should reset state when itemKey changes", () => {
-            const contextValue1 = createMockContextValue({
+            const signals1 = createContainerSignals({
                 index: 0,
                 itemKey: "item-0",
                 value: { id: 0, text: "Item 0" },
@@ -577,9 +691,9 @@ describe("ContextContainer hooks", () => {
 
             const { rerender, unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue1}>
+                    <SignalBackedContainerProvider signals={signals1}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -590,7 +704,7 @@ describe("ContextContainer hooks", () => {
             expect(capturedState).toBe("updated");
 
             // Change itemKey
-            const contextValue2 = createMockContextValue({
+            const signals2 = createContainerSignals({
                 index: 1,
                 itemKey: "item-1",
                 value: { id: 1, text: "Item 1" },
@@ -599,15 +713,142 @@ describe("ContextContainer hooks", () => {
             act(() => {
                 rerender(
                     <StateProvider>
-                        <ContextContainer.Provider value={contextValue2}>
+                        <SignalBackedContainerProvider signals={signals2}>
                             <TestComponent />
-                        </ContextContainer.Provider>
+                        </SignalBackedContainerProvider>
                     </StateProvider>,
                 );
             });
 
             // State should reset to initial value
             expect(capturedState).toBe("initial");
+
+            unmount();
+        });
+
+        it("should reset state from container signals without changing context value", () => {
+            const signals = createContainerSignals();
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let capturedState: any;
+            let setStateFn: any;
+            let recyclingRenders = 0;
+            let syncLayoutRenders = 0;
+
+            const SyncLayoutConsumer = memo(() => {
+                syncLayoutRenders++;
+                useSyncLayout();
+                return <Text>Sync layout</Text>;
+            });
+
+            const RecyclingStateConsumer = () => {
+                recyclingRenders++;
+                const [state, setState] = useRecyclingState((info) => `computed-${info.index}-${info.item.id}`);
+                capturedState = state;
+                setStateFn = setState;
+                return <Text>{String(state)}</Text>;
+            };
+
+            const StableProvider = () => {
+                const ctx = useStateContext();
+                capturedCtx = ctx;
+                const providerValue = useMemo<ContextContainerType>(
+                    () => ({
+                        containerId: signals.containerId,
+                        triggerLayout: signals.triggerLayout,
+                    }),
+                    [],
+                );
+
+                ctx.values.set(`containerItemKey${signals.containerId}`, signals.itemKey);
+                ctx.values.set(`containerItemData${signals.containerId}`, signals.value);
+                ctx.values.set(`containerItemInfo${signals.containerId}`, {
+                    index: signals.index,
+                    itemKey: signals.itemKey,
+                    value: signals.value,
+                });
+
+                return (
+                    <ContextContainer.Provider value={providerValue}>
+                        <SyncLayoutConsumer />
+                        <RecyclingStateConsumer />
+                    </ContextContainer.Provider>
+                );
+            };
+
+            const { unmount } = render(
+                <StateProvider>
+                    <StableProvider />
+                </StateProvider>,
+            );
+
+            expect(capturedState).toBe("computed-0-0");
+            expect(recyclingRenders).toBe(1);
+            expect(syncLayoutRenders).toBe(1);
+
+            act(() => {
+                setStateFn("updated");
+            });
+
+            expect(capturedState).toBe("updated");
+
+            act(() => {
+                set$(capturedCtx!, `containerItemKey${signals.containerId}`, "item-1");
+                set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
+                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
+                    index: 1,
+                    itemKey: "item-1",
+                    value: { id: 1, text: "Item 1" },
+                });
+            });
+
+            expect(capturedState).toBe("computed-1-1");
+            expect(recyclingRenders).toBeGreaterThan(1);
+            expect(syncLayoutRenders).toBe(1);
+
+            unmount();
+        });
+
+        it("should not reset state when index and data change for the same itemKey", () => {
+            const signals = createContainerSignals();
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let capturedState: any;
+            let setStateFn: any;
+
+            const TestComponent = () => {
+                const ctx = useStateContext();
+                capturedCtx = ctx;
+                const [state, setState] = useRecyclingState((info) => `computed-${info.index}-${info.item.id}`);
+                capturedState = state;
+                setStateFn = setState;
+                return <Text>{String(state)}</Text>;
+            };
+
+            const { unmount } = render(
+                <StateProvider>
+                    <SignalBackedContainerProvider signals={signals}>
+                        <TestComponent />
+                    </SignalBackedContainerProvider>
+                </StateProvider>,
+            );
+
+            expect(capturedState).toBe("computed-0-0");
+
+            act(() => {
+                setStateFn("updated");
+            });
+
+            expect(capturedState).toBe("updated");
+
+            act(() => {
+                set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
+                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
+                    index: 1,
+                    itemKey: signals.itemKey,
+                    value: { id: 1, text: "Item 1" },
+                });
+            });
+
+            expect(capturedState).toBe("updated");
 
             unmount();
         });
@@ -663,11 +904,47 @@ describe("ContextContainer hooks", () => {
 
             unmount();
         });
+
+        it("should not subscribe outside context to real container item signals", () => {
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let renders = 0;
+
+            const TestComponent = () => {
+                const ctx = useStateContext();
+                capturedCtx = ctx;
+                renders++;
+                const [state] = useRecyclingState(() => "outside");
+                const isLast = useIsLastItem();
+                return <Text>{`${state}-${isLast}`}</Text>;
+            };
+
+            const { unmount } = render(
+                <StateProvider>
+                    <TestComponent />
+                </StateProvider>,
+            );
+
+            expect(renders).toBe(1);
+
+            act(() => {
+                set$(capturedCtx!, "containerItemKey0", "item-1");
+                set$(capturedCtx!, "containerItemData0", { id: 1, text: "Item 1" });
+                set$(capturedCtx!, "containerItemInfo0", {
+                    index: 1,
+                    itemKey: "item-1",
+                    value: { id: 1, text: "Item 1" },
+                });
+            });
+
+            expect(renders).toBe(1);
+
+            unmount();
+        });
     });
 
     describe("useIsLastItem", () => {
         it("should return true when item is last inside context", async () => {
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 itemKey: "item-2",
             });
 
@@ -686,9 +963,9 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
@@ -700,7 +977,7 @@ describe("ContextContainer hooks", () => {
         });
 
         it("should return false when item is not last inside context", async () => {
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 itemKey: "item-0",
             });
 
@@ -719,15 +996,78 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
             await flushAsync();
 
             expect(capturedIsLast).toBe(false);
+
+            unmount();
+        });
+
+        it("should update only for itemKey and lastItemKeys changes", () => {
+            const signals = createContainerSignals({
+                itemKey: "item-0",
+            });
+            let capturedCtx: ReturnType<typeof useStateContext> | undefined;
+            let capturedIsLast: boolean | undefined;
+            let renders = 0;
+
+            const LastItemKeysProvider = ({ children }: { children: ReactNode }) => {
+                const ctx = useStateContext();
+                capturedCtx = ctx;
+                ctx.values.set("lastItemKeys", ["item-2"]);
+                return children;
+            };
+
+            const TestComponent = () => {
+                renders++;
+                capturedIsLast = useIsLastItem();
+                return <Text>{String(capturedIsLast)}</Text>;
+            };
+
+            const { unmount } = render(
+                <StateProvider>
+                    <LastItemKeysProvider>
+                        <SignalBackedContainerProvider signals={signals}>
+                            <TestComponent />
+                        </SignalBackedContainerProvider>
+                    </LastItemKeysProvider>
+                </StateProvider>,
+            );
+
+            expect(capturedIsLast).toBe(false);
+            expect(renders).toBe(1);
+
+            act(() => {
+                set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
+                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
+                    index: 1,
+                    itemKey: signals.itemKey,
+                    value: { id: 1, text: "Item 1" },
+                });
+            });
+
+            expect(capturedIsLast).toBe(false);
+            expect(renders).toBe(1);
+
+            act(() => {
+                set$(capturedCtx!, `containerItemKey${signals.containerId}`, "item-2");
+            });
+
+            expect(capturedIsLast).toBe(true);
+            expect(renders).toBe(2);
+
+            act(() => {
+                set$(capturedCtx!, "lastItemKeys", ["item-3"]);
+            });
+
+            expect(capturedIsLast).toBe(false);
+            expect(renders).toBe(3);
 
             unmount();
         });
@@ -811,7 +1151,7 @@ describe("ContextContainer hooks", () => {
         it("should return triggerLayout function when used inside context (new architecture)", async () => {
             // IsNewArchitecture is set to true in setup.ts via global.nativeFabricUIManager
             let triggerLayoutCalled = false;
-            const contextValue = createMockContextValue({
+            const signals = createContainerSignals({
                 triggerLayout: () => {
                     triggerLayoutCalled = true;
                 },
@@ -827,15 +1167,15 @@ describe("ContextContainer hooks", () => {
 
             const { unmount } = render(
                 <StateProvider>
-                    <ContextContainer.Provider value={contextValue}>
+                    <SignalBackedContainerProvider signals={signals}>
                         <TestComponent />
-                    </ContextContainer.Provider>
+                    </SignalBackedContainerProvider>
                 </StateProvider>,
             );
 
             await flushAsync();
 
-            expect(capturedSyncLayout).toBe(contextValue.triggerLayout);
+            expect(capturedSyncLayout).toBe(signals.triggerLayout);
 
             // Call it
             act(() => {

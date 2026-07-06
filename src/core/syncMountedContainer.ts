@@ -56,7 +56,18 @@ export function syncMountedContainer(
         }
     }
 
+    const prevItemInfo = peek$(ctx, `containerItemInfo${containerIndex}`);
     const prevData = peek$(ctx, `containerItemData${containerIndex}`);
+    let itemInfoValue = prevData;
+    let didChangeItemInfo =
+        prevItemInfo?.itemKey !== itemKey || prevItemInfo?.index !== itemIndex || prevItemInfo?.value !== prevData;
+    const updateData = () => {
+        set$(ctx, `containerItemData${containerIndex}`, item);
+        itemInfoValue = item;
+        didChangeItemInfo = true;
+        didRefreshData = true;
+    };
+
     if (prevData !== item) {
         const pendingDataComparison =
             state.pendingDataComparison?.previousData === state.previousData &&
@@ -66,17 +77,14 @@ export function syncMountedContainer(
         const cachedComparison = pendingDataComparison?.byIndex[itemIndex] ?? 0;
 
         if (cachedComparison === 2) {
-            set$(ctx, `containerItemData${containerIndex}`, item);
-            didRefreshData = true;
+            updateData();
         } else if (cachedComparison !== 1) {
             const nextItemKey = peek$(ctx, `containerItemKey${containerIndex}`) ?? itemKey;
             const prevKey = keyExtractor?.(prevData, itemIndex);
             if (prevData === undefined || !keyExtractor || prevKey !== nextItemKey) {
-                set$(ctx, `containerItemData${containerIndex}`, item);
-                didRefreshData = true;
+                updateData();
             } else if (!itemsAreEqual) {
-                set$(ctx, `containerItemData${containerIndex}`, item);
-                didRefreshData = true;
+                updateData();
             } else {
                 const isEqual = itemsAreEqual(prevData, item, itemIndex, data);
 
@@ -98,11 +106,18 @@ export function syncMountedContainer(
                 }
 
                 if (!isEqual) {
-                    set$(ctx, `containerItemData${containerIndex}`, item);
-                    didRefreshData = true;
+                    updateData();
                 }
             }
         }
+    }
+
+    if (didChangeItemInfo) {
+        set$(ctx, `containerItemInfo${containerIndex}`, {
+            index: itemIndex,
+            itemKey,
+            value: itemInfoValue,
+        });
     }
 
     return { didChangePosition, didRefreshData };

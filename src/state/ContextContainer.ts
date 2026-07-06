@@ -12,7 +12,7 @@ import {
 
 import { IsNewArchitecture } from "@/constants-platform";
 import { useInit } from "@/hooks/useInit";
-import { listen$, peek$, useArr$, useSelector$, useStateContext } from "@/state/state";
+import { type ContainerItemInfo, listen$, peek$, useArr$, useSelector$, useStateContext } from "@/state/state";
 import type {
     AdaptiveRender,
     LegendListRecyclingState,
@@ -23,16 +23,28 @@ import { isFunction, isNullOrUndefined } from "@/utils/helpers";
 
 export interface ContextContainerType {
     containerId: number;
-    itemKey: string;
-    index: number;
-    value: any;
     triggerLayout: () => void;
 }
 
 export const ContextContainer = createContext<ContextContainerType | null>(null);
+const NO_CONTAINER_ID = -1;
 
 function useContextContainer(): ContextContainerType | null {
     return useContext(ContextContainer);
+}
+
+function useContainerItemInfo(containerContext: ContextContainerType | null): ContainerItemInfo | undefined {
+    const containerId = containerContext?.containerId ?? NO_CONTAINER_ID;
+    const [itemInfo] = useArr$([`containerItemInfo${containerId}`]);
+
+    return containerContext ? itemInfo : undefined;
+}
+
+function useContainerItemKey(containerContext: ContextContainerType | null) {
+    const containerId = containerContext?.containerId ?? NO_CONTAINER_ID;
+    const [itemKey] = useArr$([`containerItemKey${containerId}`]);
+
+    return containerContext ? (itemKey as string | undefined) : undefined;
 }
 
 export function useAdaptiveRender(): AdaptiveRender {
@@ -124,48 +136,40 @@ export function useViewabilityAmount<ItemT = any>(callback: ViewabilityAmountCal
 
 export function useRecyclingEffect(effect: (info: LegendListRecyclingState<unknown>) => void | (() => void)) {
     const containerContext = useContextContainer();
-    const prevValues = useRef<{ prevIndex: number | undefined; prevItem: any }>({
-        prevIndex: undefined,
-        prevItem: undefined,
-    });
+    const itemInfo = useContainerItemInfo(containerContext);
+    const prevInfo = useRef<ContainerItemInfo | undefined>(undefined);
 
     useEffect(() => {
-        // Fail gracefully if used outside context
-        if (!containerContext) {
+        if (!itemInfo) {
             return;
         }
 
-        const { index, value } = containerContext;
         let ret: void | (() => void);
-        // Only run effect if there's a previous value
-        if (prevValues.current.prevIndex !== undefined && prevValues.current.prevItem !== undefined) {
+        if (prevInfo.current) {
             ret = effect({
-                index,
-                item: value,
-                prevIndex: prevValues.current.prevIndex,
-                prevItem: prevValues.current.prevItem,
+                index: itemInfo.index,
+                item: itemInfo.value,
+                prevIndex: prevInfo.current.index,
+                prevItem: prevInfo.current.value,
             });
         }
 
-        // Update refs for next render
-        prevValues.current = {
-            prevIndex: index,
-            prevItem: value,
-        };
+        prevInfo.current = itemInfo;
 
         return ret!;
-    }, [effect, containerContext]);
+    }, [effect, itemInfo]);
 }
 
 export function useRecyclingState<ItemT>(valueOrFun: ((info: LegendListRecyclingState<ItemT>) => ItemT) | ItemT) {
     const containerContext = useContextContainer();
-    const computeValue = (ctx: ContextContainerType | null) => {
+    const itemInfo = useContainerItemInfo(containerContext);
+    const computeValue = (info: ContainerItemInfo | undefined) => {
         if (isFunction(valueOrFun)) {
-            const initializer = valueOrFun as (info: LegendListRecyclingState<ItemT>) => ItemT;
-            return ctx
+            const initializer = valueOrFun as (recyclingInfo: LegendListRecyclingState<ItemT>) => ItemT;
+            return info
                 ? initializer({
-                      index: ctx.index,
-                      item: ctx.value,
+                      index: info.index,
+                      item: info.value,
                       prevIndex: undefined,
                       prevItem: undefined,
                   })
@@ -175,16 +179,14 @@ export function useRecyclingState<ItemT>(valueOrFun: ((info: LegendListRecycling
     };
 
     const [stateValue, setStateValue] = useState<ItemT>(() => {
-        // Initialize state value
-        return computeValue(containerContext);
+        return computeValue(itemInfo);
     });
-    const prevItemKeyRef = useRef<string | null>(containerContext?.itemKey ?? null);
+    const prevItemKeyRef = useRef<string | null>(itemInfo?.itemKey ?? null);
 
     // Reset state when the recycled item changes (synchronously to avoid extra renders)
-    const currentItemKey = containerContext?.itemKey ?? null;
-    if (currentItemKey !== null && prevItemKeyRef.current !== currentItemKey) {
-        prevItemKeyRef.current = currentItemKey;
-        setStateValue(computeValue(containerContext));
+    if (itemInfo && prevItemKeyRef.current !== itemInfo.itemKey) {
+        prevItemKeyRef.current = itemInfo.itemKey;
+        setStateValue(computeValue(itemInfo));
     }
 
     const triggerLayout = containerContext?.triggerLayout;
@@ -210,14 +212,12 @@ export function useRecyclingState<ItemT>(valueOrFun: ((info: LegendListRecycling
 
 export function useIsLastItem(): boolean {
     const containerContext = useContextContainer();
+    const itemKey = useContainerItemKey(containerContext);
 
     const isLast = useSelector$("lastItemKeys", (lastItemKeys) => {
         // Fail gracefully if used outside context
-        if (containerContext) {
-            const { itemKey } = containerContext;
-            if (!isNullOrUndefined(itemKey)) {
-                return lastItemKeys?.includes(itemKey) || false;
-            }
+        if (containerContext && !isNullOrUndefined(itemKey)) {
+            return lastItemKeys?.includes(itemKey) || false;
         }
         return false;
     });
@@ -233,13 +233,5 @@ export function useListScrollSize(): { width: number; height: number } {
 const noop = () => {};
 export function useSyncLayout() {
     const containerContext = useContextContainer();
-
-    if (IsNewArchitecture && containerContext) {
-        const { triggerLayout: syncLayout } = containerContext;
-        return syncLayout;
-    } else {
-        // Old architecture doesn't support sync layout so there's no point in triggering
-        // a state update for no reason
-        return noop;
-    }
+    return IsNewArchitecture && containerContext ? containerContext.triggerLayout : noop;
 }

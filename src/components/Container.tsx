@@ -244,12 +244,9 @@ export const Container = typedMemo(function Container<ItemT>({
         ctx.viewRefs.set(id, ref);
         return {
             containerId: id,
-            index: index!,
-            itemKey,
             triggerLayout,
-            value: data,
         };
-    }, [id, itemKey, index, data, triggerLayout]);
+    }, [id, triggerLayout]);
 
     useLayoutEffect(() => {
         ctx.containerLayoutTriggers.set(id, triggerLayout);

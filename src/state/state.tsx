@@ -53,6 +53,7 @@ export type ListenerType =
     | `containerColumn${number}`
     | `containerSpan${number}`
     | `containerItemData${number}`
+    | `containerItemInfo${number}`
     | `containerItemKey${number}`
     | `containerPosition${number}`
     | `containerSticky${number}`;
@@ -115,6 +116,8 @@ export type ListenerTypeValueMap = {
 } & {
     [K in ListenerType as K extends `containerItemData${number}` ? K : never]: any;
 } & {
+    [K in ListenerType as K extends `containerItemInfo${number}` ? K : never]: ContainerItemInfo;
+} & {
     [K in ListenerType as K extends `containerPosition${number}` ? K : never]: number;
 } & {
     [K in ListenerType as K extends `containerColumn${number}` ? K : never]: number;
@@ -123,6 +126,12 @@ export type ListenerTypeValueMap = {
 } & {
     [K in ListenerType as K extends `containerSticky${number}` ? K : never]: boolean;
 };
+
+export interface ContainerItemInfo {
+    index: number;
+    itemKey: string;
+    value: any;
+}
 
 export interface StateContext {
     animatedScrollY: AnimatedValue;
