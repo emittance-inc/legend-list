@@ -93,7 +93,6 @@ describe("PositionView (web)", () => {
                             animatedScrollY={{}}
                             horizontal={false}
                             id={0}
-                            index={3}
                             onLayout={() => {}}
                             onLayoutChange={() => {}}
                             refView={refView}
@@ -108,7 +107,7 @@ describe("PositionView (web)", () => {
         });
 
         const div = renderer!.root.findByType("div");
-        expect(div.props["data-index"]).toBe(3);
+        expect(div.props["data-index"]).toBeUndefined();
         expect(div.props.style).toMatchObject({
             contain: "paint layout style",
             top: 32,
@@ -143,7 +142,7 @@ describe("PositionView (web)", () => {
                 renderer = TestRenderer.create(
                     <StateProvider>
                         <ReplacementMeasurementSetup>
-                            <PositionView horizontal={false} id={1} index={1} refView={refView} style={{}}>
+                            <PositionView horizontal={false} id={1} refView={refView} style={{}}>
                                 {null}
                             </PositionView>
                         </ReplacementMeasurementSetup>
@@ -184,7 +183,7 @@ describe("PositionView (web)", () => {
                 renderer = TestRenderer.create(
                     <StateProvider>
                         <StateSetup>
-                            <PositionView horizontal={false} id={0} index={3} refView={refView} style={{ width: 100 }}>
+                            <PositionView horizontal={false} id={0} refView={refView} style={{ width: 100 }}>
                                 {null}
                             </PositionView>
                         </StateSetup>
@@ -226,7 +225,6 @@ describe("PositionView (web)", () => {
                             animatedScrollY={{}}
                             horizontal={false}
                             id={0}
-                            index={4}
                             onLayout={() => {}}
                             onLayoutChange={() => {}}
                             refView={refView}
@@ -241,7 +239,7 @@ describe("PositionView (web)", () => {
         });
 
         const div = renderer!.root.findByType("div");
-        expect(div.props["data-index"]).toBe(4);
+        expect(div.props["data-index"]).toBeUndefined();
         expect(div.props.style).toMatchObject({
             contain: "paint layout style",
             position: "sticky",
@@ -272,7 +270,6 @@ describe("PositionView (web)", () => {
                         <PositionViewSticky
                             horizontal={false}
                             id={0}
-                            index={3}
                             refView={refView}
                             stickyHeaderConfig={{ offset: 10 }}
                             style={{ width: 100 } as React.CSSProperties}
@@ -285,7 +282,7 @@ describe("PositionView (web)", () => {
         });
 
         const div = renderer!.root.findByType("div");
-        expect(div.props["data-index"]).toBe(2);
+        expect(div.props["data-index"]).toBeUndefined();
         expect(div.props.style).toMatchObject({
             position: "sticky",
             top: 10,
@@ -310,7 +307,6 @@ describe("PositionView (web)", () => {
                         <PositionViewSticky
                             horizontal={false}
                             id={0}
-                            index={4}
                             refView={refView}
                             stickyHeaderConfig={{ backdropComponent: Backdrop, offset: 10 }}
                             style={{ width: 100 } as React.CSSProperties}

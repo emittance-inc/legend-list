@@ -14,12 +14,10 @@ interface ExtraPropsFromRN {
     onLayout?: unknown;
     onLayoutChange?: (rectangle: LayoutRectangle, fromLayoutEffect: boolean) => void;
     stickyHeaderConfig?: StickyHeaderConfig;
-    index?: number;
 }
 
 interface PositionViewStateProps {
     id: number;
-    index: number;
     horizontal: boolean;
     style: CSSProperties;
     refView: React.RefObject<HTMLDivElement | null>;
@@ -59,14 +57,13 @@ const PositionViewState = typedMemo(function PositionViewState({
 
     const {
         animatedScrollY: _animatedScrollY,
-        index,
         onLayout: _onLayout,
         onLayoutChange: _onLayoutChange,
         stickyHeaderConfig: _stickyHeaderConfig,
         ...webProps
     } = props as PositionViewStateProps & ExtraPropsFromRN;
 
-    return <div data-index={index} ref={refView} {...(webProps as any)} style={combinedStyle} />;
+    return <div ref={refView} {...(webProps as any)} style={combinedStyle} />;
 });
 
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
@@ -75,7 +72,6 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
     horizontal,
     style,
     refView,
-    index: _index,
     animatedScrollY: _animatedScrollY,
     stickyHeaderConfig,
     onLayout: _onLayout,
@@ -88,7 +84,6 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
     style: CSSProperties;
     refView: React.RefObject<HTMLDivElement | null>;
     onLayoutChange?: (rectangle: LayoutRectangle, fromLayoutEffect: boolean) => void;
-    index: number;
     animatedScrollY?: unknown;
     stickyHeaderConfig?: StickyHeaderConfig;
     onLayout?: unknown;
@@ -142,12 +137,7 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
     );
 
     return (
-        <div
-            data-index={itemIndex}
-            ref={refView as unknown as React.RefObject<HTMLDivElement>}
-            style={viewStyle as any}
-            {...webProps}
-        >
+        <div ref={refView as unknown as React.RefObject<HTMLDivElement>} style={viewStyle as any} {...webProps}>
             {renderStickyHeaderBackdrop}
             {children}
         </div>

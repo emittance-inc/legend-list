@@ -1,19 +1,9 @@
-const mapFn = (element: HTMLElement): [HTMLElement, number | null] => {
-    const indexStr = element.getAttribute("data-index");
-    if (indexStr === null) {
-        return [element, null];
-    }
-
-    const index = Number.parseInt(indexStr, 10);
-    return [element, Number.isNaN(index) ? null : index];
-};
-
-export function sortDOMElements(container: HTMLDivElement) {
+export function sortDOMElements(container: HTMLDivElement, indexByElement: Map<HTMLElement, number>) {
     const elements = Array.from(container.children) as HTMLElement[];
     if (elements.length <= 1) return elements;
 
-    // Create array of [element, key, currentIndex] tuples
-    const items = elements.map(mapFn);
+    // Create array of [element, itemIndex] tuples
+    const items = elements.map((element) => [element, indexByElement.get(element) ?? null] as const);
     // Sort to get target positions
     items.sort((a, b) => {
         const aKey = a[1];

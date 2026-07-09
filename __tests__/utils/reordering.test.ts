@@ -8,9 +8,8 @@ interface MockElement extends HTMLElement {
     id: string;
 }
 
-function createElement(id: string, index: number): MockElement {
+function createElement(id: string): MockElement {
     return {
-        getAttribute: (name: string) => (name === "data-index" ? String(index) : null),
         id,
     } as unknown as MockElement;
 }
@@ -50,14 +49,19 @@ function createContainer(elements: MockElement[]): HTMLDivElement {
 }
 
 describe("sortDOMElements", () => {
-    it("reorders children using data-index", () => {
-        const first = createElement("first", 2);
-        const second = createElement("second", 0);
-        const third = createElement("third", 1);
+    it("reorders children using a provided index map", () => {
+        const first = createElement("first");
+        const second = createElement("second");
+        const third = createElement("third");
         const elements = [first, second, third];
         const container = createContainer(elements);
+        const indexByElement = new Map<HTMLElement, number>([
+            [first, 2],
+            [second, 0],
+            [third, 1],
+        ]);
 
-        sortDOMElements(container);
+        sortDOMElements(container, indexByElement);
 
         expect(elements.map((element) => element.id)).toEqual(["second", "third", "first"]);
     });

@@ -166,7 +166,7 @@ export const Container = typedMemo(function Container<ItemT>({
         () => (itemKey !== undefined ? getRenderedItem(itemKey) : null),
         [itemKey, data, extraData],
     );
-    const { index, renderedItem } = renderedItemInfo || {};
+    const { renderedItem } = renderedItemInfo || {};
 
     const onLayoutChange = useCallback((rectangle: LayoutRectangle, fromLayoutEffect: boolean) => {
         const {
@@ -314,7 +314,6 @@ export const Container = typedMemo(function Container<ItemT>({
             animatedScrollY={isSticky ? animatedScrollY : undefined}
             horizontal={horizontal}
             id={id}
-            index={index!}
             key={recycleItems ? undefined : itemKey}
             onLayout={onLayout}
             refView={ref as React.RefObject<any>}

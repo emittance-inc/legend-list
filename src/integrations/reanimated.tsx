@@ -108,7 +108,6 @@ interface ReanimatedPositionViewStickyProps {
     style: StyleProp<ViewStyle>;
     refView: React.RefObject<View | null>;
     onLayout: (event: LayoutChangeEvent) => void;
-    index: number;
     stickyHeaderConfig?: StickyHeaderConfig;
     stickyScrollOffset: SharedValue<number>;
     children: React.ReactNode;
@@ -120,7 +119,6 @@ interface ReanimatedPositionViewProps {
     style: StyleProp<ViewStyle>;
     refView: React.RefObject<View | null>;
     onLayout: (event: LayoutChangeEvent) => void;
-    index: number;
     recycleItems?: boolean;
     layoutTransition?: ReanimatedLayoutAnimation;
     children: React.ReactNode;
@@ -152,8 +150,7 @@ const ReanimatedPositionViewSticky = typedMemo(function ReanimatedPositionViewSt
     props: ReanimatedPositionViewStickyProps,
 ) {
     const ctx = useStateContext();
-    const { id, horizontal, style, refView, stickyScrollOffset, stickyHeaderConfig, index: _index, children, ...rest } =
-        props;
+    const { id, horizontal, style, refView, stickyScrollOffset, stickyHeaderConfig, children, ...rest } = props;
     const [position = POSITION_OUT_OF_VIEW, headerSize = 0, stylePaddingTop = 0, itemKey, itemIndex, _totalSize = 0] =
         useArr$([
             `containerPosition${id}`,
@@ -196,7 +193,7 @@ const ReanimatedPositionViewSticky = typedMemo(function ReanimatedPositionViewSt
 
 const ReanimatedPositionView = typedMemo(function ReanimatedPositionViewComponent(props: ReanimatedPositionViewProps) {
     const ctx = useStateContext();
-    const { id, horizontal, style, refView, children, recycleItems, layoutTransition, index: _index, ...rest } = props;
+    const { id, horizontal, style, refView, children, recycleItems, layoutTransition, ...rest } = props;
     const [positionValue = POSITION_OUT_OF_VIEW] = useArr$([`containerPosition${id}`]);
     const prevItemKeyRef = React.useRef<string | undefined>(undefined);
     let shouldSkipTransitionForRecycleReuse = false;
@@ -238,7 +235,6 @@ interface PositionComponentInternalProps {
     style: StyleProp<ViewStyle>;
     refView: React.RefObject<View | null>;
     onLayout: (event: LayoutChangeEvent) => void;
-    index: number;
     stickyHeaderConfig?: StickyHeaderConfig;
     children: React.ReactNode;
 }

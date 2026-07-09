@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef } from "react";
 
 import { Platform } from "@/platform/Platform";
-import { listen$, useStateContext } from "@/state/state";
+import { listen$, peek$, useStateContext } from "@/state/state";
 import { sortDOMElements } from "@/utils/reordering";
 
 export function useDOMOrder(ref: RefObject<HTMLDivElement | null>) {
@@ -21,10 +21,17 @@ export function useDOMOrder(ref: RefObject<HTMLDivElement | null>) {
 
             // Schedule reordering to run 500ms after the last position change
             debounceRef.current = setTimeout(() => {
-                // Find the first container element from the viewRefs map and use its parent for reordering
                 const parent = ref.current;
                 if (parent) {
-                    sortDOMElements(parent);
+                    const indexByElement = new Map<HTMLElement, number>();
+                    for (const [containerId, viewRef] of ctx.viewRefs) {
+                        const element = viewRef.current as HTMLElement | null;
+                        const index = peek$(ctx, `containerItemIndex${containerId}`);
+                        if (element && index !== undefined) {
+                            indexByElement.set(element, index);
+                        }
+                    }
+                    sortDOMElements(parent, indexByElement);
                 }
                 debounceRef.current = undefined;
             }, 500) as unknown as number;

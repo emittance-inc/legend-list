@@ -117,18 +117,12 @@ function PositionComponentHarness({
 
     React.useLayoutEffect(() => {
         set$(ctx, `containerItemKey${containerId}` as any, itemKey as any);
+        set$(ctx, `containerItemIndex${containerId}` as any, 0 as any);
         set$(ctx, `containerPosition${containerId}` as any, position as any);
     }, [containerId, ctx, itemKey, position]);
 
     return (
-        <PositionComponent
-            horizontal={false}
-            id={containerId}
-            index={0}
-            onLayout={() => {}}
-            refView={refView}
-            style={{}}
-        >
+        <PositionComponent horizontal={false} id={containerId} onLayout={() => {}} refView={refView} style={{}}>
             {null}
         </PositionComponent>
     );
@@ -173,14 +167,7 @@ function StickyPositionComponentHarness({
     }, [containerId, ctx, index, itemKey, position]);
 
     return (
-        <PositionComponent
-            horizontal={false}
-            id={containerId}
-            index={index}
-            onLayout={() => {}}
-            refView={refView}
-            style={{}}
-        >
+        <PositionComponent horizontal={false} id={containerId} onLayout={() => {}} refView={refView} style={{}}>
             {null}
         </PositionComponent>
     );

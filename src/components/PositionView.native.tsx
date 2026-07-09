@@ -64,7 +64,6 @@ const PositionViewSticky = typedMemo(function PositionViewSticky({
     style,
     refView,
     animatedScrollY,
-    index: _index,
     stickyHeaderConfig,
     children,
     ...rest
@@ -75,7 +74,6 @@ const PositionViewSticky = typedMemo(function PositionViewSticky({
     refView: React.RefObject<View>;
     animatedScrollY?: Animated.Value;
     onLayout: (event: LayoutChangeEvent) => void;
-    index: number;
     stickyHeaderConfig?: StickyHeaderConfig;
     children: React.ReactNode;
 }) {
