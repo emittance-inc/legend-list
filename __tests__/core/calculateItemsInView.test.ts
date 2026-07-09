@@ -954,7 +954,7 @@ describe("calculateItemsInView", () => {
             }
         });
 
-        it("preserves visible MVCP containers during a stale prepend range pass", () => {
+        it("uses the adjusted MVCP scroll for the visible range after a prepend", () => {
             const itemSize = 60;
             const prependCount = 42;
             const previousItems = Array.from({ length: 12 }, (_, i) => ({ id: `old-${i}` }));
@@ -993,11 +993,23 @@ describe("calculateItemsInView", () => {
             calculateItemsInView(mockCtx, { dataChanged: true, doMVCP: true });
 
             expect(mockState.scroll).toBe(-4 + prependCount * itemSize);
-            expect(mockState.startNoBuffer).toBe(0);
-            expect(mockState.endNoBuffer).toBe(10);
+            expect(mockState.startNoBuffer).toBe(41);
+            expect(mockState.endNoBuffer).toBe(51);
+            expect(mockState.idsInView).toEqual([
+                "old-0",
+                "old-1",
+                "old-2",
+                "old-3",
+                "old-4",
+                "old-5",
+                "old-6",
+                "old-7",
+                "old-8",
+                "old-9",
+            ]);
             expect(mockState.containerItemKeys.get("old-0")).toBe(0);
             expect(mockState.containerItemKeys.get("old-10")).toBe(10);
-            expect(mockState.containerItemKeys.has("new-0")).toBe(true);
+            expect(mockState.containerItemKeys.has("new-41")).toBe(true);
         });
 
         it("recomputes the visible range after MVCP adjusts a preserved initial-scroll target", () => {
@@ -1069,7 +1081,7 @@ describe("calculateItemsInView", () => {
                 data: true,
                 shouldRestorePosition: (item: { id: string }) => item.id !== "old-0",
             });
-            mockState.scroll = -4;
+            mockState.scroll = itemSize;
             mockState.scrollLength = 600;
             mockState.idsInView = previousItems.slice(0, 11).map((item) => item.id);
             mockState.scrollAdjustHandler.requestAdjust = mock(() => {});
@@ -1092,8 +1104,9 @@ describe("calculateItemsInView", () => {
 
             calculateItemsInView(mockCtx, { dataChanged: true, doMVCP: true });
 
-            expect(mockState.containerItemKeys.get("old-0")).toBeUndefined();
-            expect(mockState.containerItemKeys.get("old-1")).toBe(1);
+            expect(mockState.scroll).toBe(itemSize + prependCount * itemSize);
+            expect(mockState.idsInView[0]).toBe("old-1");
+            expect(mockState.idsInView).not.toContain("old-0");
         });
 
         it("does not publish viewability from the stale range when MVCP adjusts a prepend", () => {
