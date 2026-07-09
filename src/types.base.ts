@@ -598,6 +598,11 @@ export type LegendListRef = {
     getNativeScrollRef(): any;
 
     /**
+     * Returns the underlying animatable scroll component reference.
+     */
+    getAnimatableRef(): any;
+
+    /**
      * Returns the scroll responder instance for handling scroll events.
      */
     getScrollableNode(): any;

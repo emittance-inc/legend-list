@@ -205,6 +205,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
     return {
         clearCaches,
         flashScrollIndicators: () => refScroller.current!.flashScrollIndicators(),
+        getAnimatableRef: () => refScroller.current!.getNativeScrollRef?.() ?? refScroller.current!,
         getNativeScrollRef: () => refScroller.current!,
         getScrollableNode: () => refScroller.current!.getScrollableNode(),
         getScrollResponder: () => refScroller.current!.getScrollResponder(),

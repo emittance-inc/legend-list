@@ -107,6 +107,44 @@ describe("createImperativeHandle.scrollToEnd", () => {
         });
     });
 
+    it("returns the native scroll ref as the animatable ref when available", () => {
+        const nativeScrollRef = { __nativeTag: 7 };
+        const scroller = {
+            flashScrollIndicators: () => {},
+            getNativeScrollRef: () => nativeScrollRef,
+            getScrollableNode: () => ({}),
+            getScrollResponder: () => ({}),
+            scrollTo: () => {},
+            scrollToEnd: () => {},
+        };
+        const ctx = createMockContext(
+            {},
+            {
+                refScroller: { current: scroller },
+            },
+        );
+
+        expect(createImperativeHandle(ctx).getAnimatableRef()).toBe(nativeScrollRef);
+    });
+
+    it("falls back to the scroller as the animatable ref", () => {
+        const scroller = {
+            flashScrollIndicators: () => {},
+            getScrollableNode: () => ({}),
+            getScrollResponder: () => ({}),
+            scrollTo: () => {},
+            scrollToEnd: () => {},
+        };
+        const ctx = createMockContext(
+            {},
+            {
+                refScroller: { current: scroller },
+            },
+        );
+
+        expect(createImperativeHandle(ctx).getAnimatableRef()).toBe(scroller);
+    });
+
     it("does not mark synthetic content inset reports as scroll progress", () => {
         const ctx = createMockContext(
             {},

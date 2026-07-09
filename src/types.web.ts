@@ -90,8 +90,9 @@ export type LegendListProps<
 
 export type LegendListRef = Omit<
     LegendListRefBase,
-    "getNativeScrollRef" | "getScrollableNode" | "getScrollResponder"
+    "getAnimatableRef" | "getNativeScrollRef" | "getScrollableNode" | "getScrollResponder"
 > & {
+    getAnimatableRef(): HTMLElement | ScrollViewMethods;
     getNativeScrollRef(): HTMLElement | ScrollViewMethods;
     getScrollableNode(): HTMLElement;
     getScrollResponder(): HTMLElement | null;

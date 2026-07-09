@@ -73,8 +73,9 @@ export type LegendListProps<
 
 export type LegendListRef = Omit<
     LegendListRefBase,
-    "getNativeScrollRef" | "getScrollResponder" | "reportContentInset"
+    "getAnimatableRef" | "getNativeScrollRef" | "getScrollResponder" | "reportContentInset"
 > & {
+    getAnimatableRef(): React.ElementRef<typeof ScrollViewComponent>;
     getNativeScrollRef(): React.ElementRef<typeof ScrollViewComponent>;
     getScrollResponder(): ScrollResponderMixin;
     reportContentInset(inset?: Partial<Insets> | null): void;
