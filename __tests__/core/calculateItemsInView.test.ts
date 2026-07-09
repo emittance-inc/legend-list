@@ -1109,13 +1109,14 @@ describe("calculateItemsInView", () => {
             expect(mockState.idsInView).not.toContain("old-0");
         });
 
-        it("does not publish viewability from the stale range when MVCP adjusts a prepend", () => {
+        it("publishes viewability from the adjusted range when MVCP adjusts a prepend", () => {
             const itemSize = 60;
             const prependCount = 42;
             const previousItems = Array.from({ length: 12 }, (_, i) => ({ id: `old-${i}` }));
             const prependedItems = Array.from({ length: prependCount }, (_, i) => ({ id: `new-${i}` }));
             const nextItems = [...prependedItems, ...previousItems];
             const updateViewableItemsSpy = spyOn(viewabilityModule, "updateViewableItems");
+            const viewabilityCalls: any[] = [];
 
             try {
                 mockCtx.values.set("numContainers", 12);
@@ -1132,7 +1133,7 @@ describe("calculateItemsInView", () => {
                 mockState.scrollAdjustHandler.requestAdjust = mock(() => {});
                 mockState.viewabilityConfigCallbackPairs = [
                     {
-                        onViewableItemsChanged: mock(() => {}),
+                        onViewableItemsChanged: (info) => viewabilityCalls.push(info),
                         viewabilityConfig: { id: "default", viewAreaCoveragePercentThreshold: 0 },
                     },
                 ];
@@ -1155,10 +1156,123 @@ describe("calculateItemsInView", () => {
 
                 calculateItemsInView(mockCtx, { dataChanged: true, doMVCP: true });
 
-                expect(updateViewableItemsSpy).not.toHaveBeenCalled();
+                expect(updateViewableItemsSpy).toHaveBeenCalledTimes(1);
+                expect(updateViewableItemsSpy.mock.calls[0].slice(3)).toEqual([600, 41, 51, 41, 51]);
+                expect(viewabilityCalls).toHaveLength(1);
+                expect(viewabilityCalls[0]).toMatchObject({
+                    end: 51,
+                    endBuffered: 51,
+                    start: 41,
+                    startBuffered: 41,
+                });
+                expect(viewabilityCalls[0].viewableItems.map((token: any) => token.key)).toEqual([
+                    "new-41",
+                    "old-0",
+                    "old-1",
+                    "old-2",
+                    "old-3",
+                    "old-4",
+                    "old-5",
+                    "old-6",
+                    "old-7",
+                    "old-8",
+                    "old-9",
+                ]);
+                expect(viewabilityCalls[0].viewableItems.map((token: any) => token.key)).not.toContain("new-0");
             } finally {
                 updateViewableItemsSpy.mockRestore();
             }
+        });
+
+        it("does not report stale prepend viewability after preserving existing visible items", () => {
+            const itemSize = 60;
+            const prependCount = 42;
+            const previousItems = Array.from({ length: 12 }, (_, i) => ({ id: `old-${i}` }));
+            const prependedItems = Array.from({ length: prependCount }, (_, i) => ({ id: `new-${i}` }));
+            const nextItems = [...prependedItems, ...previousItems];
+            const viewabilityCalls: any[] = [];
+
+            mockCtx.values.set("numContainers", 12);
+            mockCtx.values.set("readyToRender", true);
+            mockCtx.values.set("totalSize", previousItems.length * itemSize);
+            mockState.didContainersLayout = true;
+            mockState.props.data = previousItems;
+            mockState.props.drawDistance = 0;
+            mockState.props.keyExtractor = (item: { id: string }) => item.id;
+            mockState.props.maintainVisibleContentPosition = normalizeMaintainVisibleContentPosition(true);
+            mockState.scroll = -4;
+            mockState.scrollLength = 600;
+            mockState.scrollAdjustHandler.requestAdjust = mock(() => {});
+            mockState.viewabilityConfigCallbackPairs = [
+                {
+                    onViewableItemsChanged: (info) => viewabilityCalls.push(info),
+                    viewabilityConfig: { id: "default", viewAreaCoveragePercentThreshold: 0 },
+                },
+            ];
+
+            for (let i = 0; i < previousItems.length; i++) {
+                const id = previousItems[i].id;
+                mockState.idCache[i] = id;
+                mockState.indexByKey.set(id, i);
+                setLayoutValue(mockState, "positions", id, i * itemSize);
+                mockState.sizes.set(id, itemSize);
+                if (i < 11) {
+                    mockState.containerItemKeys.set(id, i);
+                    mockCtx.values.set(`containerItemKey${i}`, id);
+                    mockCtx.values.set(`containerItemData${i}`, previousItems[i]);
+                }
+            }
+
+            calculateItemsInView(mockCtx);
+            expect(viewabilityCalls.at(-1).viewableItems.map((token: any) => token.key)).toEqual([
+                "old-0",
+                "old-1",
+                "old-2",
+                "old-3",
+                "old-4",
+                "old-5",
+                "old-6",
+                "old-7",
+                "old-8",
+                "old-9",
+            ]);
+
+            viewabilityCalls.length = 0;
+            mockState.props.data = nextItems;
+            mockState.idsInView = previousItems.slice(0, 11).map((item) => item.id);
+            for (const item of prependedItems) {
+                mockState.sizes.set(item.id, itemSize);
+            }
+
+            calculateItemsInView(mockCtx, { dataChanged: true, doMVCP: true });
+
+            expect(viewabilityCalls).toHaveLength(1);
+            expect(viewabilityCalls[0]).toMatchObject({
+                end: 51,
+                endBuffered: 51,
+                start: 41,
+                startBuffered: 41,
+            });
+            expect(viewabilityCalls[0].viewableItems.map((token: any) => token.key)).toEqual([
+                "new-41",
+                "old-0",
+                "old-1",
+                "old-2",
+                "old-3",
+                "old-4",
+                "old-5",
+                "old-6",
+                "old-7",
+                "old-8",
+                "old-9",
+            ]);
+            expect(viewabilityCalls[0].changed.map((token: any) => [token.key, token.isViewable])).toEqual([
+                ["new-41", true],
+            ]);
+            expect(viewabilityCalls[0].changed).not.toContainEqual(
+                expect.objectContaining({ isViewable: false, key: "old-0" }),
+            );
+            expect(viewabilityCalls[0].viewableItems.map((token: any) => token.key)).not.toContain("new-0");
         });
 
         it("should not cache null bounds when buffered viewport covers content", () => {

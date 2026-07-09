@@ -305,6 +305,107 @@ describe("viewability system", () => {
             ]);
         });
 
+        it("should keep a moved previous viewable item viewable at its current index", () => {
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 2);
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].viewableItems.map((token: ViewToken) => token.key)).toContain(
+                "item-2",
+            );
+
+            onViewableItemsChangedCalls.length = 0;
+
+            const data = Array.from({ length: 13 }, (_, i) => ({ id: i < 10 ? `new-${i}` : `${i - 10}` }));
+            mockState.props.data = data;
+            mockState.idCache = data.map((item) => `item-${item.id}`);
+            mockState.indexByKey = new Map(data.map((item, index) => [`item-${item.id}`, index]));
+            mockState.positions = Array.from({ length: 13 }, (_, i) => i * 100);
+            mockState.scroll = 1000;
+            mockState.sizes.set("item-2", 100);
+
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 10, 12);
+
+            expect(onViewableItemsChangedCalls).toHaveLength(0);
+            expect(mockCtx.mapViewabilityConfigStates?.get("test-config")?.viewableItems).toContainEqual(
+                expect.objectContaining({ index: 12, isViewable: true, key: "item-2" }),
+            );
+            expect(mockCtx.mapViewabilityConfigStates?.get("test-config")?.viewableItems).toContainEqual(
+                expect.objectContaining({ index: 10, isViewable: true, key: "item-0" }),
+            );
+        });
+
+        it("should report a moved previous viewable item as not viewable when it leaves the range", () => {
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 2);
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].viewableItems.map((token: ViewToken) => token.key)).toContain(
+                "item-2",
+            );
+
+            onViewableItemsChangedCalls.length = 0;
+
+            const data = Array.from({ length: 13 }, (_, i) => ({ id: i < 10 ? `new-${i}` : `${i - 10}` }));
+            mockState.props.data = data;
+            mockState.idCache = data.map((item) => `item-${item.id}`);
+            mockState.indexByKey = new Map(data.map((item, index) => [`item-${item.id}`, index]));
+            mockState.positions = Array.from({ length: 13 }, (_, i) => i * 100);
+            mockState.sizes.set("item-2", 100);
+
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 1);
+
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].viewableItems.map((token: ViewToken) => token.key)).not.toContain(
+                "item-2",
+            );
+            expect(onViewableItemsChangedCalls[0].changed).toContainEqual(
+                expect.objectContaining({ index: 12, isViewable: false, key: "item-2" }),
+            );
+        });
+
+        it("should report a removed previous viewable item as not viewable", () => {
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 2);
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].viewableItems.map((token: ViewToken) => token.key)).toContain(
+                "item-2",
+            );
+
+            onViewableItemsChangedCalls.length = 0;
+
+            const data = mockState.props.data.filter((item: { id: number }) => item.id !== 2);
+            mockState.props.data = data;
+            mockState.idCache = ["item-0", "item-1", "item-3", "item-4"];
+            mockState.indexByKey = new Map([
+                ["item-0", 0],
+                ["item-1", 1],
+                ["item-3", 2],
+                ["item-4", 3],
+            ]);
+            mockState.positions = [0, 100, 250, 450];
+
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 1);
+
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].changed).toContainEqual(
+                expect.objectContaining({ index: 2, isViewable: false, key: "item-2" }),
+            );
+        });
+
+        it("should report a previous viewable item with a missing current position as not viewable", () => {
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 2);
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].viewableItems.map((token: ViewToken) => token.key)).toContain(
+                "item-2",
+            );
+
+            onViewableItemsChangedCalls.length = 0;
+            mockState.positions[2] = undefined as any;
+
+            updateViewableItems(mockState, mockCtx, viewabilityPairs, 500, 0, 1);
+
+            expect(onViewableItemsChangedCalls).toHaveLength(1);
+            expect(onViewableItemsChangedCalls[0].changed).toContainEqual(
+                expect.objectContaining({ index: 2, isViewable: false, key: "item-2" }),
+            );
+        });
+
         it("should handle scroll position changes affecting viewability", () => {
             // Scroll down so first items are out of view
             const scrolledState = createMockState({ scroll: 300 });

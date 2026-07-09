@@ -930,18 +930,16 @@ export function calculateItemsInView(
             visibleRange.startNoBuffer !== null &&
             visibleRange.endNoBuffer !== null
         ) {
-            if (!didMVCPAdjustScroll) {
-                updateViewableItems(
-                    ctx.state,
-                    ctx,
-                    viewabilityConfigCallbackPairs,
-                    scrollLength,
-                    visibleRange.startNoBuffer,
-                    visibleRange.endNoBuffer,
-                    startBuffered ?? visibleRange.startNoBuffer,
-                    endBuffered ?? visibleRange.endNoBuffer,
-                );
-            }
+            updateViewableItems(
+                ctx.state,
+                ctx,
+                viewabilityConfigCallbackPairs,
+                scrollLength,
+                visibleRange.startNoBuffer,
+                visibleRange.endNoBuffer,
+                startBuffered ?? visibleRange.startNoBuffer,
+                endBuffered ?? visibleRange.endNoBuffer,
+            );
         }
 
         stickyState?.finishCalculateItemsInView?.();

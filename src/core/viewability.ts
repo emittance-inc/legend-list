@@ -136,21 +136,29 @@ function updateViewableItemsWithConfig(
     if (previousViewableItems) {
         for (const viewToken of previousViewableItems) {
             previousViewableKeys.add(viewToken.key);
+            const currentIndex = state.indexByKey.get(viewToken.key);
+            const currentItem = currentIndex !== undefined ? data[currentIndex] : undefined;
             const containerId = findContainerId(ctx, viewToken.key);
-            if (
-                !checkIsViewable(
+            let isStillViewable = false;
+            if (currentIndex !== undefined && currentItem !== undefined) {
+                isStillViewable = checkIsViewable(
                     state,
                     ctx,
                     viewabilityConfig,
                     containerId,
                     viewToken.key,
                     scrollSize,
-                    viewToken.item,
-                    viewToken.index,
-                )
-            ) {
-                viewToken.isViewable = false;
-                changed.push(viewToken);
+                    currentItem,
+                    currentIndex,
+                );
+            }
+            if (!isStillViewable) {
+                changed.push({
+                    ...viewToken,
+                    index: currentIndex ?? viewToken.index,
+                    isViewable: false,
+                    item: currentItem ?? viewToken.item,
+                });
             }
         }
     }
