@@ -20,6 +20,7 @@ function StickyHarness({
     animatedScrollY,
     currentSize,
     index,
+    itemIndex,
     itemKey,
     nextStickyPosition,
     position,
@@ -28,6 +29,7 @@ function StickyHarness({
     animatedScrollY: { interpolate: (config: any) => any };
     currentSize: number;
     index: number;
+    itemIndex?: number;
     itemKey: string;
     nextStickyPosition: number;
     position: number;
@@ -44,13 +46,15 @@ function StickyHarness({
         }) as any;
     }
 
-    ctx.state.positions[index] = position;
-    ctx.state.positions[stickyHeaderIndices[stickyHeaderIndices.indexOf(index) + 1]] = nextStickyPosition;
+    const resolvedIndex = itemIndex ?? index;
+    ctx.state.positions[resolvedIndex] = position;
+    ctx.state.positions[stickyHeaderIndices[stickyHeaderIndices.indexOf(resolvedIndex) + 1]] = nextStickyPosition;
     ctx.state.props.stickyHeaderIndicesArr = stickyHeaderIndices;
     ctx.state.sizes.set(itemKey, currentSize);
 
     ctx.values.set(`containerPosition7`, position);
     ctx.values.set(`containerItemKey7`, itemKey);
+    ctx.values.set(`containerItemIndex7`, resolvedIndex);
     ctx.values.set("headerSize", 0);
     ctx.values.set("stylePaddingTop", 0);
     ctx.values.set("totalSize", nextStickyPosition + currentSize);
@@ -60,7 +64,6 @@ function StickyHarness({
             animatedScrollY={animatedScrollY as any}
             horizontal={false}
             id={7}
-            index={index}
             onLayout={() => {}}
             refView={{ current: null }}
             style={{}}
@@ -153,6 +156,40 @@ describe("PositionView.native", () => {
         expect(interpolate).toHaveBeenCalledWith(expectedInterpolation);
 
         const flattenedStyle = flattenStyle((toJSON() as any)?.props?.style);
+        expect(flattenedStyle?.transform).toEqual([{ translateY: expectedInterpolation }]);
+
+        unmount();
+    });
+
+    it("uses the current container index signal when a sticky item moves", () => {
+        const interpolate = mock((config: any) => config);
+        const animatedScrollY = { interpolate };
+        const { toJSON, unmount } = render(
+            <StateProvider>
+                <StickyHarness
+                    animatedScrollY={animatedScrollY}
+                    currentSize={120}
+                    index={3}
+                    itemIndex={2}
+                    itemKey="header-2"
+                    nextStickyPosition={300}
+                    position={100}
+                    stickyHeaderIndices={[0, 2, 5]}
+                />
+            </StateProvider>,
+        );
+
+        const expectedInterpolation = {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+            inputRange: [100, 180],
+            outputRange: [100, 180],
+        };
+
+        expect(interpolate).toHaveBeenCalledWith(expectedInterpolation);
+
+        const flattenedStyle = flattenStyle((toJSON() as any)?.props?.style);
+        expect(flattenedStyle?.zIndex).toBe(1002);
         expect(flattenedStyle?.transform).toEqual([{ translateY: expectedInterpolation }]);
 
         unmount();

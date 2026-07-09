@@ -165,6 +165,7 @@ function StickyPositionComponentHarness({
         ctx.state.sizes.set(itemKey, 120);
 
         set$(ctx, `containerItemKey${containerId}` as any, itemKey as any);
+        set$(ctx, `containerItemIndex${containerId}` as any, index as any);
         set$(ctx, `containerPosition${containerId}` as any, position as any);
         set$(ctx, "headerSize" as any, 0 as any);
         set$(ctx, "stylePaddingTop" as any, 0 as any);

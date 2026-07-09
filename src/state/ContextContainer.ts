@@ -12,7 +12,7 @@ import {
 
 import { IsNewArchitecture } from "@/constants-platform";
 import { useInit } from "@/hooks/useInit";
-import { type ContainerItemInfo, listen$, peek$, useArr$, useSelector$, useStateContext } from "@/state/state";
+import { listen$, peek$, useArr$, useSelector$, useStateContext } from "@/state/state";
 import type {
     AdaptiveRender,
     LegendListRecyclingState,
@@ -33,18 +33,20 @@ function useContextContainer(): ContextContainerType | null {
     return useContext(ContextContainer);
 }
 
-function useContainerItemInfo(containerContext: ContextContainerType | null): ContainerItemInfo | undefined {
+function useContainerItemSignals(containerContext: ContextContainerType | null) {
     const containerId = containerContext?.containerId ?? NO_CONTAINER_ID;
-    const [itemInfo] = useArr$([`containerItemInfo${containerId}`]);
+    const [itemKey, itemIndex, item] = useArr$([
+        `containerItemKey${containerId}`,
+        `containerItemIndex${containerId}`,
+        `containerItemData${containerId}`,
+    ]);
 
-    return containerContext ? itemInfo : undefined;
-}
-
-function useContainerItemKey(containerContext: ContextContainerType | null) {
-    const containerId = containerContext?.containerId ?? NO_CONTAINER_ID;
-    const [itemKey] = useArr$([`containerItemKey${containerId}`]);
-
-    return containerContext ? (itemKey as string | undefined) : undefined;
+    return {
+        hasItemInfo: !!containerContext && itemKey !== undefined && itemIndex !== undefined,
+        item,
+        itemIndex,
+        itemKey,
+    };
 }
 
 export function useAdaptiveRender(): AdaptiveRender {
@@ -136,40 +138,43 @@ export function useViewabilityAmount<ItemT = any>(callback: ViewabilityAmountCal
 
 export function useRecyclingEffect(effect: (info: LegendListRecyclingState<unknown>) => void | (() => void)) {
     const containerContext = useContextContainer();
-    const itemInfo = useContainerItemInfo(containerContext);
-    const prevInfo = useRef<ContainerItemInfo | undefined>(undefined);
+    const { hasItemInfo, item, itemIndex, itemKey } = useContainerItemSignals(containerContext);
+    const prevInfo = useRef<{ index: number; item: unknown } | undefined>(undefined);
 
     useEffect(() => {
-        if (!itemInfo) {
+        if (!hasItemInfo) {
             return;
         }
 
         let ret: void | (() => void);
         if (prevInfo.current) {
             ret = effect({
-                index: itemInfo.index,
-                item: itemInfo.value,
+                index: itemIndex,
+                item,
                 prevIndex: prevInfo.current.index,
-                prevItem: prevInfo.current.value,
+                prevItem: prevInfo.current.item,
             });
         }
 
-        prevInfo.current = itemInfo;
+        prevInfo.current = {
+            index: itemIndex,
+            item,
+        };
 
         return ret!;
-    }, [effect, itemInfo]);
+    }, [effect, hasItemInfo, itemIndex, item, itemKey]);
 }
 
 export function useRecyclingState<ItemT>(valueOrFun: ((info: LegendListRecyclingState<ItemT>) => ItemT) | ItemT) {
     const containerContext = useContextContainer();
-    const itemInfo = useContainerItemInfo(containerContext);
-    const computeValue = (info: ContainerItemInfo | undefined) => {
+    const { hasItemInfo, item, itemIndex, itemKey } = useContainerItemSignals(containerContext);
+    const computeValue = () => {
         if (isFunction(valueOrFun)) {
             const initializer = valueOrFun as (recyclingInfo: LegendListRecyclingState<ItemT>) => ItemT;
-            return info
+            return hasItemInfo
                 ? initializer({
-                      index: info.index,
-                      item: info.value,
+                      index: itemIndex,
+                      item,
                       prevIndex: undefined,
                       prevItem: undefined,
                   })
@@ -179,14 +184,14 @@ export function useRecyclingState<ItemT>(valueOrFun: ((info: LegendListRecycling
     };
 
     const [stateValue, setStateValue] = useState<ItemT>(() => {
-        return computeValue(itemInfo);
+        return computeValue();
     });
-    const prevItemKeyRef = useRef<string | null>(itemInfo?.itemKey ?? null);
+    const prevItemKeyRef = useRef<string | null>(hasItemInfo ? itemKey : null);
 
     // Reset state when the recycled item changes (synchronously to avoid extra renders)
-    if (itemInfo && prevItemKeyRef.current !== itemInfo.itemKey) {
-        prevItemKeyRef.current = itemInfo.itemKey;
-        setStateValue(computeValue(itemInfo));
+    if (hasItemInfo && prevItemKeyRef.current !== itemKey) {
+        prevItemKeyRef.current = itemKey;
+        setStateValue(computeValue());
     }
 
     const triggerLayout = containerContext?.triggerLayout;
@@ -212,7 +217,8 @@ export function useRecyclingState<ItemT>(valueOrFun: ((info: LegendListRecycling
 
 export function useIsLastItem(): boolean {
     const containerContext = useContextContainer();
-    const itemKey = useContainerItemKey(containerContext);
+    const containerId = containerContext?.containerId ?? NO_CONTAINER_ID;
+    const [itemKey] = useArr$([`containerItemKey${containerId}`]);
 
     const isLast = useSelector$("lastItemKeys", (lastItemKeys) => {
         // Fail gracefully if used outside context

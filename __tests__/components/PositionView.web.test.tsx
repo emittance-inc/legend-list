@@ -11,10 +11,21 @@ import TestRenderer, { act } from "../helpers/testRenderer";
 
 let currentCtx: StateContext | undefined;
 
-function StateSetup({ activeStickyIndex, children }: { activeStickyIndex?: number; children: React.ReactNode }) {
+function StateSetup({
+    activeStickyIndex,
+    children,
+    itemIndex,
+}: {
+    activeStickyIndex?: number;
+    children: React.ReactNode;
+    itemIndex?: number;
+}) {
     const ctx = useStateContext();
     ctx.values.set("containerPosition0", 32);
     ctx.values.set("activeStickyIndex", activeStickyIndex);
+    if (itemIndex !== undefined) {
+        ctx.values.set("containerItemIndex0", itemIndex);
+    }
     return children;
 }
 
@@ -210,7 +221,7 @@ describe("PositionView (web)", () => {
         act(() => {
             renderer = TestRenderer.create(
                 <StateProvider>
-                    <StateSetup activeStickyIndex={4}>
+                    <StateSetup activeStickyIndex={4} itemIndex={4}>
                         <PositionViewSticky
                             animatedScrollY={{}}
                             horizontal={false}
@@ -249,6 +260,43 @@ describe("PositionView (web)", () => {
         });
     });
 
+    it("uses the current container index signal for sticky activation", async () => {
+        const refView = React.createRef<HTMLDivElement>();
+        const { PositionViewSticky } = await import("../../src/components/PositionView?web-sticky-index-signal");
+        let renderer: TestRenderer.ReactTestRenderer | undefined;
+
+        act(() => {
+            renderer = TestRenderer.create(
+                <StateProvider>
+                    <StateSetup activeStickyIndex={2} itemIndex={2}>
+                        <PositionViewSticky
+                            horizontal={false}
+                            id={0}
+                            index={3}
+                            refView={refView}
+                            stickyHeaderConfig={{ offset: 10 }}
+                            style={{ width: 100 } as React.CSSProperties}
+                        >
+                            <span>sticky</span>
+                        </PositionViewSticky>
+                    </StateSetup>
+                </StateProvider>,
+            );
+        });
+
+        const div = renderer!.root.findByType("div");
+        expect(div.props["data-index"]).toBe(2);
+        expect(div.props.style).toMatchObject({
+            position: "sticky",
+            top: 10,
+            zIndex: 1002,
+        });
+
+        act(() => {
+            renderer?.unmount();
+        });
+    });
+
     it("renders a sticky header backdrop on web", async () => {
         const refView = React.createRef<HTMLDivElement>();
         const { PositionViewSticky } = await import("../../src/components/PositionView?web-sticky-backdrop-render");
@@ -258,7 +306,7 @@ describe("PositionView (web)", () => {
         act(() => {
             renderer = TestRenderer.create(
                 <StateProvider>
-                    <StateSetup activeStickyIndex={4}>
+                    <StateSetup activeStickyIndex={4} itemIndex={4}>
                         <PositionViewSticky
                             horizontal={false}
                             id={0}

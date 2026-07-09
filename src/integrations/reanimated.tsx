@@ -152,17 +152,20 @@ const ReanimatedPositionViewSticky = typedMemo(function ReanimatedPositionViewSt
     props: ReanimatedPositionViewStickyProps,
 ) {
     const ctx = useStateContext();
-    const { id, horizontal, style, refView, stickyScrollOffset, stickyHeaderConfig, index, children, ...rest } = props;
-    const [position = POSITION_OUT_OF_VIEW, headerSize = 0, stylePaddingTop = 0, itemKey, _totalSize = 0] = useArr$([
-        `containerPosition${id}`,
-        "headerSize",
-        "stylePaddingTop",
-        `containerItemKey${id}`,
-        "totalSize",
-    ]);
+    const { id, horizontal, style, refView, stickyScrollOffset, stickyHeaderConfig, index: _index, children, ...rest } =
+        props;
+    const [position = POSITION_OUT_OF_VIEW, headerSize = 0, stylePaddingTop = 0, itemKey, itemIndex, _totalSize = 0] =
+        useArr$([
+            `containerPosition${id}`,
+            "headerSize",
+            "stylePaddingTop",
+            `containerItemKey${id}`,
+            `containerItemIndex${id}`,
+            "totalSize",
+        ]);
     const pushLimit = React.useMemo(
-        () => getStickyPushLimit(ctx.state, index, itemKey),
-        [ctx.state, index, itemKey, _totalSize],
+        () => getStickyPushLimit(ctx.state, itemIndex, itemKey),
+        [ctx.state, itemIndex, itemKey, _totalSize],
     );
 
     const stickyOffset = stickyHeaderConfig?.offset ?? 0;
@@ -179,8 +182,8 @@ const ReanimatedPositionViewSticky = typedMemo(function ReanimatedPositionViewSt
     }, [horizontal, position, pushLimit, stickyStart]);
 
     const viewStyle = React.useMemo(
-        () => [style, { zIndex: index + 1000 }, stickyPositionStyle],
-        [index, stickyPositionStyle, style],
+        () => [style, { zIndex: itemIndex + 1000 }, stickyPositionStyle],
+        [itemIndex, stickyPositionStyle, style],
     );
 
     return (
@@ -193,7 +196,7 @@ const ReanimatedPositionViewSticky = typedMemo(function ReanimatedPositionViewSt
 
 const ReanimatedPositionView = typedMemo(function ReanimatedPositionViewComponent(props: ReanimatedPositionViewProps) {
     const ctx = useStateContext();
-    const { id, horizontal, style, refView, children, recycleItems, layoutTransition, ...rest } = props;
+    const { id, horizontal, style, refView, children, recycleItems, layoutTransition, index: _index, ...rest } = props;
     const [positionValue = POSITION_OUT_OF_VIEW] = useArr$([`containerPosition${id}`]);
     const prevItemKeyRef = React.useRef<string | undefined>(undefined);
     let shouldSkipTransitionForRecycleReuse = false;

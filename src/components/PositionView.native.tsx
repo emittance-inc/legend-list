@@ -64,7 +64,7 @@ const PositionViewSticky = typedMemo(function PositionViewSticky({
     style,
     refView,
     animatedScrollY,
-    index,
+    index: _index,
     stickyHeaderConfig,
     children,
     ...rest
@@ -86,6 +86,7 @@ const PositionViewSticky = typedMemo(function PositionViewSticky({
         headerSize = 0,
         stylePaddingTop = 0,
         itemKey,
+        itemIndex,
         _totalSize = 0,
     ] = useArr$([
         `containerPosition${id}`,
@@ -93,11 +94,12 @@ const PositionViewSticky = typedMemo(function PositionViewSticky({
         "headerSize",
         "stylePaddingTop",
         `containerItemKey${id}`,
+        `containerItemIndex${id}`,
         "totalSize",
     ]);
     const pushLimit = React.useMemo(
-        () => getStickyPushLimit(ctx.state, index, itemKey),
-        [ctx.state, index, itemKey, _totalSize],
+        () => getStickyPushLimit(ctx.state, itemIndex, itemKey),
+        [ctx.state, itemIndex, itemKey, _totalSize],
     );
 
     // Sticky headers follow scroll visually; keep this on transform.
@@ -139,7 +141,10 @@ const PositionViewSticky = typedMemo(function PositionViewSticky({
         stickyHeaderConfig?.offset,
     ]);
 
-    const viewStyle = React.useMemo(() => [style, { zIndex: index + 1000 }, { transform }], [style, transform]);
+    const viewStyle = React.useMemo(
+        () => [style, { zIndex: itemIndex + 1000 }, { transform }],
+        [style, itemIndex, transform],
+    );
 
     const renderStickyHeaderBackdrop = React.useMemo(() => {
         if (!stickyHeaderConfig?.backdropComponent) {

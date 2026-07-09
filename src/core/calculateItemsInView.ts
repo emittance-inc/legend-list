@@ -788,12 +788,8 @@ export function calculateItemsInView(
                     }
 
                     set$(ctx, `containerItemKey${containerIndex}`, id);
+                    set$(ctx, `containerItemIndex${containerIndex}`, i);
                     set$(ctx, `containerItemData${containerIndex}`, data[i]);
-                    set$(ctx, `containerItemInfo${containerIndex}`, {
-                        index: i,
-                        itemKey: id,
-                        value: data[i],
-                    });
 
                     // Store item type for type-safe container reuse
                     if (allocation.itemType !== undefined) {
@@ -886,8 +882,8 @@ export function calculateItemsInView(
                 }
 
                 set$(ctx, `containerItemKey${i}`, undefined);
+                set$(ctx, `containerItemIndex${i}`, undefined);
                 set$(ctx, `containerItemData${i}`, undefined);
-                set$(ctx, `containerItemInfo${i}`, undefined);
                 set$(ctx, `containerPosition${i}`, POSITION_OUT_OF_VIEW);
                 set$(ctx, `containerColumn${i}`, -1);
                 set$(ctx, `containerSpan${i}`, 1);

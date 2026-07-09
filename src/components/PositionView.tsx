@@ -75,7 +75,7 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
     horizontal,
     style,
     refView,
-    index,
+    index: _index,
     animatedScrollY: _animatedScrollY,
     stickyHeaderConfig,
     onLayout: _onLayout,
@@ -94,9 +94,10 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
     onLayout?: unknown;
     children: React.ReactNode;
 }) {
-    const [position = POSITION_OUT_OF_VIEW, activeStickyIndex] = useArr$([
+    const [position = POSITION_OUT_OF_VIEW, activeStickyIndex, itemIndex] = useArr$([
         `containerPosition${id}`,
         "activeStickyIndex",
+        `containerItemIndex${id}`,
     ]);
 
     const composed = React.useMemo(
@@ -111,9 +112,9 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
         delete styleBase.transform;
 
         const offset = stickyHeaderConfig?.offset ?? 0;
-        const isActive = activeStickyIndex === index;
+        const isActive = activeStickyIndex === itemIndex;
         styleBase.position = isActive ? "sticky" : "absolute";
-        styleBase.zIndex = index + 1000;
+        styleBase.zIndex = itemIndex + 1000;
 
         if (horizontal) {
             styleBase.left = isActive ? offset : position;
@@ -122,7 +123,7 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
         }
 
         return styleBase;
-    }, [composed, horizontal, position, index, activeStickyIndex, stickyHeaderConfig?.offset]);
+    }, [composed, horizontal, position, itemIndex, activeStickyIndex, stickyHeaderConfig?.offset]);
 
     const renderStickyHeaderBackdrop = React.useMemo(
         () =>
@@ -142,7 +143,7 @@ export const PositionViewSticky = typedMemo(function PositionViewSticky({
 
     return (
         <div
-            data-index={index}
+            data-index={itemIndex}
             ref={refView as unknown as React.RefObject<HTMLDivElement>}
             style={viewStyle as any}
             {...webProps}

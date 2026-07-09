@@ -54,12 +54,8 @@ function SignalBackedContainerProvider({ children, signals }: { children: ReactN
     );
 
     ctx.values.set(`containerItemKey${containerId}`, itemKey);
+    ctx.values.set(`containerItemIndex${containerId}`, index);
     ctx.values.set(`containerItemData${containerId}`, value);
-    ctx.values.set(`containerItemInfo${containerId}`, {
-        index,
-        itemKey,
-        value,
-    });
 
     return <ContextContainer.Provider value={providerValue}>{children}</ContextContainer.Provider>;
 }
@@ -499,12 +495,8 @@ describe("ContextContainer hooks", () => {
                 );
 
                 ctx.values.set(`containerItemKey${signals.containerId}`, signals.itemKey);
+                ctx.values.set(`containerItemIndex${signals.containerId}`, signals.index);
                 ctx.values.set(`containerItemData${signals.containerId}`, signals.value);
-                ctx.values.set(`containerItemInfo${signals.containerId}`, {
-                    index: signals.index,
-                    itemKey: signals.itemKey,
-                    value: signals.value,
-                });
 
                 return (
                     <ContextContainer.Provider value={providerValue}>
@@ -527,12 +519,8 @@ describe("ContextContainer hooks", () => {
 
             await act(async () => {
                 set$(capturedCtx!, `containerItemKey${signals.containerId}`, "item-1");
+                set$(capturedCtx!, `containerItemIndex${signals.containerId}`, 1);
                 set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
-                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
-                    index: 1,
-                    itemKey: "item-1",
-                    value: { id: 1, text: "Item 1" },
-                });
             });
             await flushAsync();
 
@@ -760,12 +748,8 @@ describe("ContextContainer hooks", () => {
                 );
 
                 ctx.values.set(`containerItemKey${signals.containerId}`, signals.itemKey);
+                ctx.values.set(`containerItemIndex${signals.containerId}`, signals.index);
                 ctx.values.set(`containerItemData${signals.containerId}`, signals.value);
-                ctx.values.set(`containerItemInfo${signals.containerId}`, {
-                    index: signals.index,
-                    itemKey: signals.itemKey,
-                    value: signals.value,
-                });
 
                 return (
                     <ContextContainer.Provider value={providerValue}>
@@ -793,12 +777,8 @@ describe("ContextContainer hooks", () => {
 
             act(() => {
                 set$(capturedCtx!, `containerItemKey${signals.containerId}`, "item-1");
+                set$(capturedCtx!, `containerItemIndex${signals.containerId}`, 1);
                 set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
-                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
-                    index: 1,
-                    itemKey: "item-1",
-                    value: { id: 1, text: "Item 1" },
-                });
             });
 
             expect(capturedState).toBe("computed-1-1");
@@ -840,12 +820,8 @@ describe("ContextContainer hooks", () => {
             expect(capturedState).toBe("updated");
 
             act(() => {
+                set$(capturedCtx!, `containerItemIndex${signals.containerId}`, 1);
                 set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
-                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
-                    index: 1,
-                    itemKey: signals.itemKey,
-                    value: { id: 1, text: "Item 1" },
-                });
             });
 
             expect(capturedState).toBe("updated");
@@ -928,12 +904,8 @@ describe("ContextContainer hooks", () => {
 
             act(() => {
                 set$(capturedCtx!, "containerItemKey0", "item-1");
+                set$(capturedCtx!, "containerItemIndex0", 1);
                 set$(capturedCtx!, "containerItemData0", { id: 1, text: "Item 1" });
-                set$(capturedCtx!, "containerItemInfo0", {
-                    index: 1,
-                    itemKey: "item-1",
-                    value: { id: 1, text: "Item 1" },
-                });
             });
 
             expect(renders).toBe(1);
@@ -1044,12 +1016,8 @@ describe("ContextContainer hooks", () => {
             expect(renders).toBe(1);
 
             act(() => {
+                set$(capturedCtx!, `containerItemIndex${signals.containerId}`, 1);
                 set$(capturedCtx!, `containerItemData${signals.containerId}`, { id: 1, text: "Item 1" });
-                set$(capturedCtx!, `containerItemInfo${signals.containerId}`, {
-                    index: 1,
-                    itemKey: signals.itemKey,
-                    value: { id: 1, text: "Item 1" },
-                });
             });
 
             expect(capturedIsLast).toBe(false);

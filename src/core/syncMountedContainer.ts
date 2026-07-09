@@ -56,15 +56,14 @@ export function syncMountedContainer(
         }
     }
 
-    const prevItemInfo = peek$(ctx, `containerItemInfo${containerIndex}`);
+    const prevIndex = peek$(ctx, `containerItemIndex${containerIndex}`);
+    if (prevIndex !== itemIndex) {
+        set$(ctx, `containerItemIndex${containerIndex}`, itemIndex);
+    }
+
     const prevData = peek$(ctx, `containerItemData${containerIndex}`);
-    let itemInfoValue = prevData;
-    let didChangeItemInfo =
-        prevItemInfo?.itemKey !== itemKey || prevItemInfo?.index !== itemIndex || prevItemInfo?.value !== prevData;
     const updateData = () => {
         set$(ctx, `containerItemData${containerIndex}`, item);
-        itemInfoValue = item;
-        didChangeItemInfo = true;
         didRefreshData = true;
     };
 
@@ -110,14 +109,6 @@ export function syncMountedContainer(
                 }
             }
         }
-    }
-
-    if (didChangeItemInfo) {
-        set$(ctx, `containerItemInfo${containerIndex}`, {
-            index: itemIndex,
-            itemKey,
-            value: itemInfoValue,
-        });
     }
 
     return { didChangePosition, didRefreshData };
