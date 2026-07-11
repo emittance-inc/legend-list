@@ -74,17 +74,29 @@ type OtherAnimatedLegendListProps<ItemT> = Pick<PropsBase<ItemT>, KeysToOmit>;
 type ReanimatedScrollBridgeProps = ReanimatedScrollViewProps & {
     forwardedRef?: React.Ref<AnimatedScrollView>;
     scrollOffset: SharedValue<number>;
+    trackScrollOffset: boolean;
     renderScrollComponent?: (props: ReanimatedScrollRenderProps) => React.ReactElement | null;
+};
+
+const ReanimatedScrollOffsetTracker = ({
+    animatedScrollRef,
+    scrollOffset,
+}: {
+    animatedScrollRef: ReturnType<typeof useAnimatedRef<AnimatedScrollView>>;
+    scrollOffset: SharedValue<number>;
+}) => {
+    useScrollViewOffset(animatedScrollRef, scrollOffset);
+    return null;
 };
 
 const ReanimatedScrollBridge = typedMemo(function ReanimatedScrollBridgeComponent({
     forwardedRef,
     scrollOffset,
+    trackScrollOffset,
     renderScrollComponent,
     ...props
 }: ReanimatedScrollBridgeProps) {
     const animatedScrollRef = useAnimatedRef<AnimatedScrollView>();
-    useScrollViewOffset(animatedScrollRef, scrollOffset);
 
     const combinedRef = useCombinedRef<AnimatedScrollView>(animatedScrollRef, forwardedRef);
 
@@ -99,7 +111,14 @@ const ReanimatedScrollBridge = typedMemo(function ReanimatedScrollBridgeComponen
     }));
     const ScrollComponent = renderScrollComponent ? CustomScrollComponent : Reanimated.ScrollView;
 
-    return <ScrollComponent {...props} ref={combinedRef} />;
+    return (
+        <>
+            {trackScrollOffset && (
+                <ReanimatedScrollOffsetTracker animatedScrollRef={animatedScrollRef} scrollOffset={scrollOffset} />
+            )}
+            <ScrollComponent {...props} ref={combinedRef} />
+        </>
+    );
 });
 
 interface ReanimatedPositionViewStickyProps {
@@ -338,6 +357,7 @@ const LegendListForwardedRef = typedMemo(
         );
         const internalScrollOffset = useSharedValue(0);
         const scrollOffset = sharedValues?.scrollOffset ?? internalScrollOffset;
+        const trackScrollOffset = sharedValues?.scrollOffset !== undefined || !!rest.stickyHeaderIndices?.length;
 
         const shouldUseReanimatedScrollView = true;
         const renderScrollComponentForBridge = React.useMemo<ReanimatedScrollBridgeProps["renderScrollComponent"]>(
@@ -359,10 +379,11 @@ const LegendListForwardedRef = typedMemo(
                         forwardedRef={forwardedRef}
                         renderScrollComponent={renderScrollComponentForBridge}
                         scrollOffset={scrollOffset}
+                        trackScrollOffset={trackScrollOffset}
                     />
                 );
             },
-            [renderScrollComponentForBridge, scrollOffset],
+            [renderScrollComponentForBridge, scrollOffset, trackScrollOffset],
         );
 
         const stickyPositionComponentInternal = React.useMemo(
