@@ -262,6 +262,143 @@ describe("findAvailableContainers", () => {
                 { containerIndex: 1, itemIndex: 21, itemType: "footer" },
             ]);
         });
+
+        it("uses an unused pooled slot before retyping an inactive container", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 3);
+            ctx.values.set("containerItemKey0", "item0");
+            ctx.values.set("containerItemKey1", "item20");
+
+            mockState.indexByKey.set("item0", 0);
+            mockState.indexByKey.set("item20", 20);
+            mockState.containerItemTypes.set(0, "header");
+            mockState.containerItemTypes.set(1, "footer");
+
+            const result = findAvailableContainers(ctx, [10], 8, 12, [], () => "row");
+
+            expect(result).toEqual([{ containerIndex: 2, itemIndex: 10, itemType: "row" }]);
+        });
+
+        it("retypes the farthest inactive container when the pooled budget is full", () => {
+            ctx.values.set("numContainers", 3);
+            ctx.values.set("numContainersPooled", 3);
+            ctx.values.set("containerItemKey0", "item0");
+            ctx.values.set("containerItemKey1", "item10");
+            ctx.values.set("containerItemKey2", "item20");
+
+            mockState.indexByKey.set("item0", 0);
+            mockState.indexByKey.set("item10", 10);
+            mockState.indexByKey.set("item20", 20);
+            mockState.containerItemTypes.set(0, "header");
+            mockState.containerItemTypes.set(1, "footer");
+            mockState.containerItemTypes.set(2, "footer");
+
+            const result = findAvailableContainers(ctx, [11], 8, 12, [], () => "row");
+
+            expect(result).toEqual([{ containerIndex: 0, itemIndex: 11, itemType: "row" }]);
+        });
+
+        it("retypes a pending-removal container before an assigned inactive container", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 2);
+            ctx.values.set("containerItemKey0", "item0");
+            ctx.values.set("containerItemKey1", "removed-item");
+
+            mockState.indexByKey.set("item0", 0);
+            mockState.indexByKey.set("removed-item", 10);
+            mockState.containerItemTypes.set(0, "header");
+            mockState.containerItemTypes.set(1, "footer");
+
+            const pendingRemoval = [1];
+            const result = findAvailableContainers(ctx, [11], 8, 12, pendingRemoval, () => "row");
+
+            expect(result).toEqual([{ containerIndex: 1, itemIndex: 11, itemType: "row" }]);
+            expect(pendingRemoval).toEqual([]);
+        });
+
+        it("does not retype active or protected containers when the pooled budget is full", () => {
+            ctx.values.set("numContainers", 3);
+            ctx.values.set("numContainersPooled", 3);
+            ctx.values.set("containerItemKey0", "protected-item");
+            ctx.values.set("containerItemKey1", "active-item");
+            ctx.values.set("containerItemKey2", "item20");
+
+            mockState.indexByKey.set("protected-item", 0);
+            mockState.indexByKey.set("active-item", 10);
+            mockState.indexByKey.set("item20", 20);
+            mockState.containerItemTypes.set(0, "header");
+            mockState.containerItemTypes.set(1, "footer");
+            mockState.containerItemTypes.set(2, "footer");
+
+            const result = findAvailableContainers(ctx, [11], 8, 12, [], () => "row", new Set(["protected-item"]));
+
+            expect(result).toEqual([{ containerIndex: 2, itemIndex: 11, itemType: "row" }]);
+        });
+
+        it("grows beyond the pooled budget when every existing container is active", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 2);
+            ctx.values.set("containerItemKey0", "item10");
+            ctx.values.set("containerItemKey1", "item11");
+
+            mockState.indexByKey.set("item10", 10);
+            mockState.indexByKey.set("item11", 11);
+            mockState.containerItemTypes.set(0, "header");
+            mockState.containerItemTypes.set(1, "footer");
+
+            const result = findAvailableContainers(ctx, [12], 8, 12, [], () => "row");
+
+            expect(result).toEqual([{ containerIndex: 2, itemIndex: 12, itemType: "row" }]);
+        });
+
+        it("keeps sequential long-tail item types within the pooled budget", () => {
+            ctx.values.set("numContainers", 3);
+            ctx.values.set("numContainersPooled", 3);
+
+            for (let containerIndex = 0; containerIndex < 3; containerIndex++) {
+                const key = `seed-${containerIndex}`;
+                ctx.values.set(`containerItemKey${containerIndex}`, key);
+                mockState.indexByKey.set(key, -10 + containerIndex);
+                mockState.containerItemTypes.set(containerIndex, `seed-type-${containerIndex}`);
+            }
+
+            for (let itemIndex = 0; itemIndex < 20; itemIndex++) {
+                const itemType = `type-${itemIndex}`;
+                const result = findAvailableContainers(ctx, [itemIndex], itemIndex, itemIndex, [], () => itemType);
+                const allocation = result[0];
+                const oldKey = ctx.values.get(`containerItemKey${allocation.containerIndex}`);
+                const nextKey = `item-${itemIndex}`;
+
+                expect(allocation.containerIndex).toBeLessThan(3);
+                mockState.indexByKey.delete(oldKey);
+                mockState.indexByKey.set(nextKey, itemIndex);
+                mockState.containerItemTypes.set(allocation.containerIndex, itemType);
+                ctx.values.set(`containerItemKey${allocation.containerIndex}`, nextKey);
+            }
+        });
+
+        it("does not retype a container needed by a later item in the same batch", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 2);
+            ctx.values.set("containerItemKey0", "footer-item");
+            ctx.values.set("containerItemKey1", "header-item");
+
+            mockState.indexByKey.set("footer-item", 0);
+            mockState.indexByKey.set("header-item", 20);
+            mockState.containerItemTypes.set(0, "footer");
+            mockState.containerItemTypes.set(1, "header");
+
+            const itemTypes = new Map([
+                [10, "row"],
+                [11, "footer"],
+            ]);
+            const result = findAvailableContainers(ctx, [10, 11], 8, 12, [], (index) => itemTypes.get(index));
+
+            expect(result).toEqual([
+                { containerIndex: 1, itemIndex: 10, itemType: "row" },
+                { containerIndex: 0, itemIndex: 11, itemType: "footer" },
+            ]);
+        });
     });
 
     describe("mixed scenarios", () => {

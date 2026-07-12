@@ -27,6 +27,7 @@ export function findAvailableContainers(
     }
 
     const numContainers = peek$(ctx, "numContainers");
+    const numContainersPooled = peek$(ctx, "numContainersPooled") ?? Number.POSITIVE_INFINITY;
     const state = ctx.state;
 
     const { stickyContainerPool, containerItemTypes } = state;
@@ -152,7 +153,71 @@ export function findAvailableContainers(
         return matchIndex === -1 ? undefined : containers.splice(matchIndex, 1)[0].index;
     };
 
-    for (const itemIndex of needNewContainers) {
+    const findRetypableContainer = (allocationIndex: number) => {
+        // Retyping is a rare fallback. Build reservation bookkeeping only when
+        // the pool is full and no compatible inactive container exists.
+        const remainingRequiredTypeCounts = new Map<string, number>();
+        for (let i = allocationIndex + 1; i < needNewContainers.length; i++) {
+            const itemType = getRequiredItemType?.(needNewContainers[i]);
+            if (itemType) {
+                remainingRequiredTypeCounts.set(itemType, (remainingRequiredTypeCounts.get(itemType) ?? 0) + 1);
+            }
+        }
+
+        const candidates: number[] = [];
+        const candidateSet = new Set<number>();
+
+        for (let containerIndex = 0; containerIndex < numContainers; containerIndex++) {
+            if (usedContainers.has(containerIndex) || stickyContainerPool.has(containerIndex)) {
+                continue;
+            }
+
+            const key = peek$(ctx, `containerItemKey${containerIndex}`);
+            const isPending = !!pendingRemovalSet?.has(containerIndex);
+            const isProtected = !!key && !!protectedKeys?.has(key) && state.indexByKey.has(key);
+            if ((key === undefined || isPending) && !isProtected) {
+                candidates.push(containerIndex);
+                candidateSet.add(containerIndex);
+            }
+        }
+
+        const containers = getAvailableContainers();
+        for (const container of containers) {
+            if (!usedContainers.has(container.index) && !candidateSet.has(container.index)) {
+                candidates.push(container.index);
+                candidateSet.add(container.index);
+            }
+        }
+
+        const candidateTypeCounts = new Map<string, number>();
+        for (const containerIndex of candidates) {
+            const itemType = containerItemTypes.get(containerIndex);
+            if (itemType) {
+                candidateTypeCounts.set(itemType, (candidateTypeCounts.get(itemType) ?? 0) + 1);
+            }
+        }
+
+        const selectedContainer = candidates.find((containerIndex) => {
+            const itemType = containerItemTypes.get(containerIndex);
+            return (
+                !itemType || (candidateTypeCounts.get(itemType) ?? 0) > (remainingRequiredTypeCounts.get(itemType) ?? 0)
+            );
+        });
+
+        if (selectedContainer !== undefined) {
+            // Keep the cached available list in sync so this container cannot
+            // be selected again during the current allocation batch.
+            const availableIndex = containers.findIndex((container) => container.index === selectedContainer);
+            if (availableIndex !== -1) {
+                containers.splice(availableIndex, 1);
+            }
+        }
+
+        return selectedContainer;
+    };
+
+    for (let allocationIndex = 0; allocationIndex < needNewContainers.length; allocationIndex++) {
+        const itemIndex = needNewContainers[allocationIndex];
         const itemType = getRequiredItemType?.(itemIndex);
         const isSticky = stickyHeaderIndicesSet.has(itemIndex);
         let containerIndex: number | undefined;
@@ -168,6 +233,15 @@ export function findAvailableContainers(
 
         if (containerIndex !== undefined) {
             pushAllocation(itemIndex, itemType, containerIndex);
+        } else if (!isSticky && nextNewContainerIndex >= numContainersPooled) {
+            // The spare pool is full. Retype an inactive container instead of
+            // retaining one container for every historical long-tail item type.
+            const retypableContainer = findRetypableContainer(allocationIndex);
+            if (retypableContainer !== undefined) {
+                pushAllocation(itemIndex, itemType, retypableContainer);
+            } else {
+                pushNewContainer(itemIndex, itemType, false);
+            }
         } else {
             pushNewContainer(itemIndex, itemType, isSticky);
         }
