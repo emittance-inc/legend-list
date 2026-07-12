@@ -240,7 +240,7 @@ describe("findAvailableContainers", () => {
             expect(result.map((allocation) => allocation.containerIndex)).toEqual([0, 1, 2]);
         });
 
-        it("creates a new container for an unmatched type before reusing a later compatible container", () => {
+        it("reserves a compatible container for a later request before retyping", () => {
             ctx.values.set("numContainers", 2);
             ctx.values.set("numContainersPooled", 5);
             ctx.values.set("containerItemKey0", "item0");
@@ -258,12 +258,12 @@ describe("findAvailableContainers", () => {
             const result = findAvailableContainers(ctx, [20, 21], 10, 15, [], (index) => itemTypes.get(index));
 
             expect(result).toEqual([
-                { containerIndex: 2, itemIndex: 20, itemType: "row" },
+                { containerIndex: 0, itemIndex: 20, itemType: "row" },
                 { containerIndex: 1, itemIndex: 21, itemType: "footer" },
             ]);
         });
 
-        it("uses an unused pooled slot before retyping an inactive container", () => {
+        it("retypes an inactive container before using spare capacity", () => {
             ctx.values.set("numContainers", 2);
             ctx.values.set("numContainersPooled", 3);
             ctx.values.set("containerItemKey0", "item0");
@@ -276,7 +276,7 @@ describe("findAvailableContainers", () => {
 
             const result = findAvailableContainers(ctx, [10], 8, 12, [], () => "row");
 
-            expect(result).toEqual([{ containerIndex: 2, itemIndex: 10, itemType: "row" }]);
+            expect(result).toEqual([{ containerIndex: 0, itemIndex: 10, itemType: "row" }]);
         });
 
         it("retypes the farthest inactive container when the pooled budget is full", () => {
@@ -397,6 +397,28 @@ describe("findAvailableContainers", () => {
             expect(result).toEqual([
                 { containerIndex: 1, itemIndex: 10, itemType: "row" },
                 { containerIndex: 0, itemIndex: 11, itemType: "footer" },
+            ]);
+        });
+
+        it("uses exact matches before cross-type recycling", () => {
+            ctx.values.set("numContainers", 2);
+            ctx.values.set("numContainersPooled", 5);
+            ctx.values.set("containerItemKey0", "header-item");
+            ctx.values.set("containerItemKey1", "footer-item");
+            mockState.indexByKey.set("header-item", 0);
+            mockState.indexByKey.set("footer-item", 20);
+            mockState.containerItemTypes.set(0, "header");
+            mockState.containerItemTypes.set(1, "footer");
+            const itemTypes = new Map([
+                [10, "row"],
+                [11, "footer"],
+            ]);
+
+            const result = findAvailableContainers(ctx, [10, 11], 8, 12, [], (index) => itemTypes.get(index));
+
+            expect(result).toEqual([
+                { containerIndex: 0, itemIndex: 10, itemType: "row" },
+                { containerIndex: 1, itemIndex: 11, itemType: "footer" },
             ]);
         });
     });
