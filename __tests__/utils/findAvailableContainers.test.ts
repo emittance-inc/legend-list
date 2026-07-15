@@ -240,29 +240,6 @@ describe("findAvailableContainers", () => {
             expect(result.map((allocation) => allocation.containerIndex)).toEqual([0, 1, 2]);
         });
 
-        it("reserves a compatible container for a later request before retyping", () => {
-            ctx.values.set("numContainers", 2);
-            ctx.values.set("numContainersPooled", 5);
-            ctx.values.set("containerItemKey0", "item0");
-            ctx.values.set("containerItemKey1", "item1");
-
-            mockState.indexByKey.set("item0", 0);
-            mockState.indexByKey.set("item1", 1);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
-
-            const itemTypes = new Map([
-                [20, "row"],
-                [21, "footer"],
-            ]);
-            const result = findAvailableContainers(ctx, [20, 21], 10, 15, [], (index) => itemTypes.get(index));
-
-            expect(result).toEqual([
-                { containerIndex: 0, itemIndex: 20, itemType: "row" },
-                { containerIndex: 1, itemIndex: 21, itemType: "footer" },
-            ]);
-        });
-
         it("retypes an inactive container before using spare capacity", () => {
             ctx.values.set("numContainers", 2);
             ctx.values.set("numContainersPooled", 3);
@@ -279,9 +256,8 @@ describe("findAvailableContainers", () => {
             expect(result).toEqual([{ containerIndex: 0, itemIndex: 10, itemType: "row" }]);
         });
 
-        it("retypes the farthest inactive container when the pooled budget is full", () => {
+        it("retypes the farthest inactive container", () => {
             ctx.values.set("numContainers", 3);
-            ctx.values.set("numContainersPooled", 3);
             ctx.values.set("containerItemKey0", "item0");
             ctx.values.set("containerItemKey1", "item10");
             ctx.values.set("containerItemKey2", "item20");
@@ -300,7 +276,6 @@ describe("findAvailableContainers", () => {
 
         it("retypes a pending-removal container before an assigned inactive container", () => {
             ctx.values.set("numContainers", 2);
-            ctx.values.set("numContainersPooled", 2);
             ctx.values.set("containerItemKey0", "item0");
             ctx.values.set("containerItemKey1", "removed-item");
 
@@ -316,9 +291,8 @@ describe("findAvailableContainers", () => {
             expect(pendingRemoval).toEqual([]);
         });
 
-        it("does not retype active or protected containers when the pooled budget is full", () => {
+        it("does not retype active or protected containers", () => {
             ctx.values.set("numContainers", 3);
-            ctx.values.set("numContainersPooled", 3);
             ctx.values.set("containerItemKey0", "protected-item");
             ctx.values.set("containerItemKey1", "active-item");
             ctx.values.set("containerItemKey2", "item20");
@@ -335,9 +309,8 @@ describe("findAvailableContainers", () => {
             expect(result).toEqual([{ containerIndex: 2, itemIndex: 11, itemType: "row" }]);
         });
 
-        it("grows beyond the pooled budget when every existing container is active", () => {
+        it("grows when every existing container is active", () => {
             ctx.values.set("numContainers", 2);
-            ctx.values.set("numContainersPooled", 2);
             ctx.values.set("containerItemKey0", "item10");
             ctx.values.set("containerItemKey1", "item11");
 
@@ -351,9 +324,8 @@ describe("findAvailableContainers", () => {
             expect(result).toEqual([{ containerIndex: 2, itemIndex: 12, itemType: "row" }]);
         });
 
-        it("keeps sequential long-tail item types within the pooled budget", () => {
+        it("reuses existing containers across sequential long-tail item types", () => {
             ctx.values.set("numContainers", 3);
-            ctx.values.set("numContainersPooled", 3);
 
             for (let containerIndex = 0; containerIndex < 3; containerIndex++) {
                 const key = `seed-${containerIndex}`;
@@ -379,7 +351,6 @@ describe("findAvailableContainers", () => {
 
         it("does not retype a container needed by a later item in the same batch", () => {
             ctx.values.set("numContainers", 2);
-            ctx.values.set("numContainersPooled", 2);
             ctx.values.set("containerItemKey0", "footer-item");
             ctx.values.set("containerItemKey1", "header-item");
 
@@ -397,28 +368,6 @@ describe("findAvailableContainers", () => {
             expect(result).toEqual([
                 { containerIndex: 1, itemIndex: 10, itemType: "row" },
                 { containerIndex: 0, itemIndex: 11, itemType: "footer" },
-            ]);
-        });
-
-        it("uses exact matches before cross-type recycling", () => {
-            ctx.values.set("numContainers", 2);
-            ctx.values.set("numContainersPooled", 5);
-            ctx.values.set("containerItemKey0", "header-item");
-            ctx.values.set("containerItemKey1", "footer-item");
-            mockState.indexByKey.set("header-item", 0);
-            mockState.indexByKey.set("footer-item", 20);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
-            const itemTypes = new Map([
-                [10, "row"],
-                [11, "footer"],
-            ]);
-
-            const result = findAvailableContainers(ctx, [10, 11], 8, 12, [], (index) => itemTypes.get(index));
-
-            expect(result).toEqual([
-                { containerIndex: 0, itemIndex: 10, itemType: "row" },
-                { containerIndex: 1, itemIndex: 11, itemType: "footer" },
             ]);
         });
     });

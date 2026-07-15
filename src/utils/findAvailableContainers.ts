@@ -38,7 +38,6 @@ export function findAvailableContainers(
     }
 
     const numContainers = peek$(ctx, "numContainers");
-    const numContainersPooled = peek$(ctx, "numContainersPooled") ?? Number.POSITIVE_INFINITY;
     const state = ctx.state;
     const { containerItemTypes, stickyContainerPool } = state;
     const shouldAvoidAssignedContainerReuse = state.props.recycleItems && !!state.props.positionComponentInternal;
@@ -86,19 +85,16 @@ export function findAvailableContainers(
     }
 
     normalCandidates.sort(comparatorByDistance);
-    const allocations: Array<ContainerAllocation & { order: number }> = [];
-    const unresolved = new Set(requests);
+    const allocations = new Array<ContainerAllocation>(numNeeded);
     let nextNewContainerIndex = numContainers;
     let pendingRemovalChanged = false;
 
     const assign = (request: RequestedContainer, containerIndex: number) => {
-        allocations.push({
+        allocations[request.order] = {
             containerIndex,
             itemIndex: request.itemIndex,
             itemType: request.itemType,
-            order: request.order,
-        });
-        unresolved.delete(request);
+        };
         if (pendingRemovalSet?.delete(containerIndex)) {
             pendingRemovalChanged = true;
         }
@@ -110,7 +106,7 @@ export function findAvailableContainers(
         matches: (containerType: string | undefined, requestType: string | undefined) => boolean,
     ) => {
         for (const request of pendingRequests) {
-            if (!unresolved.has(request)) {
+            if (allocations[request.order]) {
                 continue;
             }
 
@@ -133,11 +129,13 @@ export function findAvailableContainers(
         // Otherwise an early request could retype the exact container needed by a
         // later request. Sticky pools skip the cross-type pass so a mismatched sticky
         // request grows a new type-owned slot instead of retyping an existing one.
-        assignMatching(
-            pendingRequests,
-            candidates,
-            (containerType, requestType) => requestType !== undefined && containerType === requestType,
-        );
+        if (getRequiredItemType) {
+            assignMatching(
+                pendingRequests,
+                candidates,
+                (containerType, requestType) => requestType !== undefined && containerType === requestType,
+            );
+        }
         assignMatching(pendingRequests, candidates, (containerType) => containerType === undefined);
         if (allowCrossType) {
             assignMatching(pendingRequests, candidates, () => true);
@@ -152,7 +150,7 @@ export function findAvailableContainers(
     // active/protected demand or a sticky type mismatch. The development warning below
     // makes that exceptional cost visible.
     for (const request of requests) {
-        if (!unresolved.has(request)) {
+        if (allocations[request.order]) {
             continue;
         }
 
@@ -174,27 +172,26 @@ export function findAvailableContainers(
         }
     }
 
-    if (IS_DEV && nextNewContainerIndex > numContainersPooled) {
-        console.warn(
-            "[legend-list] No unused container available, so creating one on demand. This can be a minor performance issue and is likely caused by the estimatedItemSize being too large. Consider decreasing estimatedItemSize.",
-            {
-                debugInfo: {
-                    numContainers,
-                    numContainersPooled,
-                    numNeeded,
-                    stillNeeded: nextNewContainerIndex - numContainers,
+    if (IS_DEV) {
+        const numContainersPooled = peek$(ctx, "numContainersPooled") ?? Number.POSITIVE_INFINITY;
+        if (nextNewContainerIndex > numContainersPooled) {
+            console.warn(
+                "[legend-list] No unused container available, so creating one on demand. This can be a minor performance issue and is likely caused by the estimatedItemSize being too large. Consider decreasing estimatedItemSize.",
+                {
+                    debugInfo: {
+                        numContainers,
+                        numContainersPooled,
+                        numNeeded,
+                        stillNeeded: nextNewContainerIndex - numContainers,
+                    },
                 },
-            },
-        );
+            );
+        }
     }
 
-    // Pool and type passes intentionally resolve requests out of input order. Restore
-    // the public result to deterministic request order before returning it.
-    return allocations
-        .sort((a, b) => a.order - b.order)
-        .map(({ containerIndex, itemIndex, itemType }) => ({ containerIndex, itemIndex, itemType }));
+    return allocations;
 }
 
 function comparatorByDistance(a: AvailableContainer, b: AvailableContainer) {
-    return b.distance - a.distance || a.containerIndex - b.containerIndex;
+    return b.distance - a.distance;
 }

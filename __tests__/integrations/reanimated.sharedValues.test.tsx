@@ -220,7 +220,6 @@ describe("AnimatedLegendList sharedValues integration", () => {
             ref: null,
         });
         expect(renderedBridge.props.scrollOffset).toBe(sharedValues.scrollOffset);
-        expect(renderedBridge.props.trackScrollOffset).toBe(true);
 
         act(() => {
             TestRenderer.create(renderedBridge);
@@ -244,7 +243,7 @@ describe("AnimatedLegendList sharedValues integration", () => {
         });
 
         const renderedBridge = lastLegendListProps.renderScrollComponent({ ref: null });
-        expect(renderedBridge.props.trackScrollOffset).toBe(false);
+        expect(renderedBridge.props.scrollOffset).toBeUndefined();
 
         act(() => {
             TestRenderer.create(renderedBridge);
@@ -267,7 +266,7 @@ describe("AnimatedLegendList sharedValues integration", () => {
         });
 
         const renderedBridge = lastLegendListProps.renderScrollComponent({ ref: null });
-        expect(renderedBridge.props.trackScrollOffset).toBe(true);
+        expect(renderedBridge.props.scrollOffset).toBeDefined();
 
         act(() => {
             TestRenderer.create(renderedBridge);
