@@ -123,6 +123,67 @@ beforeEach(() => {
 });
 
 describe("LegendList props behavior", () => {
+    it("prepares the reached-edge gate when a native drag begins", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const { LegendList } = await import("../../src/components/LegendList?props-test-edge-drag-rearm");
+
+        const rendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={renderItem}
+            />,
+        );
+        const state = await getStateFromRender();
+        state.edgeReachedGate = "closed";
+
+        act(() => {
+            lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+        });
+
+        expect(state.edgeReachedGate).toBe("prepared");
+        rendered.unmount();
+    });
+
+    it("calls current native scroll lifecycle props from stable internal handlers", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const dragCalls: string[] = [];
+        const momentumCalls: string[] = [];
+        const { LegendList } = await import("../../src/components/LegendList?props-test-current-scroll-callbacks");
+        const renderList = (version: string) => (
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                keyExtractor={(item: { id: string }) => item.id}
+                onMomentumScrollEnd={() => momentumCalls.push(version)}
+                onScrollBeginDrag={() => dragCalls.push(version)}
+                recycleItems={false}
+                renderItem={renderItem}
+            />
+        );
+        const rendered = render(renderList("first"));
+
+        act(() => {
+            lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+            lastListProps.onMomentumScrollEnd({ nativeEvent: {} });
+        });
+
+        rendered.rerender(renderList("next"));
+
+        act(() => {
+            lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+            lastListProps.onMomentumScrollEnd({ nativeEvent: {} });
+        });
+
+        expect(dragCalls).toEqual(["first", "next"]);
+        expect(momentumCalls).toEqual(["first", "next"]);
+        rendered.unmount();
+    });
+
     it("clears tracked timeouts on unmount", async () => {
         const data = [{ id: "item-1", label: "Alpha" }];
         const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;

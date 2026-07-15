@@ -4,6 +4,7 @@ import { resolvePendingNativeMVCPAdjust } from "@/core/mvcp";
 import { flushSync } from "@/platform/flushSync";
 import type { StateContext } from "@/state/state";
 import { checkThresholds } from "@/utils/checkThresholds";
+import { beginReachedEdgeUserScroll } from "@/utils/edgeReachedGate";
 import type { DrawDistanceMode } from "@/utils/getEffectiveDrawDistance";
 import { scheduleFullDrawDistancePrewarm } from "@/utils/getEffectiveDrawDistance";
 import { getScrollVelocity } from "@/utils/getScrollVelocity";
@@ -13,7 +14,7 @@ export function updateScroll(
     ctx: StateContext,
     newScroll: number,
     forceUpdate?: boolean,
-    options?: { markHasScrolled?: boolean },
+    options?: { fromNativeScrollEvent?: boolean; markHasScrolled?: boolean },
 ) {
     const state = ctx.state;
     const { ignoreScrollFromMVCP, lastScrollAdjustForHistory, scrollAdjustHandler, scrollHistory, scrollingTo } = state;
@@ -68,6 +69,13 @@ export function updateScroll(
     state.scrollTime = currentTime;
 
     const scrollDelta = Math.abs(newScroll - prevScroll);
+    const isUserScrollEvent =
+        !!options?.fromNativeScrollEvent &&
+        scrollDelta > 0.1 &&
+        !adjustChanged &&
+        scrollingTo === undefined &&
+        !state.pendingNativeMVCPAdjust;
+    const allowedEdge = isUserScrollEvent ? beginReachedEdgeUserScroll(ctx, newScroll - prevScroll) : undefined;
     const didResolvePendingNativeMVCPAdjust = resolvePendingNativeMVCPAdjust(ctx, newScroll);
     const scrollLength = state.scrollLength;
     const isLargeUserScrollJump =
@@ -81,6 +89,7 @@ export function updateScroll(
     const shouldUpdate =
         useAggressiveItemRecalculation ||
         didResolvePendingNativeMVCPAdjust ||
+        allowedEdge !== undefined ||
         forceUpdate ||
         lastCalculated === undefined ||
         Math.abs(state.scroll - lastCalculated) > 2;
@@ -104,7 +113,7 @@ export function updateScroll(
                 calculateItemsParams.drawDistanceMode = "visible-first";
             }
             state.triggerCalculateItemsInView?.(calculateItemsParams);
-            checkThresholds(ctx);
+            checkThresholds(ctx, allowedEdge);
         };
 
         if (isLargeUserScrollJump) {

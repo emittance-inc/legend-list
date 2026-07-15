@@ -69,6 +69,7 @@ export interface ListComponentScrollViewProps {
             layoutMeasurement: { width: number; height: number };
         };
     }) => void;
+    onInternalScrollEnd?: () => void;
     onMomentumScrollEnd?: (event: {
         nativeEvent: {
             contentOffset: { x: number; y: number };
@@ -91,6 +92,7 @@ interface ExtraPropsFromRN {
 }
 
 const SCROLLBAR_HIDDEN_STYLE_ID = "legend-list-scrollbar-axis-hidden-style";
+const SCROLL_END_FALLBACK_MS = 200;
 const SCROLLBAR_HIDDEN_STYLE = `.${LEGEND_LIST_SCROLLBAR_Y_HIDDEN_CLASS}::-webkit-scrollbar:vertical{width:0;display:none;}.${LEGEND_LIST_SCROLLBAR_X_HIDDEN_CLASS}::-webkit-scrollbar:horizontal{height:0;display:none;}`;
 
 function ensureScrollbarHiddenStyle() {
@@ -148,6 +150,7 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
         contentOffset,
         maintainVisibleContentPosition,
         onScroll,
+        onInternalScrollEnd,
         onMomentumScrollEnd: _onMomentumScrollEnd,
         showsHorizontalScrollIndicator = true,
         showsVerticalScrollIndicator = true,
@@ -292,6 +295,17 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
     }, [getCurrentScrollOffset, horizontal, isWindowScroll, onScroll]);
 
     const scrollEventCoalescer = useRafCoalescer(emitScroll);
+    const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    const emitScrollEnd = useCallback(() => {
+        const timeout = scrollEndFallbackRef.current;
+        if (timeout !== undefined) {
+            clearTimeout(timeout);
+            scrollEndFallbackRef.current = undefined;
+        }
+        scrollEventCoalescer.flush();
+        onInternalScrollEnd?.();
+    }, [onInternalScrollEnd, scrollEventCoalescer]);
 
     const handleScroll = useCallback(
         (_event: Event) => {
@@ -310,19 +324,38 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
             } else {
                 scrollEventCoalescer.schedule();
             }
+
+            if (onInternalScrollEnd) {
+                const timeout = scrollEndFallbackRef.current;
+                if (timeout !== undefined) {
+                    clearTimeout(timeout);
+                }
+                scrollEndFallbackRef.current = setTimeout(emitScrollEnd, SCROLL_END_FALLBACK_MS);
+            }
         },
-        [ctx.state, onScroll, scrollEventCoalescer],
+        [ctx.state, emitScrollEnd, onInternalScrollEnd, onScroll, scrollEventCoalescer],
     );
 
     useLayoutEffect(() => {
         const target = getScrollTarget();
         if (!target) return;
         target.addEventListener("scroll", handleScroll, { passive: true });
+        if ("onscrollend" in target) {
+            target.addEventListener("scrollend", emitScrollEnd);
+        }
         return () => {
             target.removeEventListener("scroll", handleScroll);
+            if ("onscrollend" in target) {
+                target.removeEventListener("scrollend", emitScrollEnd);
+            }
+            const timeout = scrollEndFallbackRef.current;
+            if (timeout !== undefined) {
+                clearTimeout(timeout);
+                scrollEndFallbackRef.current = undefined;
+            }
             scrollEventCoalescer.cancel();
         };
-    }, [getScrollTarget, handleScroll, scrollEventCoalescer]);
+    }, [emitScrollEnd, getScrollTarget, handleScroll, scrollEventCoalescer]);
 
     // Set initial scroll offset
     useEffect(() => {

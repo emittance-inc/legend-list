@@ -37,6 +37,7 @@ const ContainersInner = typedMemo(function ContainersInner({ horizontal, numColu
     const style: React.CSSProperties = horizontal
         ? {
               direction: isHorizontalRTLList ? "ltr" : undefined,
+              flexShrink: 0,
               minHeight: otherAxisSize,
               opacity: readyToRender ? 1 : 0,
               position: "relative",
