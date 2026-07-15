@@ -127,6 +127,7 @@ describe("scrollTo non-animated precompute integration", () => {
         });
 
         expect(endReachedCalls).toEqual([{ distanceFromEnd: 0 }]);
+        expect(ctx.state.edgeReachedGate).toBe("closed");
 
         ctx.state.triggerCalculateItemsInView?.({ doMVCP: true });
 

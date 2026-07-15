@@ -156,6 +156,7 @@ export interface InternalState {
     didMeasureHeader?: boolean;
     didContainersLayout?: boolean;
     enableScrollForNextCalculateItemsInView: boolean;
+    edgeReachedGate?: "closed" | "prepared";
     endBuffered: number;
     endNoBuffer: number;
     endReachedSnapshot: ThresholdSnapshot | undefined;
@@ -244,7 +245,6 @@ export interface InternalState {
     startBuffered: number;
     startBufferedId?: string;
     startNoBuffer: number;
-    startReachedSnapshotDataChangeEpoch: number | undefined;
     startReachedSnapshot: ThresholdSnapshot | undefined;
     stickyContainerPool: Set<number>;
     stickyContainers: Map<number, number>;
@@ -295,7 +295,9 @@ export interface InternalState {
         adaptiveRender: LegendListPropsInternal["experimental_adaptiveRender"];
         onItemSizeChanged: LegendListPropsInternal["onItemSizeChanged"];
         onLoad: LegendListPropsInternal["onLoad"];
+        onMomentumScrollEnd: LegendListPropsInternal["onMomentumScrollEnd"];
         onScroll: LegendListPropsInternal["onScroll"];
+        onScrollBeginDrag: LegendListPropsInternal["onScrollBeginDrag"];
         onStartReached: LegendListPropsInternal["onStartReached"];
         onStartReachedThreshold: number | null | undefined;
         onStickyHeaderChange: LegendListPropsInternal["onStickyHeaderChange"];

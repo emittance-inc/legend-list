@@ -52,6 +52,7 @@ function ListComponentHarness({
     ListFooterComponent,
     maintainScrollAtEnd,
     onContext,
+    onInternalScrollBeginDrag,
     onLayoutFooter,
     onRenderScrollComponent,
 }: {
@@ -62,6 +63,7 @@ function ListComponentHarness({
     ListFooterComponent?: React.ReactNode;
     maintainScrollAtEnd?: boolean | MaintainScrollAtEndOptions;
     onContext?: (ctx: StateContext) => void;
+    onInternalScrollBeginDrag?: (event: unknown) => void;
     onLayoutFooter?: (rect: { height: number; width: number; x: number; y: number }) => void;
     onRenderScrollComponent?: () => void;
 }) {
@@ -83,6 +85,7 @@ function ListComponentHarness({
             initialContentOffset={undefined}
             ListFooterComponent={ListFooterComponent}
             ListHeaderComponent={<Header events={events} />}
+            onInternalScrollBeginDrag={onInternalScrollBeginDrag}
             onLayout={() => {}}
             onLayoutFooter={onLayoutFooter}
             onScroll={() => {}}
@@ -108,6 +111,48 @@ function ListComponentHarness({
 }
 
 describe("ListComponent renderScrollComponent", () => {
+    it("forwards the internal drag boundary to native scroll components", async () => {
+        const { Platform } = await import("../../src/platform/Platform");
+        const { ListComponent } = await import("../../src/components/ListComponent?native-edge-drag-boundary");
+        const events: string[] = [];
+        let receivedScrollProps: Record<string, unknown> | undefined;
+        let renderer!: TestRenderer.ReactTestRenderer;
+        const originalPlatform = Platform.OS;
+
+        try {
+            Platform.OS = "ios";
+            act(() => {
+                renderer = TestRenderer.create(
+                    <StateProvider>
+                        <ListComponentHarness
+                            events={events}
+                            ListComponent={ListComponent}
+                            label="native"
+                            onInternalScrollBeginDrag={() => events.push("drag")}
+                            onRenderScrollComponent={() => {}}
+                        />
+                    </StateProvider>,
+                );
+            });
+
+            const renderedView = renderer.root.findAllByType(View)[0];
+            receivedScrollProps = renderedView?.props;
+            act(() => {
+                (receivedScrollProps?.onScrollBeginDrag as ((event: unknown) => void) | undefined)?.({
+                    nativeEvent: {},
+                });
+            });
+
+            expect(typeof receivedScrollProps?.onScrollBeginDrag).toBe("function");
+            expect(events).toContain("drag");
+        } finally {
+            Platform.OS = originalPlatform;
+            act(() => {
+                renderer?.unmount();
+            });
+        }
+    });
+
     it("keeps the scroll subtree mounted when the render callback identity changes", async () => {
         const { ListComponent } = await import("../../src/components/ListComponent?render-scroll-component");
         const events: string[] = [];
