@@ -78,6 +78,9 @@ type ReanimatedScrollBridgeProps = ReanimatedScrollViewProps & {
     renderScrollComponent?: (props: ReanimatedScrollRenderProps) => React.ReactElement | null;
 };
 
+// Keeping the hook in an optional child makes tracking conditional without calling a
+// hook conditionally in ReanimatedScrollBridge. This avoids installing raw scroll-offset
+// tracking when neither a consumer-provided offset nor sticky positioning needs it.
 const ReanimatedScrollOffsetTracker = ({
     animatedScrollRef,
     scrollOffset,

@@ -19,6 +19,10 @@ interface RequestedContainer {
     order: number;
 }
 
+// Allocate the whole request batch together rather than greedily assigning each item.
+// This lets every request claim an exact-type container before earlier requests can
+// consume those containers through untyped or cross-type reuse. Normal and sticky
+// pools stay separate, and only requests that cannot reuse a candidate grow the pool.
 export function findAvailableContainers(
     ctx: StateContext,
     needNewContainers: number[],
@@ -51,6 +55,12 @@ export function findAvailableContainers(
     const normalCandidates: AvailableContainer[] = [];
     const stickyCandidates: AvailableContainer[] = [];
 
+    // Unassigned and pending-removal containers are immediately reusable, so they
+    // sort ahead with an infinite distance. Assigned normal containers are eligible
+    // only outside the buffered range and are ranked farthest-first to avoid stealing
+    // a container that may soon re-enter the viewport. Assigned reuse is disabled while
+    // recycled layout animations may still need the outgoing view. Sticky containers
+    // never leave their dedicated pool, and active or protected containers are excluded.
     for (let containerIndex = 0; containerIndex < numContainers; containerIndex++) {
         const key = peek$(ctx, `containerItemKey${containerIndex}`);
         const isPendingRemoval = !!pendingRemovalSet?.has(containerIndex);
@@ -119,8 +129,10 @@ export function findAvailableContainers(
         candidates: AvailableContainer[],
         allowCrossType: boolean,
     ) => {
-        // Preserve matching containers for every request in the batch before
-        // consuming untyped or differently typed containers.
+        // Run each matching class across the whole batch before moving to the next.
+        // Otherwise an early request could retype the exact container needed by a
+        // later request. Sticky pools skip the cross-type pass so a mismatched sticky
+        // request grows a new type-owned slot instead of retyping an existing one.
         assignMatching(
             pendingRequests,
             candidates,
@@ -135,6 +147,10 @@ export function findAvailableContainers(
     assignFromPool(normalRequests, normalCandidates, true);
     assignFromPool(stickyRequests, stickyCandidates, false);
 
+    // Reusable capacity is exhausted at this point. Growing beyond the preallocated
+    // budget is valid when no eligible candidate remains, such as during concurrent
+    // active/protected demand or a sticky type mismatch. The development warning below
+    // makes that exceptional cost visible.
     for (const request of requests) {
         if (!unresolved.has(request)) {
             continue;
@@ -148,6 +164,8 @@ export function findAvailableContainers(
     }
 
     if (pendingRemovalChanged) {
+        // The caller owns this queue. Reusing a pending-removal container cancels only
+        // that removal while preserving the order of every untouched entry.
         pendingRemoval.length = 0;
         if (pendingRemovalSet) {
             for (const value of pendingRemovalSet) {
@@ -170,6 +188,8 @@ export function findAvailableContainers(
         );
     }
 
+    // Pool and type passes intentionally resolve requests out of input order. Restore
+    // the public result to deterministic request order before returning it.
     return allocations
         .sort((a, b) => a.order - b.order)
         .map(({ containerIndex, itemIndex, itemType }) => ({ containerIndex, itemIndex, itemType }));
