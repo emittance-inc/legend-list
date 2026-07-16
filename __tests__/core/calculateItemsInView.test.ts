@@ -209,6 +209,10 @@ describe("calculateItemsInView", () => {
                 expect(mockState.startNoBuffer).toBe(10);
                 expect(mockState.endNoBuffer).toBe(12);
                 expect(mockState.userScrollAnchorReset?.keys).toEqual(new Set(["item_10", "item_11", "item_12"]));
+                expect(mockCtx.values.get("containerLayoutEpoch")).toBe(1);
+
+                calculateItemsInView(mockCtx);
+                expect(mockCtx.values.get("containerLayoutEpoch")).toBe(1);
             } finally {
                 Platform.OS = prevPlatform;
             }

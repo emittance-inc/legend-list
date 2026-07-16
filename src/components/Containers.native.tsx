@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Animated, type ViewStyle } from "react-native";
 
+import { ContainerLayoutCoordinator } from "@/components/ContainerLayoutCoordinator";
 import { ContainerSlot } from "@/components/ContainerSlot";
 import { useValue$ } from "@/hooks/useValue$";
 import { useArr$, useStateContext } from "@/state/state";
@@ -60,7 +61,11 @@ const ContainersLayer = typedMemo(function ContainersLayer({ children, horizonta
         }
     }
 
-    return <Animated.View style={style}>{children}</Animated.View>;
+    return (
+        <Animated.View style={style}>
+            <ContainerLayoutCoordinator>{children}</ContainerLayoutCoordinator>
+        </Animated.View>
+    );
 });
 
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional

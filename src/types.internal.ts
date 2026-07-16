@@ -128,6 +128,17 @@ type LegendListPropsInternal = LegendListPropsBase<any, Record<string, any>, str
     renderItem: (props: LegendListRenderItemProps<any, string | undefined>) => React.ReactNode;
 };
 
+export interface ContainerItemMetadata {
+    dataChangeEpoch: number;
+    didResolveFixedItemSize?: boolean;
+    fixedItemSize?: number;
+    getFixedItemSize: LegendListPropsInternal["getFixedItemSize"];
+    getItemType: LegendListPropsInternal["getItemType"];
+    itemData: any;
+    itemIndex: number;
+    itemType?: string;
+}
+
 export interface PendingDataComparison {
     byIndex: Array<0 | 1 | 2 | undefined>;
     nextData: readonly unknown[];
@@ -145,7 +156,8 @@ export interface InternalState {
     columns: Array<number | undefined>;
     columnSpans: Array<number | undefined>;
     containerItemKeys: Map<string, number>;
-    containerItemTypes: Map<number, string>;
+    containerItemGenerations: Array<number | undefined>;
+    containerItemMetadata: Map<number, ContainerItemMetadata>;
     dataChangeEpoch: number;
     dataChangeNeedsScrollUpdate: boolean;
     deferredPublicOnScrollEvent?: NativeSyntheticEvent<NativeScrollEvent>;
@@ -210,7 +222,6 @@ export interface InternalState {
     };
     pendingMaintainScrollAtEnd?: boolean;
     pendingDataComparison?: PendingDataComparison;
-    pendingLayoutEffectMeasurements?: Set<string>;
     pendingScrollToEnd?: {
         options?: ScrollToEndOptions;
         resolve: () => void;
