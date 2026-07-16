@@ -8,10 +8,21 @@ export interface ContainerAllocation {
 }
 
 interface AvailableContainer {
+    containerIndex: number;
     distance: number;
-    index: number;
 }
 
+interface RequestedContainer {
+    isSticky: boolean;
+    itemIndex: number;
+    itemType?: string;
+    order: number;
+}
+
+// Allocate the whole request batch together rather than greedily assigning each item.
+// This lets every request claim an exact-type container before earlier requests can
+// consume those containers through untyped or cross-type reuse. Normal and sticky
+// pools stay separate, and only requests that cannot reuse a candidate grow the pool.
 export function findAvailableContainers(
     ctx: StateContext,
     needNewContainers: number[],
@@ -28,152 +39,131 @@ export function findAvailableContainers(
 
     const numContainers = peek$(ctx, "numContainers");
     const state = ctx.state;
-
-    const { stickyContainerPool, containerItemTypes } = state;
+    const { containerItemMetadata, stickyContainerPool } = state;
     const shouldAvoidAssignedContainerReuse = state.props.recycleItems && !!state.props.positionComponentInternal;
-
-    const allocations: ContainerAllocation[] = [];
-
     const pendingRemovalSet = pendingRemoval.length > 0 ? new Set(pendingRemoval) : undefined;
-    let pendingRemovalChanged = false;
+
+    const requests: RequestedContainer[] = needNewContainers.map((itemIndex, order) => ({
+        isSticky: state.props.stickyHeaderIndicesSet.has(itemIndex),
+        itemIndex,
+        itemType: getRequiredItemType?.(itemIndex),
+        order,
+    }));
+    const normalRequests = requests.filter((request) => !request.isSticky);
+    const stickyRequests = requests.filter((request) => request.isSticky);
+    const normalCandidates: AvailableContainer[] = [];
+    const stickyCandidates: AvailableContainer[] = [];
+
+    // Unassigned and pending-removal containers are immediately reusable, so they
+    // sort ahead with an infinite distance. Assigned normal containers are eligible
+    // only outside the buffered range and are ranked farthest-first to avoid stealing
+    // a container that may soon re-enter the viewport. Assigned reuse is disabled while
+    // recycled layout animations may still need the outgoing view. Sticky containers
+    // never leave their dedicated pool, and active or protected containers are excluded.
+    for (let containerIndex = 0; containerIndex < numContainers; containerIndex++) {
+        const key = peek$(ctx, `containerItemKey${containerIndex}`);
+        const isPendingRemoval = !!pendingRemovalSet?.has(containerIndex);
+        const isProtected = !!key && !!protectedKeys?.has(key) && state.indexByKey.has(key);
+
+        if (isProtected) {
+            continue;
+        }
+
+        if (stickyContainerPool.has(containerIndex)) {
+            if (key === undefined || isPendingRemoval) {
+                stickyCandidates.push({ containerIndex, distance: Number.POSITIVE_INFINITY });
+            }
+        } else if (key === undefined || isPendingRemoval) {
+            normalCandidates.push({ containerIndex, distance: Number.POSITIVE_INFINITY });
+        } else if (!shouldAvoidAssignedContainerReuse) {
+            const index = state.indexByKey.get(key);
+            if (index !== undefined && (index < startBuffered || index > endBuffered)) {
+                const distance = index < startBuffered ? startBuffered - index : index - endBuffered;
+                normalCandidates.push({ containerIndex, distance });
+            }
+        }
+    }
+
+    normalCandidates.sort(comparatorByDistance);
+    const allocations = new Array<ContainerAllocation>(numNeeded);
     let nextNewContainerIndex = numContainers;
-    const usedContainers = new Set<number>();
-    let availableContainers: AvailableContainer[] | undefined;
+    let pendingRemovalChanged = false;
 
-    const stickyHeaderIndicesSet = state.props.stickyHeaderIndicesSet;
-
-    // Helper function to check if a container can be reused for a given item type
-    const canReuseContainer = (containerIndex: number, requiredType: string | undefined): boolean => {
-        if (!requiredType) return true; // No type requirement, can reuse any container
-
-        const existingType = containerItemTypes.get(containerIndex);
-        if (!existingType) return true; // Untyped container can be reused for any type
-
-        return existingType === requiredType;
-    };
-
-    const pushAllocation = (itemIndex: number, itemType: string | undefined, containerIndex: number) => {
-        allocations.push({
+    const assign = (request: RequestedContainer, containerIndex: number) => {
+        allocations[request.order] = {
             containerIndex,
-            itemIndex,
-            itemType,
-        });
-        usedContainers.add(containerIndex);
+            itemIndex: request.itemIndex,
+            itemType: request.itemType,
+        };
         if (pendingRemovalSet?.delete(containerIndex)) {
             pendingRemovalChanged = true;
         }
     };
 
-    const pushNewContainer = (itemIndex: number, itemType: string | undefined, isSticky: boolean) => {
-        const newContainerIndex = nextNewContainerIndex++;
-        pushAllocation(itemIndex, itemType, newContainerIndex);
-        if (isSticky) {
-            stickyContainerPool.add(newContainerIndex);
-        }
-        return newContainerIndex;
-    };
+    const assignMatching = (
+        pendingRequests: RequestedContainer[],
+        candidates: AvailableContainer[],
+        matches: (containerType: string | undefined, requestType: string | undefined) => boolean,
+    ) => {
+        for (const request of pendingRequests) {
+            if (allocations[request.order]) {
+                continue;
+            }
 
-    const canUseContainer = (containerIndex: number, itemType: string | undefined) => {
-        if (usedContainers.has(containerIndex) || stickyContainerPool.has(containerIndex)) {
-            return false;
-        }
-        const key = peek$(ctx, `containerItemKey${containerIndex}`);
-        const isPending = !!pendingRemovalSet?.has(containerIndex);
-        return (key === undefined || isPending) && canReuseContainer(containerIndex, itemType);
-    };
-
-    const findStickyContainer = (itemType: string | undefined) => {
-        let foundContainer: number | undefined;
-        for (const containerIndex of stickyContainerPool) {
-            if (!usedContainers.has(containerIndex)) {
-                const key = peek$(ctx, `containerItemKey${containerIndex}`);
-                const isPendingRemoval = !!pendingRemovalSet?.has(containerIndex);
-                if ((key === undefined || isPendingRemoval) && canReuseContainer(containerIndex, itemType)) {
-                    foundContainer = containerIndex;
-                    break;
-                }
+            const candidateIndex = candidates.findIndex((candidate) =>
+                matches(containerItemMetadata.get(candidate.containerIndex)?.itemType, request.itemType),
+            );
+            if (candidateIndex !== -1) {
+                const [candidate] = candidates.splice(candidateIndex, 1);
+                assign(request, candidate.containerIndex);
             }
         }
-        return foundContainer;
     };
 
-    const findUnassignedOrPendingContainer = (itemType: string | undefined) => {
-        let foundContainer: number | undefined;
-
-        for (let containerIndex = 0; containerIndex < numContainers && foundContainer === undefined; containerIndex++) {
-            if (canUseContainer(containerIndex, itemType)) {
-                foundContainer = containerIndex;
-            }
+    const assignFromPool = (
+        pendingRequests: RequestedContainer[],
+        candidates: AvailableContainer[],
+        allowCrossType: boolean,
+    ) => {
+        // Run each matching class across the whole batch before moving to the next.
+        // Otherwise an early request could retype the exact container needed by a
+        // later request. Sticky pools skip the cross-type pass so a mismatched sticky
+        // request grows a new type-owned slot instead of retyping an existing one.
+        if (getRequiredItemType) {
+            assignMatching(
+                pendingRequests,
+                candidates,
+                (containerType, requestType) => requestType !== undefined && containerType === requestType,
+            );
         }
-
-        return foundContainer;
+        assignMatching(pendingRequests, candidates, (containerType) => containerType === undefined);
+        if (allowCrossType) {
+            assignMatching(pendingRequests, candidates, () => true);
+        }
     };
 
-    const getAvailableContainers = () => {
-        if (!availableContainers) {
-            availableContainers = [];
+    assignFromPool(normalRequests, normalCandidates, true);
+    assignFromPool(stickyRequests, stickyCandidates, false);
 
-            if (!shouldAvoidAssignedContainerReuse) {
-                for (let containerIndex = 0; containerIndex < numContainers; containerIndex++) {
-                    if (usedContainers.has(containerIndex) || stickyContainerPool.has(containerIndex)) {
-                        continue;
-                    }
-
-                    const key = peek$(ctx, `containerItemKey${containerIndex}`);
-                    if (key === undefined) continue;
-                    if (protectedKeys?.has(key) && state.indexByKey.has(key)) continue;
-
-                    const index = state.indexByKey.get(key)!;
-                    const isOutOfView = index < startBuffered || index > endBuffered;
-                    if (isOutOfView) {
-                        const distance = index < startBuffered ? startBuffered - index : index - endBuffered;
-                        availableContainers.push({ distance, index: containerIndex });
-                    }
-                }
-
-                availableContainers.sort(comparatorByDistance);
-            }
+    // Reusable capacity is exhausted at this point. Growing beyond the preallocated
+    // budget is valid when no eligible candidate remains, such as during concurrent
+    // active/protected demand or a sticky type mismatch. The development warning below
+    // makes that exceptional cost visible.
+    for (const request of requests) {
+        if (allocations[request.order]) {
+            continue;
         }
 
-        return availableContainers;
-    };
-
-    const findAvailableContainer = (itemType: string | undefined) => {
-        const containers = getAvailableContainers();
-        let matchIndex = -1;
-
-        for (let i = 0; i < containers.length && matchIndex === -1; i++) {
-            const containerIndex = containers[i].index;
-            if (!usedContainers.has(containerIndex) && canReuseContainer(containerIndex, itemType)) {
-                matchIndex = i;
-            }
+        const containerIndex = nextNewContainerIndex++;
+        if (request.isSticky) {
+            stickyContainerPool.add(containerIndex);
         }
-
-        return matchIndex === -1 ? undefined : containers.splice(matchIndex, 1)[0].index;
-    };
-
-    for (const itemIndex of needNewContainers) {
-        const itemType = getRequiredItemType?.(itemIndex);
-        const isSticky = stickyHeaderIndicesSet.has(itemIndex);
-        let containerIndex: number | undefined;
-
-        if (isSticky) {
-            containerIndex = findStickyContainer(itemType);
-        } else {
-            containerIndex = findUnassignedOrPendingContainer(itemType);
-            if (containerIndex === undefined) {
-                containerIndex = findAvailableContainer(itemType);
-            }
-        }
-
-        if (containerIndex !== undefined) {
-            pushAllocation(itemIndex, itemType, containerIndex);
-        } else {
-            pushNewContainer(itemIndex, itemType, isSticky);
-        }
+        assign(request, containerIndex);
     }
 
     if (pendingRemovalChanged) {
+        // The caller owns this queue. Reusing a pending-removal container cancels only
+        // that removal while preserving the order of every untouched entry.
         pendingRemoval.length = 0;
         if (pendingRemovalSet) {
             for (const value of pendingRemovalSet) {
@@ -182,18 +172,21 @@ export function findAvailableContainers(
         }
     }
 
-    if (IS_DEV && nextNewContainerIndex > peek$(ctx, "numContainersPooled")) {
-        console.warn(
-            "[legend-list] No unused container available, so creating one on demand. This can be a minor performance issue and is likely caused by the estimatedItemSize being too large. Consider decreasing estimatedItemSize.",
-            {
-                debugInfo: {
-                    numContainers,
-                    numContainersPooled: peek$(ctx, "numContainersPooled"),
-                    numNeeded,
-                    stillNeeded: nextNewContainerIndex - numContainers,
+    if (IS_DEV) {
+        const numContainersPooled = peek$(ctx, "numContainersPooled") ?? Number.POSITIVE_INFINITY;
+        if (nextNewContainerIndex > numContainersPooled) {
+            console.warn(
+                "[legend-list] No unused container available, so creating one on demand. This can be a minor performance issue and is likely caused by the estimatedItemSize being too large. Consider decreasing estimatedItemSize.",
+                {
+                    debugInfo: {
+                        numContainers,
+                        numContainersPooled,
+                        numNeeded,
+                        stillNeeded: nextNewContainerIndex - numContainers,
+                    },
                 },
-            },
-        );
+            );
+        }
     }
 
     return allocations;

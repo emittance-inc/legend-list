@@ -28,8 +28,9 @@ export function createMockState(
         columnSpans: [],
         // Core calculateItemsInView properties
         columns: [],
+        containerItemGenerations: [],
         containerItemKeys: new Map(),
-        containerItemTypes: new Map(),
+        containerItemMetadata: new Map(),
         contentInsetOverride: undefined,
         dataChangeEpoch: 0,
         dataChangeNeedsScrollUpdate: false,
@@ -95,7 +96,6 @@ export function createMockState(
         startBufferedId: undefined,
         startNoBuffer: 0,
         startReachedSnapshot: undefined,
-        startReachedSnapshotDataChangeEpoch: undefined,
         // Sticky container setup (empty by default)
         stickyContainerPool: new Set(),
         stickyContainers: new Map(),

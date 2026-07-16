@@ -55,6 +55,7 @@ type ScrollViewPropsWeb = Omit<
     | "onLayout"
     | "onMomentumScrollBegin"
     | "onMomentumScrollEnd"
+    | "onScrollBeginDrag"
     | "pagingEnabled"
     | "snapToInterval"
 > &

@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useRef } from "react";
 
+import { ContainerLayoutCoordinator } from "@/components/ContainerLayoutCoordinator";
 import { ContainerSlot } from "@/components/ContainerSlot";
 import { useDOMOrder } from "@/hooks/useDOMOrder";
 import { useArr$, useStateContext } from "@/state/state";
@@ -38,6 +39,7 @@ const ContainersInner = typedMemo(function ContainersInner({ horizontal, numColu
     const style: React.CSSProperties = horizontal
         ? {
               direction: isHorizontalRTLList ? "ltr" : undefined,
+              flexShrink: 0,
               minHeight: otherAxisSize,
               opacity: readyToRender ? 1 : 0,
               position: "relative",
@@ -71,7 +73,7 @@ const ContainersInner = typedMemo(function ContainersInner({ horizontal, numColu
 
     return (
         <div ref={ref} style={style}>
-            {children}
+            <ContainerLayoutCoordinator>{children}</ContainerLayoutCoordinator>
         </div>
     );
 });
