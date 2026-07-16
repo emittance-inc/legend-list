@@ -12,6 +12,7 @@ import { type GetRenderedItem, typedMemo } from "@/types.internal";
 import { isHorizontalRTL } from "@/utils/rtl";
 
 interface ContainersProps<ItemT> {
+    activeItemKeys: ReadonlySet<string>;
     freshDataTransitionEpoch: number;
     horizontal: boolean;
     recycleItems: boolean;
@@ -88,6 +89,7 @@ const ContainersInner = typedMemo(function ContainersInner({
 
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
 export const Containers = typedMemo(function Containers<ItemT>({
+    activeItemKeys,
     freshDataTransitionEpoch,
     horizontal,
     recycleItems,
@@ -101,6 +103,7 @@ export const Containers = typedMemo(function Containers<ItemT>({
     for (let i = 0; i < numContainersPooled; i++) {
         containers.push(
             <ContainerSlot
+                activeItemKeys={activeItemKeys}
                 getRenderedItem={getRenderedItem}
                 horizontal={horizontal}
                 ItemSeparatorComponent={ItemSeparatorComponent}

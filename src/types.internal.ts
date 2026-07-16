@@ -153,6 +153,7 @@ export type AverageSizes = Record<string, { num: number; avg: number }>;
 export type AnchoredEndSpaceOwner = "list" | "scroll";
 
 export interface InternalState {
+    activeItemKeys: ReadonlySet<string>;
     adjustingFromInitialMount?: number;
     anchoredEndSpaceReadyAnchorIndex?: number;
     anchoredEndSpaceReadyAnchorKey?: string;

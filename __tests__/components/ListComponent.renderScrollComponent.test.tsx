@@ -96,6 +96,7 @@ function ListComponentHarness({
 
     return (
         <ListComponent
+            activeItemKeys={new Set()}
             canRender={false}
             contentContainerStyle={contentContainerStyle}
             drawDistance={0}

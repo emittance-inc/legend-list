@@ -102,6 +102,7 @@ describe("Containers native", () => {
             <StateProvider>
                 <Setup columnWrapperStyle={{ gap: 20 }} numColumns={1}>
                     <Containers
+                        activeItemKeys={new Set()}
                         freshDataTransitionEpoch={0}
                         getRenderedItem={() => null}
                         horizontal={false}
@@ -125,6 +126,7 @@ describe("Containers native", () => {
             <StateProvider>
                 <Setup columnWrapperStyle={{ gap: 16 }} numColumns={2}>
                     <Containers
+                        activeItemKeys={new Set()}
                         freshDataTransitionEpoch={0}
                         getRenderedItem={() => null}
                         horizontal={false}
@@ -148,6 +150,7 @@ describe("Containers native", () => {
             <StateProvider>
                 <Setup columnWrapperStyle={{}} numColumns={1}>
                     <Containers
+                        activeItemKeys={new Set()}
                         freshDataTransitionEpoch={0}
                         getRenderedItem={() => null}
                         horizontal
@@ -171,6 +174,7 @@ describe("Containers native", () => {
             <StateProvider>
                 <Setup columnWrapperStyle={{}} numColumns={1} otherAxisSize={180}>
                     <Containers
+                        activeItemKeys={new Set()}
                         freshDataTransitionEpoch={0}
                         getRenderedItem={() => null}
                         horizontal
