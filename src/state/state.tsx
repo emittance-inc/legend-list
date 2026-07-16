@@ -24,6 +24,7 @@ export type ListenerType =
     | "activeStickyIndex"
     | "alignItemsAtEndPadding"
     | "anchoredEndSpaceSize"
+    | "containerLayoutEpoch"
     | "debugComputedScroll"
     | "debugRawScroll"
     | "extraData"
@@ -84,6 +85,7 @@ export type ListenerTypeValueMap = {
     activeStickyIndex: number;
     alignItemsAtEndPadding: number;
     anchoredEndSpaceSize: number;
+    containerLayoutEpoch: number;
     animatedScrollY: any;
     debugComputedScroll: number;
     debugRawScroll: number;
@@ -149,6 +151,7 @@ export interface StateContext {
             viewableItems: ViewToken[];
         }
     >;
+    pendingContainerIds: Set<number> | null | undefined;
     positionListeners: Map<string, Set<(value: any) => void>>;
     state: InternalState;
     scrollAxisGap: number;
@@ -174,11 +177,13 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         mapViewabilityCallbacks: new Map<string, ViewabilityCallback>(),
         mapViewabilityConfigStates: new Map(),
         mapViewabilityValues: new Map<string, ViewToken>(),
+        pendingContainerIds: undefined,
         positionListeners: new Map(),
         scrollAxisGap: 0,
         state: undefined as any,
         values: new Map<ListenerType, any>([
             ["alignItemsAtEndPadding", 0],
+            ["containerLayoutEpoch", 0],
             ["stylePaddingTop", 0],
             ["headerSize", 0],
             ["numContainers", 0],

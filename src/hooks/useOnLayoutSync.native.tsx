@@ -8,10 +8,12 @@ import { IsNewArchitecture } from "@/constants-platform";
 export function useOnLayoutSync<T extends View = View>(
     {
         ref,
+        measureInLayoutEffect = true,
         onLayoutProp,
         onLayoutChange,
     }: {
         ref: React.RefObject<T | null>;
+        measureInLayoutEffect?: boolean;
         onLayoutProp?: (event: LayoutChangeEvent) => void;
         onLayoutChange: (rectangle: LayoutRectangle, fromLayoutEffect: boolean) => void;
     },
@@ -28,13 +30,13 @@ export function useOnLayoutSync<T extends View = View>(
 
     if (IsNewArchitecture) {
         useLayoutEffect(() => {
-            if (ref.current) {
+            if (measureInLayoutEffect && ref.current) {
                 // measure is synchronous in new architecture
                 ref.current.measure((x, y, width, height) => {
                     onLayoutChange({ height, width, x, y }, true);
                 });
             }
-        }, deps);
+        }, [measureInLayoutEffect, ...deps]);
     }
 
     return { onLayout };

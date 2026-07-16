@@ -1,4 +1,7 @@
+import { IsNewArchitecture } from "@/constants-platform";
+import { invalidateContainerFixedItemSizes } from "@/core/containerItemMetadata";
 import { retargetActiveInitialScrollAtEnd } from "@/core/initialScrollLifecycle";
+import { scheduleContainerLayout } from "@/core/scheduleContainerLayout";
 import { scrollTo } from "@/core/scrollTo";
 import { scrollToEnd } from "@/core/scrollToEnd";
 import { scrollToIndex } from "@/core/scrollToIndex";
@@ -40,8 +43,12 @@ function getAverageItemSizes(state: StateContext["state"]): Record<string, Legen
 }
 
 function triggerMountedContainerLayouts(ctx: StateContext) {
-    for (const triggerLayout of ctx.containerLayoutTriggers.values()) {
-        triggerLayout();
+    if (IsNewArchitecture) {
+        scheduleContainerLayout(ctx);
+    } else {
+        for (const triggerLayout of ctx.containerLayoutTriggers.values()) {
+            triggerLayout();
+        }
     }
 }
 
@@ -180,6 +187,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
 
         state.sizes.clear();
         state.sizesKnown.clear();
+        invalidateContainerFixedItemSizes(state);
         for (const key in state.averageSizes) {
             delete state.averageSizes[key];
         }

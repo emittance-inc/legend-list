@@ -1,12 +1,12 @@
-import { IsNewArchitecture } from "@/constants-platform";
 import { calculateItemsInView } from "@/core/calculateItemsInView";
+import { resolveContainerItemMetadata } from "@/core/containerItemMetadata";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import { setSize } from "@/core/setSize";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { Platform } from "@/platform/Platform";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
-import { getItemSize } from "@/utils/getItemSize";
+import { getItemSize, type ResolvedItemSize } from "@/utils/getItemSize";
 import { roundSize } from "@/utils/helpers";
 import { isNativeLayoutNoise } from "@/utils/layoutMeasurement";
 
@@ -53,18 +53,30 @@ function updateOtherAxisSizeIfNeeded(
     }
 }
 
-interface ResolvedMeasurementItem {
-    didResolveFixedItemSize?: boolean;
-    fixedItemSize?: number;
-    itemData?: any;
-    itemType?: string;
-}
-
 export interface ItemSizeMeasurement {
     containerId?: number;
-    fromLayoutEffect?: boolean;
     itemKey: string;
     size: { width: number; height: number };
+}
+
+let activeItemSizeBatches: Map<StateContext, ItemSizeMeasurement[]> | undefined;
+
+// Collects synchronous measurements and flushes one position update per list at the outer boundary.
+export function batchItemSizeUpdates(runUpdates: () => void) {
+    const isOuterBatch = activeItemSizeBatches === undefined;
+    activeItemSizeBatches ??= new Map();
+
+    try {
+        runUpdates();
+    } finally {
+        if (isOuterBatch) {
+            const batches = activeItemSizeBatches;
+            activeItemSizeBatches = undefined;
+            for (const [ctx, measurements] of batches) {
+                updateItemSizesBatch(ctx, measurements);
+            }
+        }
+    }
 }
 
 interface ItemSizeUpdateResult {
@@ -81,49 +93,6 @@ function mergeItemSizeUpdateResult(result: ItemSizeUpdateResult, next: ItemSizeU
     result.shouldMaintainScrollAtEnd ||= next.shouldMaintainScrollAtEnd;
 }
 
-const batchedItemSizeRecalculates = new WeakMap<StateContext, ItemSizeUpdateResult>();
-
-// Measurements update size maps immediately, but position/range recalculation is held
-// until the expected Fabric layout-effect measurements complete. This keeps the
-// recalculation in the same layout-effect turn when possible, while avoiding one
-// recalculation per recycled container. The frame fallback prevents a missed layout
-// callback from leaving positions stale indefinitely.
-function flushBatchedItemSizeRecalculate(
-    ctx: StateContext,
-    didFallback = false,
-    expectedResult?: ItemSizeUpdateResult,
-) {
-    const result = batchedItemSizeRecalculates.get(ctx);
-    if (!result || (expectedResult && result !== expectedResult)) {
-        return;
-    }
-
-    batchedItemSizeRecalculates.delete(ctx);
-    if (didFallback) {
-        ctx.state.pendingLayoutEffectMeasurements = undefined;
-    }
-    flushItemSizeUpdates(ctx, result);
-}
-
-function queueItemSizeRecalculate(ctx: StateContext, result: ItemSizeUpdateResult) {
-    const batch = batchedItemSizeRecalculates.get(ctx);
-    if (batch) {
-        mergeItemSizeUpdateResult(batch, result);
-    } else {
-        const nextBatch = { ...result };
-        batchedItemSizeRecalculates.set(ctx, nextBatch);
-        if (ctx.state.pendingLayoutEffectMeasurements?.size) {
-            requestAnimationFrame(() => {
-                flushBatchedItemSizeRecalculate(ctx, true, nextBatch);
-            });
-        }
-    }
-
-    if (!ctx.state.pendingLayoutEffectMeasurements?.size) {
-        flushBatchedItemSizeRecalculate(ctx);
-    }
-}
-
 function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
     const state = ctx.state;
     if (result.needsRecalculate) {
@@ -137,70 +106,51 @@ function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
     }
 }
 
-/**
- * Updates the current measured item. On Fabric layout-effect measurements, also synchronously
- * measures any pending replacement containers so the whole pass resolves with one recalc.
- */
 export function updateItemSizes(ctx: StateContext, measurement: ItemSizeMeasurement) {
-    const state = ctx.state;
-    let didDrainLayoutEffectMeasurements = false;
-    if (IsNewArchitecture && measurement.fromLayoutEffect) {
-        const pendingLayoutEffectMeasurements = state.pendingLayoutEffectMeasurements;
-        if (
-            pendingLayoutEffectMeasurements?.delete(measurement.itemKey) &&
-            pendingLayoutEffectMeasurements.size === 0
-        ) {
-            state.pendingLayoutEffectMeasurements = undefined;
-            didDrainLayoutEffectMeasurements = true;
+    if (activeItemSizeBatches) {
+        const measurements = activeItemSizeBatches.get(ctx);
+        if (measurements) {
+            measurements.push(measurement);
+        } else {
+            activeItemSizeBatches.set(ctx, [measurement]);
         }
-    }
-    const pendingKeys = state.userScrollAnchorReset?.keys;
-    const shouldBatchPendingMeasurements = IsNewArchitecture && measurement.fromLayoutEffect && !!pendingKeys?.size;
-    const shouldQueueRecalculate = IsNewArchitecture && !!measurement.fromLayoutEffect;
-    let result: ItemSizeUpdateResult;
-
-    if (!shouldBatchPendingMeasurements) {
-        result = applyItemSize(ctx, measurement.itemKey, measurement.size);
     } else {
-        result = {};
-
-        const updateContainerItemSize = (
-            itemKey: string,
-            containerId: number | undefined,
-            size: { width: number; height: number },
-        ) => {
-            if (containerId !== undefined && peek$(ctx, `containerItemKey${containerId}`) === itemKey) {
-                mergeItemSizeUpdateResult(result, applyItemSize(ctx, itemKey, size));
-            }
-        };
-
-        updateContainerItemSize(measurement.itemKey, measurement.containerId, measurement.size);
-
-        const keys = Array.from(pendingKeys);
-        for (const itemKey of keys) {
-            const containerId = state.containerItemKeys.get(itemKey);
-            if (containerId !== undefined) {
-                ctx.viewRefs.get(containerId)?.current?.measure?.((_x, _y, width, height) => {
-                    if (pendingKeys.has(itemKey)) {
-                        updateContainerItemSize(itemKey, containerId, { height, width });
-                    }
-                });
-            }
-        }
-    }
-
-    if (shouldQueueRecalculate && result.needsRecalculate) {
-        queueItemSizeRecalculate(ctx, result);
-    } else {
-        flushItemSizeUpdates(ctx, result);
-    }
-
-    if (didDrainLayoutEffectMeasurements) {
-        flushBatchedItemSizeRecalculate(ctx);
+        updateItemSizesBatch(ctx, [measurement]);
     }
 }
 
-function applyItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: number; height: number }) {
+// Applies every measurement from one committed layout pass before recalculating positions once.
+export function updateItemSizesBatch(ctx: StateContext, measurements: ItemSizeMeasurement[]) {
+    const state = ctx.state;
+    const result: ItemSizeUpdateResult = {};
+
+    for (const measurement of measurements) {
+        // Measurements can arrive after recycling. Only explicit imperative sizes,
+        // which have no container id, bypass the current-assignment check.
+        const ownsMeasuredItem =
+            measurement.containerId === undefined ||
+            peek$(ctx, `containerItemKey${measurement.containerId}`) === measurement.itemKey;
+        if (ownsMeasuredItem) {
+            const index = state.indexByKey.get(measurement.itemKey);
+            const itemData = index === undefined ? undefined : state.props.data?.[index];
+            const metadata =
+                measurement.containerId !== undefined && index !== undefined && itemData !== undefined
+                    ? resolveContainerItemMetadata(state, measurement.containerId, index, itemData)
+                    : undefined;
+            const nextResult = applyItemSize(ctx, measurement.itemKey, measurement.size, metadata);
+            mergeItemSizeUpdateResult(result, nextResult);
+        }
+    }
+
+    flushItemSizeUpdates(ctx, result);
+}
+
+function applyItemSize(
+    ctx: StateContext,
+    itemKey: string,
+    sizeObj: { width: number; height: number },
+    resolvedMeasurementItem?: ResolvedItemSize,
+) {
     const state = ctx.state;
     const userScrollAnchorReset = state.userScrollAnchorReset;
     const didMeasureUserScrollAnchorResetItem = !!userScrollAnchorReset?.keys.delete(itemKey);
@@ -212,8 +162,6 @@ function applyItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: num
     if (!data) return { didMeasureUserScrollAnchorResetItem };
 
     const index = state.indexByKey.get(itemKey)!;
-    let resolvedMeasurementItem: ResolvedMeasurementItem | undefined;
-
     if (getFixedItemSize) {
         if (index === undefined) {
             return { didMeasureUserScrollAnchorResetItem };
@@ -222,14 +170,15 @@ function applyItemSize(ctx: StateContext, itemKey: string, sizeObj: { width: num
         if (itemData === undefined) {
             return { didMeasureUserScrollAnchorResetItem };
         }
-        const type = getItemType ? (getItemType(itemData, index) ?? "") : "";
-        const size = getFixedItemSize(itemData, index, type);
-        resolvedMeasurementItem = {
-            didResolveFixedItemSize: true,
-            fixedItemSize: size,
-            itemData,
-            itemType: type,
-        };
+        if (!resolvedMeasurementItem?.didResolveFixedItemSize) {
+            const type = resolvedMeasurementItem?.itemType ?? (getItemType ? (getItemType(itemData, index) ?? "") : "");
+            resolvedMeasurementItem = {
+                didResolveFixedItemSize: true,
+                fixedItemSize: getFixedItemSize(itemData, index, type),
+                itemType: type,
+            };
+        }
+        const size = resolvedMeasurementItem.fixedItemSize;
         if (size !== undefined && size === sizesKnown.get(itemKey)) {
             updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
             return { didMeasureUserScrollAnchorResetItem };
@@ -303,7 +252,7 @@ export function updateOneItemSize(
     ctx: StateContext,
     itemKey: string,
     sizeObj: { width: number; height: number },
-    resolvedMeasurementItem?: ResolvedMeasurementItem,
+    resolvedMeasurementItem?: ResolvedItemSize,
 ) {
     const state = ctx.state;
     const {
@@ -316,7 +265,7 @@ export function updateOneItemSize(
 
     const index = indexByKey.get(itemKey)!;
 
-    const itemData = resolvedMeasurementItem?.itemData ?? data[index];
+    const itemData = data[index];
     let itemType = resolvedMeasurementItem?.itemType;
     let fixedItemSize = resolvedMeasurementItem?.fixedItemSize;
     if (getFixedItemSize && !resolvedMeasurementItem?.didResolveFixedItemSize) {

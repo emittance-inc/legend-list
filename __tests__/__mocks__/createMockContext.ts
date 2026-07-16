@@ -109,6 +109,7 @@ export function createMockContext(
         mapViewabilityCallbacks: new Map() as StateContext["mapViewabilityCallbacks"],
         mapViewabilityConfigStates: new Map() as StateContext["mapViewabilityConfigStates"],
         mapViewabilityValues: new Map() as StateContext["mapViewabilityValues"],
+        pendingContainerIds: undefined,
         positionListeners: new Map(),
         scrollAxisGap: 0,
         get state() {

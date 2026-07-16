@@ -13,11 +13,21 @@ describe("findAvailableContainers", () => {
     const neededItems = (count: number) => Array.from({ length: count }, (_, index) => index);
     const containerIndices = (allocations: ReturnType<typeof findAvailableContainers>) =>
         allocations.map((allocation) => allocation.containerIndex);
+    const setContainerItemType = (containerIndex: number, itemType: string) => {
+        mockState.containerItemMetadata.set(containerIndex, {
+            dataChangeEpoch: 0,
+            getFixedItemSize: undefined,
+            getItemType: undefined,
+            itemData: undefined,
+            itemIndex: -1,
+            itemType,
+        });
+    };
 
     beforeEach(() => {
         ctx = createMockContext();
         mockState = {
-            containerItemTypes: new Map(),
+            containerItemMetadata: new Map(),
             indexByKey: new Map(),
             props: {
                 stickyHeaderIndicesSet: new Set(),
@@ -192,8 +202,8 @@ describe("findAvailableContainers", () => {
 
             mockState.props.stickyHeaderIndicesSet = new Set([5]);
             mockState.stickyContainerPool = new Set([0]);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "row");
+            setContainerItemType(0, "header");
+            setContainerItemType(1, "row");
 
             const itemTypes = new Map([
                 [2, "row"],
@@ -215,8 +225,8 @@ describe("findAvailableContainers", () => {
 
             mockState.props.stickyHeaderIndicesSet = new Set([5]);
             mockState.stickyContainerPool = new Set([0]);
-            mockState.containerItemTypes.set(0, "section");
-            mockState.containerItemTypes.set(1, "row");
+            setContainerItemType(0, "section");
+            setContainerItemType(1, "row");
 
             const result = findAvailableContainers(ctx, [5], 0, 10, [], () => "header");
 
@@ -248,8 +258,8 @@ describe("findAvailableContainers", () => {
 
             mockState.indexByKey.set("item0", 0);
             mockState.indexByKey.set("item20", 20);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
+            setContainerItemType(0, "header");
+            setContainerItemType(1, "footer");
 
             const result = findAvailableContainers(ctx, [10], 8, 12, [], () => "row");
 
@@ -265,9 +275,9 @@ describe("findAvailableContainers", () => {
             mockState.indexByKey.set("item0", 0);
             mockState.indexByKey.set("item10", 10);
             mockState.indexByKey.set("item20", 20);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
-            mockState.containerItemTypes.set(2, "footer");
+            setContainerItemType(0, "header");
+            setContainerItemType(1, "footer");
+            setContainerItemType(2, "footer");
 
             const result = findAvailableContainers(ctx, [11], 8, 12, [], () => "row");
 
@@ -281,8 +291,8 @@ describe("findAvailableContainers", () => {
 
             mockState.indexByKey.set("item0", 0);
             mockState.indexByKey.set("removed-item", 10);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
+            setContainerItemType(0, "header");
+            setContainerItemType(1, "footer");
 
             const pendingRemoval = [1];
             const result = findAvailableContainers(ctx, [11], 8, 12, pendingRemoval, () => "row");
@@ -300,9 +310,9 @@ describe("findAvailableContainers", () => {
             mockState.indexByKey.set("protected-item", 0);
             mockState.indexByKey.set("active-item", 10);
             mockState.indexByKey.set("item20", 20);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
-            mockState.containerItemTypes.set(2, "footer");
+            setContainerItemType(0, "header");
+            setContainerItemType(1, "footer");
+            setContainerItemType(2, "footer");
 
             const result = findAvailableContainers(ctx, [11], 8, 12, [], () => "row", new Set(["protected-item"]));
 
@@ -316,8 +326,8 @@ describe("findAvailableContainers", () => {
 
             mockState.indexByKey.set("item10", 10);
             mockState.indexByKey.set("item11", 11);
-            mockState.containerItemTypes.set(0, "header");
-            mockState.containerItemTypes.set(1, "footer");
+            setContainerItemType(0, "header");
+            setContainerItemType(1, "footer");
 
             const result = findAvailableContainers(ctx, [12], 8, 12, [], () => "row");
 
@@ -331,7 +341,7 @@ describe("findAvailableContainers", () => {
                 const key = `seed-${containerIndex}`;
                 ctx.values.set(`containerItemKey${containerIndex}`, key);
                 mockState.indexByKey.set(key, -10 + containerIndex);
-                mockState.containerItemTypes.set(containerIndex, `seed-type-${containerIndex}`);
+                setContainerItemType(containerIndex, `seed-type-${containerIndex}`);
             }
 
             for (let itemIndex = 0; itemIndex < 20; itemIndex++) {
@@ -344,7 +354,7 @@ describe("findAvailableContainers", () => {
                 expect(allocation.containerIndex).toBeLessThan(3);
                 mockState.indexByKey.delete(oldKey);
                 mockState.indexByKey.set(nextKey, itemIndex);
-                mockState.containerItemTypes.set(allocation.containerIndex, itemType);
+                setContainerItemType(allocation.containerIndex, itemType);
                 ctx.values.set(`containerItemKey${allocation.containerIndex}`, nextKey);
             }
         });
@@ -356,8 +366,8 @@ describe("findAvailableContainers", () => {
 
             mockState.indexByKey.set("footer-item", 0);
             mockState.indexByKey.set("header-item", 20);
-            mockState.containerItemTypes.set(0, "footer");
-            mockState.containerItemTypes.set(1, "header");
+            setContainerItemType(0, "footer");
+            setContainerItemType(1, "header");
 
             const itemTypes = new Map([
                 [10, "row"],

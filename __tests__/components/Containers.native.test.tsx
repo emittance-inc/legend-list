@@ -1,10 +1,15 @@
-import type React from "react";
+import * as React from "react";
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import "../setup";
 
-import { StateProvider, useStateContext } from "@/state/state";
-import { render } from "../helpers/testingLibrary";
+import { scheduleContainerLayout } from "@/core/scheduleContainerLayout";
+import { type StateContext, StateProvider, useStateContext } from "@/state/state";
+import { createMockState } from "../__mocks__/createMockState";
+import { act, render } from "../helpers/testingLibrary";
+
+const measureCalls: number[] = [];
+let observeMeasurement: (() => void) | undefined;
 
 function registerContainerMock() {
     mock.module("@/components/Container", () => ({
@@ -12,15 +17,26 @@ function registerContainerMock() {
     }));
 }
 
+function registerMeasureContainersMock() {
+    mock.module("@/core/measureContainersInLayoutEffect", () => ({
+        measureContainersInLayoutEffect: () => {
+            observeMeasurement?.();
+            measureCalls.push(measureCalls.length + 1);
+        },
+    }));
+}
+
 type SetupProps = {
     columnWrapperStyle: Record<string, any>;
     numColumns: number;
+    onContext?: (ctx: StateContext) => void;
     otherAxisSize?: number;
     children: React.ReactNode;
 };
 
-const Setup = ({ columnWrapperStyle, numColumns, otherAxisSize = 0, children }: SetupProps) => {
+const Setup = ({ columnWrapperStyle, numColumns, onContext, otherAxisSize = 0, children }: SetupProps) => {
     const ctx = useStateContext();
+    onContext?.(ctx);
     ctx.columnWrapperStyle = columnWrapperStyle;
     ctx.values.set("numColumns", numColumns);
     ctx.values.set("numContainersPooled", 1);
@@ -29,9 +45,45 @@ const Setup = ({ columnWrapperStyle, numColumns, otherAxisSize = 0, children }: 
     return <>{children}</>;
 };
 
-describe("Containers gap handling", () => {
+describe("Containers native", () => {
     beforeEach(() => {
+        measureCalls.length = 0;
+        observeMeasurement = undefined;
         registerContainerMock();
+        registerMeasureContainersMock();
+    });
+
+    it("runs coordinated measurement after child layout effects", async () => {
+        const { ContainerLayoutCoordinator } = await import("@/components/ContainerLayoutCoordinator");
+        let didRunChildLayoutEffect = false;
+        let didObserveCommittedChild = false;
+
+        observeMeasurement = () => {
+            didObserveCommittedChild = didRunChildLayoutEffect;
+        };
+
+        function Child() {
+            const ctx = useStateContext();
+            ctx.state ??= createMockState();
+
+            React.useLayoutEffect(() => {
+                didRunChildLayoutEffect = true;
+                scheduleContainerLayout(ctx, 0);
+            }, [ctx]);
+            return null;
+        }
+
+        const { unmount } = render(
+            <StateProvider>
+                <ContainerLayoutCoordinator>
+                    <Child />
+                </ContainerLayoutCoordinator>
+            </StateProvider>,
+        );
+
+        expect(didObserveCommittedChild).toBe(true);
+        expect(measureCalls).toHaveLength(1);
+        unmount();
     });
 
     it("applies row gap for single column without horizontal margin", async () => {
@@ -103,6 +155,61 @@ describe("Containers gap handling", () => {
         expect(style?.height).toBe(180);
         expect(style?.minHeight).toBe(180);
 
+        unmount();
+    });
+
+    it("runs the parent measurement pass for a scheduled all-container request", async () => {
+        const { Containers } = await import("@/components/Containers");
+        let ctx: StateContext | undefined;
+
+        const { unmount } = render(
+            <StateProvider>
+                <Setup
+                    columnWrapperStyle={{}}
+                    numColumns={1}
+                    onContext={(value) => {
+                        ctx = value;
+                    }}
+                >
+                    <Containers getRenderedItem={() => null} horizontal={false} recycleItems={false} />
+                </Setup>
+            </StateProvider>,
+        );
+
+        expect(measureCalls).toHaveLength(0);
+
+        act(() => {
+            scheduleContainerLayout(ctx!);
+        });
+
+        expect(measureCalls).toHaveLength(1);
+        unmount();
+    });
+
+    it("keeps the native visual layer stable when only the layout epoch changes", async () => {
+        const { Containers } = await import("@/components/Containers");
+        let ctx: StateContext | undefined;
+
+        const { toJSON, unmount } = render(
+            <StateProvider>
+                <Setup
+                    columnWrapperStyle={{}}
+                    numColumns={1}
+                    onContext={(value) => {
+                        ctx = value;
+                    }}
+                >
+                    <Containers getRenderedItem={() => null} horizontal={false} recycleItems={false} />
+                </Setup>
+            </StateProvider>,
+        );
+        const styleBefore = (toJSON() as any)?.props?.style;
+
+        act(() => {
+            scheduleContainerLayout(ctx!);
+        });
+
+        expect((toJSON() as any)?.props?.style).toBe(styleBefore);
         unmount();
     });
 });

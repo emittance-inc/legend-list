@@ -39,7 +39,7 @@ export function findAvailableContainers(
 
     const numContainers = peek$(ctx, "numContainers");
     const state = ctx.state;
-    const { containerItemTypes, stickyContainerPool } = state;
+    const { containerItemMetadata, stickyContainerPool } = state;
     const shouldAvoidAssignedContainerReuse = state.props.recycleItems && !!state.props.positionComponentInternal;
     const pendingRemovalSet = pendingRemoval.length > 0 ? new Set(pendingRemoval) : undefined;
 
@@ -111,7 +111,7 @@ export function findAvailableContainers(
             }
 
             const candidateIndex = candidates.findIndex((candidate) =>
-                matches(containerItemTypes.get(candidate.containerIndex), request.itemType),
+                matches(containerItemMetadata.get(candidate.containerIndex)?.itemType, request.itemType),
             );
             if (candidateIndex !== -1) {
                 const [candidate] = candidates.splice(candidateIndex, 1);

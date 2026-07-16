@@ -27,8 +27,9 @@ export function createMockState(
         columnSpans: [],
         // Core calculateItemsInView properties
         columns: [],
+        containerItemGenerations: [],
         containerItemKeys: new Map(),
-        containerItemTypes: new Map(),
+        containerItemMetadata: new Map(),
         contentInsetOverride: undefined,
         dataChangeEpoch: 0,
         dataChangeNeedsScrollUpdate: false,

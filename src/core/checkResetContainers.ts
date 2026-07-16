@@ -1,4 +1,5 @@
 import { calculateItemsInView } from "@/core/calculateItemsInView";
+import { invalidateContainerFixedItemSizes } from "@/core/containerItemMetadata";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import type { StateContext } from "@/state/state";
 import { checkThresholds } from "@/utils/checkThresholds";
@@ -19,6 +20,7 @@ export function checkResetContainers(
     if (didColumnsChange) {
         state.sizes.clear();
         state.sizesKnown.clear();
+        invalidateContainerFixedItemSizes(state);
         for (const key in state.averageSizes) {
             delete state.averageSizes[key];
         }
