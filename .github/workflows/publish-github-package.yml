@@ -2,12 +2,6 @@ name: Publish GitHub Package
 
 on:
     workflow_dispatch:
-        inputs:
-            version:
-                description: Internal package version, such as 3.3.2-emittance.1
-                required: true
-                default: 3.3.2-emittance.1
-                type: string
 
 permissions:
     contents: read
@@ -52,19 +46,30 @@ jobs:
               run: bun run build
 
             - name: Prepare internal package metadata
-              env:
-                  PACKAGE_VERSION: ${{ inputs.version }}
+              id: package
               run: |
                   node <<'NODE'
                   const fs = require("node:fs");
                   const path = "dist/package.json";
-                  const version = process.env.PACKAGE_VERSION ?? "";
+                  const runNumber = process.env.GITHUB_RUN_NUMBER ?? "";
+                  const sha = process.env.GITHUB_SHA ?? "";
 
-                  if (!/^\d+\.\d+\.\d+-emittance\.\d+$/.test(version)) {
-                    throw new Error("Version must look like 3.3.2-emittance.1");
+                  if (!/^[1-9]\d*$/.test(runNumber)) {
+                    throw new Error("GITHUB_RUN_NUMBER must be a positive integer");
+                  }
+                  if (!/^[0-9a-f]{40}$/i.test(sha)) {
+                    throw new Error("GITHUB_SHA must be a full Git commit SHA");
                   }
 
                   const packageJson = JSON.parse(fs.readFileSync(path, "utf8"));
+                  const versionMatch = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(
+                    packageJson.version,
+                  );
+                  if (!versionMatch) {
+                    throw new Error(`Upstream package version is not valid SemVer: ${packageJson.version}`);
+                  }
+
+                  const version = `${versionMatch[1]}-emittance.${runNumber}.g${sha.slice(0, 7).toLowerCase()}`;
                   packageJson.name = "@emittance-inc/legend-list";
                   packageJson.version = version;
                   packageJson.repository = {
@@ -77,13 +82,15 @@ jobs:
                   };
 
                   fs.writeFileSync(path, `${JSON.stringify(packageJson, null, 2)}\n`);
+                  fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+                  console.log(`Prepared ${packageJson.name}@${version}`);
                   NODE
 
             - name: Verify package contents
               working-directory: dist
               run: npm pack --dry-run
 
-            - name: Publish to GitHub Packages
+            - name: Publish ${{ steps.package.outputs.version }} to GitHub Packages
               working-directory: dist
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
