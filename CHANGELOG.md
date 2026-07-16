@@ -1,3 +1,14 @@
+## 3.3.3
+
+- Fix: Row measurements are applied together in a batch, so item positions don't sometimes move after rendering.
+- Fix: `onStartReached` and `onEndReached` no longer bounce between opposite edges during the same scroll gesture after data changes, MVCP adjustments, or residual scroll events.
+- Fix: Prepending items with `maintainVisibleContentPosition` was sometimes flashing the wrong items for one frame
+- Fix: SectionList sticky headers follow their current positions after section data changes. #445
+- Fix: `LegendList` can now be wrapped with `Animated.createAnimatedComponent`.
+- Fix: Horizontal web lists keep their calculated content width, so item containers do not shrink when the content is wider than the viewport.
+- Perf: Lists reuse inactive containers across item types before creating more, preventing the container pool from growing for every previously seen item type.
+- Perf: Reanimated lists skip scroll-offset tracking when neither shared scroll values nor sticky headers need it.
+
 ## 3.3.2
 
 - Perf: Recycled rows update their current item without changing the container context, so recycling hooks avoid extra rerenders during scroll.
