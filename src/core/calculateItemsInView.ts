@@ -1,10 +1,12 @@
 import { ENABLE_DEBUG_VIEW, POSITION_OUT_OF_VIEW } from "@/constants";
 import { IsNewArchitecture } from "@/constants-platform";
 import { evaluateBootstrapInitialScroll } from "@/core/bootstrapInitialScroll";
+import { createContainerItemMetadata } from "@/core/containerItemMetadata";
 import { resolveInitialScrollOffset } from "@/core/initialScroll";
 import { handleInitialScrollLayoutReady } from "@/core/initialScrollLifecycle";
 import { prepareMVCP } from "@/core/mvcp";
 import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataChange";
+import { scheduleContainerLayout } from "@/core/scheduleContainerLayout";
 import { syncMountedContainer } from "@/core/syncMountedContainer";
 import { updateItemPositions } from "@/core/updateItemPositions";
 import { updateViewableItems } from "@/core/viewability";
@@ -360,6 +362,7 @@ export function calculateItemsInView(
         }
 
         let totalSize = getContentSize(ctx);
+        let changedContainerIds: Set<number> | undefined;
         const topPad = peek$(ctx, "stylePaddingTop") + peek$(ctx, "alignItemsAtEndPadding") + peek$(ctx, "headerSize");
         const numColumns = peek$(ctx, "numColumns");
         const speed = params.scrollVelocity ?? getScrollVelocity(state);
@@ -786,26 +789,29 @@ export function calculateItemsInView(
                     if (oldKey && oldKey !== id) {
                         containerItemKeys!.delete(oldKey);
                     }
+                    if (oldKey !== id) {
+                        changedContainerIds ??= new Set();
+                        changedContainerIds.add(containerIndex);
+                        // Generations distinguish a delayed native measurement from a newer
+                        // assignment even if this physical slot later returns to the same key.
+                        state.containerItemGenerations[containerIndex] =
+                            (state.containerItemGenerations[containerIndex] ?? 0) + 1;
+                    }
 
                     set$(ctx, `containerItemKey${containerIndex}`, id);
                     set$(ctx, `containerItemIndex${containerIndex}`, i);
                     set$(ctx, `containerItemData${containerIndex}`, data[i]);
 
-                    // Store item type for type-safe container reuse
-                    if (allocation.itemType !== undefined) {
-                        state.containerItemTypes.set(containerIndex, allocation.itemType);
-                    }
+                    // The allocated type also seeds fixed-size resolution without
+                    // calling getItemType again after this container commits.
+                    state.containerItemMetadata.set(
+                        containerIndex,
+                        createContainerItemMetadata(state, i, data[i], allocation.itemType),
+                    );
 
                     // Update cache when adding new item
                     containerItemKeys!.set(id, containerIndex);
                     state.userScrollAnchorReset?.keys.add(id);
-                    if (IsNewArchitecture) {
-                        // Fabric reports the replacement item's real size from a layout effect.
-                        // Defer size-driven recalculation until those expected measurements drain,
-                        // otherwise recycled containers can briefly render with stale positions.
-                        state.pendingLayoutEffectMeasurements ??= new Set();
-                        state.pendingLayoutEffectMeasurements.add(id);
-                    }
 
                     const containerSticky = `containerSticky${containerIndex}` as const;
                     // Mark as sticky if this item is in stickyHeaderIndices
@@ -869,10 +875,13 @@ export function calculateItemsInView(
                 // Update cache when removing item
                 if (itemKey !== undefined) {
                     containerItemKeys!.delete(itemKey);
+                    changedContainerIds ??= new Set();
+                    changedContainerIds.add(i);
+                    state.containerItemGenerations[i] = (state.containerItemGenerations[i] ?? 0) + 1;
                 }
 
-                // Clear container item type when deallocating
-                state.containerItemTypes.delete(i);
+                // Clear metadata when deallocating this physical container.
+                state.containerItemMetadata.delete(i);
 
                 // Clear sticky state if this was a sticky container
                 if (state.stickyContainerPool.has(i)) {
@@ -897,6 +906,10 @@ export function calculateItemsInView(
                         }).didChangePosition || didChangePositions;
                 }
             }
+        }
+
+        if (changedContainerIds && (IsNewArchitecture || Platform.OS === "web")) {
+            scheduleContainerLayout(ctx, changedContainerIds);
         }
 
         if (Platform.OS === "web" && didChangePositions) {

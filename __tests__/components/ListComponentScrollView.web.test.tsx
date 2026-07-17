@@ -16,6 +16,7 @@ const removeEventListener = mock((type: string) => {
 const schedule = mock(() => true);
 const flush = mock(() => {});
 const cancel = mock(() => {});
+let supportsScrollEnd = false;
 const mockCtx = {
     state: {
         anchoredEndSpaceSize: undefined as number | undefined,
@@ -56,10 +57,20 @@ function registerWebScrollMocks() {
         getScrollContentSize: () => ({ height: 0, width: 0 }),
         getWindowScrollPosition: () => ({ x: 0, y: 0 }),
         resolveScrollableNode: () => null,
-        resolveScrollEventTarget: () => ({
-            addEventListener,
-            removeEventListener,
-        }),
+        resolveScrollEventTarget: () => {
+            const target = {
+                addEventListener,
+                removeEventListener,
+            } as {
+                addEventListener: typeof addEventListener;
+                onscrollend?: null;
+                removeEventListener: typeof removeEventListener;
+            };
+            if (supportsScrollEnd) {
+                target.onscrollend = null;
+            }
+            return target;
+        },
         resolveWindowScrollTarget: () => ({ left: 0, top: 0 }),
     }));
 }
@@ -72,6 +83,7 @@ function resetMocks() {
     schedule.mockClear();
     flush.mockClear();
     cancel.mockClear();
+    supportsScrollEnd = false;
     mockCtx.state.anchoredEndSpaceSize = undefined;
     mockCtx.state.dataChangeNeedsScrollUpdate = false;
     mockCtx.state.didFinishInitialScroll = true;
@@ -114,6 +126,76 @@ describe("ListComponentScrollView (web)", () => {
 
             expect(schedule).toHaveBeenCalledTimes(1);
             expect(flush).not.toHaveBeenCalled();
+        } finally {
+            act(() => {
+                renderer?.unmount();
+            });
+        }
+    });
+
+    it("reports native scrollend as the web gesture boundary", async () => {
+        resetMocks();
+        supportsScrollEnd = true;
+        const onInternalScrollEnd = mock(() => {});
+        const { ListComponentScrollView } = await import(
+            "../../src/components/ListComponentScrollView?web-native-scroll-end"
+        );
+        let renderer: TestRenderer.ReactTestRenderer | undefined;
+
+        try {
+            act(() => {
+                renderer = TestRenderer.create(
+                    <ListComponentScrollView
+                        onInternalScrollEnd={onInternalScrollEnd}
+                        onLayout={() => {}}
+                        onScroll={() => {}}
+                        style={{}}
+                    >
+                        <div />
+                    </ListComponentScrollView>,
+                );
+            });
+
+            expect(addEventListener).toHaveBeenCalledWith("scrollend", expect.any(Function));
+            act(() => {
+                scrollListeners.get("scrollend")?.({} as Event);
+            });
+            expect(flush).toHaveBeenCalledTimes(1);
+            expect(onInternalScrollEnd).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => {
+                renderer?.unmount();
+            });
+        }
+    });
+
+    it("falls back to 200ms scroll inactivity when scrollend is unavailable", async () => {
+        resetMocks();
+        const onInternalScrollEnd = mock(() => {});
+        const { ListComponentScrollView } = await import(
+            "../../src/components/ListComponentScrollView?web-fallback-scroll-end"
+        );
+        let renderer: TestRenderer.ReactTestRenderer | undefined;
+
+        try {
+            act(() => {
+                renderer = TestRenderer.create(
+                    <ListComponentScrollView
+                        onInternalScrollEnd={onInternalScrollEnd}
+                        onLayout={() => {}}
+                        onScroll={() => {}}
+                        style={{}}
+                    >
+                        <div />
+                    </ListComponentScrollView>,
+                );
+            });
+
+            act(() => {
+                scrollListeners.get("scroll")?.({} as Event);
+            });
+            await new Promise((resolve) => setTimeout(resolve, 220));
+            expect(onInternalScrollEnd).toHaveBeenCalledTimes(1);
         } finally {
             act(() => {
                 renderer?.unmount();

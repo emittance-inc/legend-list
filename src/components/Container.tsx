@@ -1,20 +1,16 @@
 // biome-ignore lint/style/useImportType: Leaving this out makes it crash in some environments
 import * as React from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 
 import { PositionView, PositionViewSticky } from "@/components/PositionView";
 import { Separator } from "@/components/Separator";
-import { IsNewArchitecture } from "@/constants-platform";
-import { updateItemSizes } from "@/core/updateItemSizes";
-import { useOnLayoutSync } from "@/hooks/useOnLayoutSync";
+import { useContainerMeasurement } from "@/hooks/useContainerMeasurement";
 import { Platform } from "@/platform/Platform";
-import type { DimensionValue, LayoutRectangle, LooseView, StyleProp, ViewStyle } from "@/platform/scrollview-types";
+import type { DimensionValue, LooseView, StyleProp, ViewStyle } from "@/platform/scrollview-types";
 import { ContextContainer, type ContextContainerType } from "@/state/ContextContainer";
 import { useArr$, useStateContext } from "@/state/state";
 import type { ColumnWrapperStyle, StickyHeaderConfig } from "@/types.base";
 import { type GetRenderedItem, typedMemo } from "@/types.internal";
-import { isNullOrUndefined, roundSize } from "@/utils/helpers";
-import { isInMVCPActiveMode } from "@/utils/isInMVCPActiveMode";
 import { isHorizontalRTL } from "@/utils/rtl";
 
 export function getContainerPositionStyle({
@@ -113,22 +109,14 @@ export const Container = typedMemo(function Container<ItemT>({
         `containerSticky${id}`,
     ]);
 
-    const itemLayoutRef = useRef<{
-        horizontal: boolean;
-        itemKey?: string | undefined;
-        lastSize?: { width: number; height: number };
-        didLayout: boolean;
-        pendingShrinkToken: number;
-    }>({
-        didLayout: false,
+    const ref = useRef<LooseView>(null);
+    const { onLayout, triggerLayout } = useContainerMeasurement({
+        containerId: id,
+        ctx,
         horizontal,
         itemKey,
-        pendingShrinkToken: 0,
+        ref,
     });
-    itemLayoutRef.current.horizontal = horizontal;
-    itemLayoutRef.current.itemKey = itemKey;
-    const ref = useRef<LooseView>(null);
-    const [layoutRenderCount, forceLayoutRender] = useState(0);
 
     const resolvedColumn = column > 0 ? column : 1;
     const resolvedSpan = Math.min(Math.max(span || 1, 1), numColumns);
@@ -168,78 +156,6 @@ export const Container = typedMemo(function Container<ItemT>({
     );
     const { renderedItem } = renderedItemInfo || {};
 
-    const onLayoutChange = useCallback((rectangle: LayoutRectangle, fromLayoutEffect: boolean) => {
-        const {
-            horizontal: currentHorizontal,
-            itemKey: currentItemKey,
-            lastSize,
-            pendingShrinkToken,
-        } = itemLayoutRef.current;
-
-        if (isNullOrUndefined(currentItemKey)) {
-            return;
-        }
-
-        itemLayoutRef.current.didLayout = true;
-        let layout: { width: number; height: number } = rectangle;
-
-        // Apply a small rounding so we don't run callbacks for tiny changes
-        const axis = currentHorizontal ? "width" : "height";
-        const size = roundSize(rectangle[axis]);
-        const prevSize = lastSize ? roundSize(lastSize[axis]) : undefined;
-
-        const doUpdate = () => {
-            itemLayoutRef.current.lastSize = layout;
-            updateItemSizes(ctx, {
-                containerId: id,
-                fromLayoutEffect,
-                itemKey: currentItemKey,
-                size: layout,
-            });
-            itemLayoutRef.current.didLayout = true;
-        };
-
-        // On web, ResizeObserver can report a brief shrink while images are loading.
-        // Applying that immediately causes MVCP scroll churn, so confirm the shrink next frame.
-        // The token ensures we ignore stale frames if a newer layout arrives first.
-        // During active MVCP we need immediate size updates so anchor math stays in sync.
-        const shouldDeferWebShrinkLayoutUpdate =
-            Platform.OS === "web" && !isInMVCPActiveMode(ctx.state) && prevSize !== undefined && size + 1 < prevSize;
-        if (shouldDeferWebShrinkLayoutUpdate) {
-            const token = pendingShrinkToken + 1;
-            itemLayoutRef.current.pendingShrinkToken = token;
-            requestAnimationFrame(() => {
-                if (itemLayoutRef.current.pendingShrinkToken !== token) {
-                    return;
-                }
-
-                const element = ref.current as unknown as HTMLElement | null;
-                const rect = element?.getBoundingClientRect?.();
-                if (rect) {
-                    layout = { height: rect.height, width: rect.width };
-                }
-
-                doUpdate();
-            });
-            return;
-        }
-
-        if (IsNewArchitecture || size > 0) {
-            doUpdate();
-        } else {
-            // On old architecture, the size can be 0 sometimes, maybe when not fully rendered?
-            // So we need to make sure it's actually rendered and measure it to make sure it's actually 0.
-            ref.current?.measure?.((_x, _y, width, height) => {
-                layout = { height, width };
-                doUpdate();
-            });
-        }
-    }, []);
-
-    const triggerLayout = useCallback(() => {
-        forceLayoutRender((v) => v + 1);
-    }, []);
-
     const contextValue = useMemo<ContextContainerType>(() => {
         ctx.viewRefs.set(id, ref);
         return {
@@ -247,59 +163,6 @@ export const Container = typedMemo(function Container<ItemT>({
             triggerLayout,
         };
     }, [id, triggerLayout]);
-
-    useLayoutEffect(() => {
-        ctx.containerLayoutTriggers.set(id, triggerLayout);
-        return () => {
-            if (ctx.containerLayoutTriggers.get(id) === triggerLayout) {
-                ctx.containerLayoutTriggers.delete(id);
-            }
-        };
-    }, [ctx, id, triggerLayout]);
-
-    const { onLayout } = useOnLayoutSync(
-        {
-            onLayoutChange,
-            ref,
-            webLayoutResync: () => isInMVCPActiveMode(ctx.state),
-        },
-        [itemKey, layoutRenderCount],
-    );
-
-    if (!IsNewArchitecture) {
-        // Since old architecture cannot use unstable_getBoundingClientRect it needs to ensure that
-        // all containers update their item size even if the container did not resize.
-        useEffect(() => {
-            // Catch a bug where a container is reused and is the exact same size as the previous item
-            // so it does not fire an onLayout, so we need to trigger it manually.
-            // TODO: There must be a better way to do this?
-            if (!isNullOrUndefined(itemKey)) {
-                // Reset the didLayoutRef to false so that the item layout will be
-                // updated even if the container is the exact same size as the previous item
-                // because it would not fire an onLayout event.
-                itemLayoutRef.current.didLayout = false;
-
-                const timeout = setTimeout(() => {
-                    if (!itemLayoutRef.current.didLayout) {
-                        const { itemKey: currentItemKey, lastSize } = itemLayoutRef.current;
-
-                        if (lastSize && !isNullOrUndefined(currentItemKey)) {
-                            updateItemSizes(ctx, {
-                                containerId: id,
-                                fromLayoutEffect: false,
-                                itemKey: currentItemKey,
-                                size: lastSize,
-                            });
-                            itemLayoutRef.current.didLayout = true;
-                        }
-                    }
-                }, 16);
-                return () => {
-                    clearTimeout(timeout);
-                };
-            }
-        }, [itemKey]);
-    }
 
     const PositionComponent = isSticky
         ? stickyPositionComponentInternal

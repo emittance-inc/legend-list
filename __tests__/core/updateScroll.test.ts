@@ -221,18 +221,16 @@ describe("updateScroll large user jumps", () => {
         expect(triggerCalculateItemsInViewSpy).toHaveBeenCalledTimes(2);
         expect(triggerCalculateItemsInViewSpy.mock.calls).toEqual([
             [
-                {
+                expect.objectContaining({
                     doMVCP: false,
                     drawDistanceMode: "visible-first",
-                    scrollVelocity: 0,
-                },
+                }),
             ],
             [
-                {
+                expect.objectContaining({
                     doMVCP: false,
                     drawDistanceMode: "visible-first",
-                    scrollVelocity: 0,
-                },
+                }),
             ],
         ]);
         expect(rafCallbacks).toHaveLength(1);

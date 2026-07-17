@@ -3,7 +3,7 @@ import type { StateContext } from "@/state/state";
 import { roundSize } from "@/utils/helpers";
 import { getId } from "./getId";
 
-interface ResolvedItemSize {
+export interface ResolvedItemSize {
     didResolveFixedItemSize?: boolean;
     fixedItemSize?: number;
     itemType?: string;

@@ -205,7 +205,7 @@ describe("checkAtBottom", () => {
         expect(ctx.values.get("isWithinMaintainScrollAtEndThreshold")).toBe(false);
     });
 
-    it("re-fires inside threshold when content/data changes", () => {
+    it("does not re-fire inside threshold when content/data changes", () => {
         const ctx = createMockContext({ footerSize: 0, headerSize: 0, stylePaddingTop: 0, totalSize: 1000 });
         const calls: Array<{ distanceFromEnd: number }> = [];
         const state = createMockState({
@@ -232,20 +232,20 @@ describe("checkAtBottom", () => {
         expect(calls).toEqual([{ distanceFromEnd: 50 }]);
         calls.length = 0;
 
-        // Change content size and data length inside window -> re-fire
+        // Change content size and data length inside window -> no re-fire
         ctx.values.set("totalSize", 1400);
         state.props.data = [{ id: 1 }, { id: 2 }];
         state.scroll = 1100; // distanceFromEnd = 0 (inside)
         checkAtBottom(ctx);
 
-        expect(calls).toEqual([{ distanceFromEnd: 0 }]);
+        expect(calls).toEqual([]);
         expect(state.endReachedSnapshot).toMatchObject({
             contentSize: 1400,
             dataLength: 2,
         });
     });
 
-    it("re-fires inside threshold when a conditional footer is removed", () => {
+    it("does not re-fire inside threshold when a conditional footer is removed", () => {
         const ctx = createMockContext({ footerSize: 40, headerSize: 0, stylePaddingTop: 0, totalSize: 1000 });
         const calls: Array<{ distanceFromEnd: number }> = [];
         const state = createMockState({
@@ -274,7 +274,7 @@ describe("checkAtBottom", () => {
         state.scroll = 650; // contentSize = 1000, distanceFromEnd = 50
         checkAtBottom(ctx);
 
-        expect(calls).toEqual([{ distanceFromEnd: 50 }]);
+        expect(calls).toEqual([]);
         expect(state.endReachedSnapshot).toMatchObject({
             contentSize: 1000,
             dataLength: 1,

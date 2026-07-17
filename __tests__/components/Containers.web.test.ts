@@ -82,6 +82,7 @@ describe("Containers (web)", () => {
 
         const div = renderer.root.findByType("div");
         expect(div.props.style).toEqual({
+            flexShrink: 0,
             marginBottom: -4,
             marginRight: -12,
             marginTop: -4,

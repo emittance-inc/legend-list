@@ -31,6 +31,7 @@ let currentLegendListState: {
 };
 let lastLegendListProps: any;
 let listeners: Map<string, Set<(value: any) => void>>;
+let scrollOffsetTrackerCalls: unknown[];
 
 const createSharedValueMock = <T,>(initial: T): SharedValueMock<T> => {
     let current = initial;
@@ -127,7 +128,9 @@ const createReanimatedModuleMock = () => {
                 }
             }
         },
-        useScrollViewOffset: () => {},
+        useScrollViewOffset: (_ref: unknown, scrollOffset: unknown) => {
+            scrollOffsetTrackerCalls.push(scrollOffset);
+        },
         useSharedValue: createSharedValueMock,
         View: (props: any) => React.createElement("reanimated-view", props),
     };
@@ -177,6 +180,7 @@ describe("AnimatedLegendList sharedValues integration", () => {
         };
         lastLegendListProps = undefined;
         listeners = new Map();
+        scrollOffsetTrackerCalls = [];
         registerLegendListModuleMock();
     });
 
@@ -216,6 +220,58 @@ describe("AnimatedLegendList sharedValues integration", () => {
             ref: null,
         });
         expect(renderedBridge.props.scrollOffset).toBe(sharedValues.scrollOffset);
+
+        act(() => {
+            TestRenderer.create(renderedBridge);
+        });
+        expect(scrollOffsetTrackerCalls).toEqual([sharedValues.scrollOffset]);
+    });
+
+    it("does not track the scroll offset for semantic shared values", async () => {
+        const { AnimatedLegendList } = await import("../../src/integrations/reanimated?shared-values-no-scroll-offset");
+        const isNearEnd = createSharedValueMock(false);
+
+        act(() => {
+            TestRenderer.create(
+                <AnimatedLegendList
+                    data={[{ id: "a" }]}
+                    estimatedItemSize={10}
+                    renderItem={() => null}
+                    sharedValues={{ isNearEnd } as any}
+                />,
+            );
+        });
+
+        const renderedBridge = lastLegendListProps.renderScrollComponent({ ref: null });
+        expect(renderedBridge.props.scrollOffset).toBeUndefined();
+
+        act(() => {
+            TestRenderer.create(renderedBridge);
+        });
+        expect(scrollOffsetTrackerCalls).toEqual([]);
+    });
+
+    it("tracks the scroll offset for sticky headers", async () => {
+        const { AnimatedLegendList } = await import("../../src/integrations/reanimated?sticky-scroll-offset");
+
+        act(() => {
+            TestRenderer.create(
+                <AnimatedLegendList
+                    data={[{ id: "a" }]}
+                    estimatedItemSize={10}
+                    renderItem={() => null}
+                    stickyHeaderIndices={[0]}
+                />,
+            );
+        });
+
+        const renderedBridge = lastLegendListProps.renderScrollComponent({ ref: null });
+        expect(renderedBridge.props.scrollOffset).toBeDefined();
+
+        act(() => {
+            TestRenderer.create(renderedBridge);
+        });
+        expect(scrollOffsetTrackerCalls).toHaveLength(1);
     });
 
     it("does not inject a public onScroll when scrollEventThrottle is set without onScroll", async () => {

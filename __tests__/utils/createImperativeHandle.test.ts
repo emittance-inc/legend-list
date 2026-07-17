@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import "../setup";
 
+import { createContainerItemMetadata } from "../../src/core/containerItemMetadata";
 import { finishScrollTo } from "../../src/core/finishScrollTo";
 import * as initialScrollLifecycleModule from "../../src/core/initialScrollLifecycle";
 import * as scrollToIndexModule from "../../src/core/scrollToIndex";
@@ -272,10 +273,34 @@ describe("createImperativeHandle.scrollToEnd", () => {
         expect(ctx.state.totalSize).toBe(0);
         expect(ctx.state.pendingTotalSize).toBeUndefined();
         expect(ctx.values.get("totalSize")).toBe(0);
-        expect(triggerFirstLayout).toHaveBeenCalledTimes(1);
-        expect(triggerSecondLayout).toHaveBeenCalledTimes(1);
-        expect(calls).toEqual(["layout:0", "layout:1", "calculate"]);
+        expect(triggerFirstLayout).toHaveBeenCalledTimes(0);
+        expect(triggerSecondLayout).toHaveBeenCalledTimes(0);
+        expect(ctx.values.get("containerLayoutEpoch")).toBe(1);
+        expect(calls).toEqual(["calculate"]);
         expect(triggerCalculateItemsInView).toHaveBeenCalledWith({ forceFullItemPositions: true });
+    });
+
+    it("clearCaches invalidates fixed sizes without discarding container types", () => {
+        const item = { id: "a" };
+        const getFixedItemSize = () => 40;
+        const ctx = createMockContext(
+            {},
+            {
+                props: {
+                    data: [item],
+                    getFixedItemSize,
+                },
+            },
+        );
+        const metadata = createContainerItemMetadata(ctx.state, 0, item, "row");
+        metadata.didResolveFixedItemSize = true;
+        metadata.fixedItemSize = 40;
+        ctx.state.containerItemMetadata.set(0, metadata);
+
+        createImperativeHandle(ctx).clearCaches();
+
+        expect(ctx.state.containerItemMetadata.get(0)?.itemType).toBe("row");
+        expect(ctx.state.containerItemMetadata.get(0)?.fixedItemSize).toBeUndefined();
     });
 
     it("setItemSize updates item measurement through the public ref", () => {

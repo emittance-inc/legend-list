@@ -107,7 +107,7 @@ export function onScroll(ctx: StateContext, event: NativeSyntheticEvent<NativeSc
 
     state.scrollPending = newScroll;
 
-    updateScroll(ctx, newScroll, insetChanged);
+    updateScroll(ctx, newScroll, insetChanged, { fromNativeScrollEvent: true });
     trackInitialScrollNativeProgress(state, newScroll);
     clearFinishedBootstrapInitialScrollTargetIfMovedAway(ctx);
 

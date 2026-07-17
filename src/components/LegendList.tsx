@@ -56,6 +56,7 @@ import type { StylesAsSharedValue } from "@/typesInternal";
 import { createColumnWrapperStyle } from "@/utils/createColumnWrapperStyle";
 import { createImperativeHandle } from "@/utils/createImperativeHandle";
 import { IS_DEV } from "@/utils/devEnvironment";
+import { prepareReachedEdgeForNextUserScroll } from "@/utils/edgeReachedGate";
 import { getAlwaysRenderIndices } from "@/utils/getAlwaysRenderIndices";
 import { getId } from "@/utils/getId";
 import { getRenderedItem } from "@/utils/getRenderedItem";
@@ -162,6 +163,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onMomentumScrollEnd,
         onRefresh,
         onScroll: onScrollProp,
+        onScrollBeginDrag,
         onStartReached,
         onStartReachedThreshold = 0.5,
         onStickyHeaderChange,
@@ -316,8 +318,9 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 averageSizes: {},
                 columnSpans: [],
                 columns: [],
+                containerItemGenerations: [],
                 containerItemKeys: new Map(),
-                containerItemTypes: new Map(),
+                containerItemMetadata: new Map(),
                 contentInsetOverride: undefined,
                 dataChangeEpoch: 0,
                 dataChangeNeedsScrollUpdate: false,
@@ -372,7 +375,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 startBuffered: -1,
                 startNoBuffer: -1,
                 startReachedSnapshot: undefined,
-                startReachedSnapshotDataChangeEpoch: undefined,
                 stickyContainerPool: new Set(),
                 stickyContainers: new Map(),
                 timeoutAdaptiveRender: undefined,
@@ -472,7 +474,9 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onFirstVisibleItemChanged,
         onItemSizeChanged,
         onLoad,
+        onMomentumScrollEnd,
         onScroll: throttleScrollFn,
+        onScrollBeginDrag,
         onStartReached,
         onStartReachedThreshold,
         onStickyHeaderChange,
@@ -812,12 +816,17 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 // but just in case it doesn't setup the falback
                 checkFinishedScrollFallback(ctx);
 
-                if (onMomentumScrollEnd) {
+                if (state.props.onMomentumScrollEnd) {
                     // TODO type this better
-                    onMomentumScrollEnd(event as any);
+                    state.props.onMomentumScrollEnd(event as any);
                 }
             },
             onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => onScroll(ctx, event),
+            onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                prepareReachedEdgeForNextUserScroll(ctx);
+                state.props.onScrollBeginDrag?.(event as any);
+            },
+            onScrollEnd: () => prepareReachedEdgeForNextUserScroll(ctx),
         }),
         [],
     );
@@ -841,6 +850,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 ListFooterComponent={ListFooterComponent}
                 ListFooterComponentStyle={ListFooterComponentStyle}
                 ListHeaderComponent={ListHeaderComponent}
+                onInternalScrollBeginDrag={fns.onScrollBeginDrag}
+                onInternalScrollEnd={fns.onScrollEnd}
                 onLayout={onLayout!}
                 onLayoutFooter={onLayoutFooter}
                 onMomentumScrollEnd={fns.onMomentumScrollEnd}

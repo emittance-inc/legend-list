@@ -26,7 +26,6 @@ describe("checkThreshold", () => {
             baseContext(),
             (dist) => onReachedCalls.push(dist),
             (snap) => snapshotCalls.push(snap),
-            true,
         );
 
         expect(onReachedCalls).toEqual([10]);
@@ -51,7 +50,6 @@ describe("checkThreshold", () => {
             baseContext(),
             (dist) => onReachedCalls.push(dist),
             (snap) => snapshotCalls.push(snap),
-            true,
         );
 
         expect(onReachedCalls).toEqual([]);
@@ -71,7 +69,6 @@ describe("checkThreshold", () => {
             baseContext(),
             (dist) => onReachedCalls.push(dist),
             (snap) => snapshotCalls.push(snap),
-            true,
         );
 
         expect(onReachedCalls).toEqual([]);
@@ -91,7 +88,6 @@ describe("checkThreshold", () => {
             baseContext(),
             (dist) => onReachedCalls.push(dist),
             (snap) => snapshotCalls.push(snap),
-            true,
         );
 
         expect(onReachedCalls).toEqual([20]);
@@ -118,7 +114,6 @@ describe("checkThreshold", () => {
             context,
             (dist) => onReachedCalls.push(dist),
             (snap) => snapshotCalls.push(snap),
-            true,
         );
         expect(onReachedCalls).toEqual([20]);
 
@@ -131,14 +126,13 @@ describe("checkThreshold", () => {
             context,
             (dist) => onReachedCalls.push(dist),
             (snap) => snapshotCalls.push(snap),
-            true,
         );
 
         expect(onReachedCalls).toEqual([20]);
         expect(snapshotCalls.at(-1)).toBeUndefined();
     });
 
-    it("re-fires within threshold when content changes", () => {
+    it("updates its snapshot without re-firing when content changes", () => {
         const onReachedCalls: number[] = [];
         let snapshot: ThresholdSnapshot | undefined;
 
@@ -154,7 +148,6 @@ describe("checkThreshold", () => {
             (s) => {
                 snapshot = s;
             },
-            true,
         );
         onReachedCalls.length = 0;
 
@@ -170,50 +163,6 @@ describe("checkThreshold", () => {
             (s) => {
                 snapshot = s;
             },
-            true,
-        );
-
-        expect(onReachedCalls).toEqual([30]);
-        expect(snapshot).toMatchObject({
-            contentSize: 700,
-            dataLength: changedContext.dataLength,
-            scrollPosition: changedContext.scrollPosition,
-        });
-    });
-
-    it("does not re-fire within threshold when content changes if reentry is disabled", () => {
-        const onReachedCalls: number[] = [];
-        let snapshot: ThresholdSnapshot | undefined;
-
-        const context = baseContext({ contentSize: 500 });
-        checkThreshold(
-            20,
-            false,
-            50,
-            false,
-            undefined,
-            context,
-            (dist) => onReachedCalls.push(dist),
-            (s) => {
-                snapshot = s;
-            },
-            true,
-        );
-        onReachedCalls.length = 0;
-
-        const changedContext = baseContext({ contentSize: 700 });
-        checkThreshold(
-            30,
-            false,
-            50,
-            true,
-            snapshot,
-            changedContext,
-            (dist) => onReachedCalls.push(dist),
-            (s) => {
-                snapshot = s;
-            },
-            false,
         );
 
         expect(onReachedCalls).toEqual([]);
@@ -240,7 +189,6 @@ describe("checkThreshold", () => {
             (s) => {
                 snapshot = s;
             },
-            true,
         );
         onReachedCalls.length = 0;
 
@@ -255,7 +203,6 @@ describe("checkThreshold", () => {
             (s) => {
                 snapshot = s;
             },
-            true,
         );
 
         expect(onReachedCalls).toEqual([]);

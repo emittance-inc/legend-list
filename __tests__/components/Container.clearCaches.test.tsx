@@ -2,7 +2,9 @@ import * as React from "react";
 import { Text } from "react-native";
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { type StateContext, StateProvider, set$, useStateContext } from "../../src/state/state";
+import { measureContainersInLayoutEffect } from "../../src/core/measureContainersInLayoutEffect.native";
+import { getContainerLayoutEffectScope } from "../../src/core/scheduleContainerLayout";
+import { type StateContext, StateProvider, set$, useArr$, useStateContext } from "../../src/state/state";
 import { createImperativeHandle } from "../../src/utils/createImperativeHandle";
 import { createMockState } from "../__mocks__/createMockState";
 import TestRenderer, { act } from "../helpers/testRenderer";
@@ -44,6 +46,20 @@ async function flushAsync() {
     await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
+}
+
+function LayoutCoordinator({ children }: { children: React.ReactNode }) {
+    const ctx = useStateContext();
+    const [containerLayoutEpoch] = useArr$(["containerLayoutEpoch"]);
+
+    React.useLayoutEffect(() => {
+        const targetContainerIds = getContainerLayoutEffectScope(ctx);
+        if (targetContainerIds !== undefined) {
+            measureContainersInLayoutEffect(ctx, targetContainerIds);
+        }
+    }, [ctx, containerLayoutEpoch]);
+
+    return children;
 }
 
 beforeEach(() => {
@@ -104,17 +120,19 @@ describe("Container clearCaches measurement", () => {
             }, [ctx]);
 
             return (
-                <Container
-                    getRenderedItem={() => ({
-                        index: 0,
-                        item: data[0],
-                        renderedItem: <Text>{data[0].label}</Text>,
-                    })}
-                    horizontal={false}
-                    id={0}
-                    itemKey="a"
-                    recycleItems={false}
-                />
+                <LayoutCoordinator>
+                    <Container
+                        getRenderedItem={() => ({
+                            index: 0,
+                            item: data[0],
+                            renderedItem: <Text>{data[0].label}</Text>,
+                        })}
+                        horizontal={false}
+                        id={0}
+                        itemKey="a"
+                        recycleItems={false}
+                    />
+                </LayoutCoordinator>
             );
         }
 
@@ -185,17 +203,19 @@ describe("Container clearCaches measurement", () => {
             }, [ctx]);
 
             return (
-                <Container
-                    getRenderedItem={() => ({
-                        index: 0,
-                        item: data[0],
-                        renderedItem: <Text>{data[0].label}</Text>,
-                    })}
-                    horizontal={false}
-                    id={0}
-                    itemKey="a"
-                    recycleItems={false}
-                />
+                <LayoutCoordinator>
+                    <Container
+                        getRenderedItem={() => ({
+                            index: 0,
+                            item: data[0],
+                            renderedItem: <Text>{data[0].label}</Text>,
+                        })}
+                        horizontal={false}
+                        id={0}
+                        itemKey="a"
+                        recycleItems={false}
+                    />
+                </LayoutCoordinator>
             );
         }
 
@@ -272,6 +292,8 @@ describe("Container clearCaches measurement", () => {
                 set$(ctx, "numColumns", 1);
                 set$(ctx, "numContainers", 2);
                 set$(ctx, "totalSize", 200);
+                ctx.state.containerItemKeys.set("a", 0);
+                ctx.state.containerItemKeys.set("b", 1);
                 didInitialize.current = true;
             }
 
@@ -290,7 +312,7 @@ describe("Container clearCaches measurement", () => {
             };
 
             return (
-                <>
+                <LayoutCoordinator>
                     <Container
                         getRenderedItem={getRenderedItem}
                         horizontal={false}
@@ -305,7 +327,7 @@ describe("Container clearCaches measurement", () => {
                         itemKey="b"
                         recycleItems={false}
                     />
-                </>
+                </LayoutCoordinator>
             );
         }
 
