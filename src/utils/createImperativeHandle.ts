@@ -1,5 +1,7 @@
 import { IsNewArchitecture } from "@/constants-platform";
+import { settlePendingImperativeScroll } from "@/core/cancelImperativeScroll";
 import { invalidateContainerFixedItemSizes } from "@/core/containerItemMetadata";
+import { supersedeInitialScroll } from "@/core/finishInitialScroll";
 import { retargetActiveInitialScrollAtEnd } from "@/core/initialScrollLifecycle";
 import { scheduleContainerLayout } from "@/core/scheduleContainerLayout";
 import { scrollTo } from "@/core/scrollTo";
@@ -61,7 +63,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
     const isSettlingAfterDataChange = () =>
         !!state.didDataChange ||
         !!state.didColumnsChange ||
-        state.queuedMVCPRecalculate !== undefined ||
+        state.scheduledWork.has("mvcpRecalculate") ||
         state.ignoreScrollFromMVCP !== undefined;
 
     const isScrollToIndexReady = (targetIndex: number, allowEmpty = false) => {
@@ -103,10 +105,10 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
                 return;
             }
 
-            requestAnimationFrame(check);
+            state.scheduledWork.frame(check, "imperativeScrollReady");
         };
 
-        requestAnimationFrame(check);
+        state.scheduledWork.frame(check, "imperativeScrollReady");
     };
 
     const runScrollRequest = (token: number, resolve: () => void, run: () => boolean, isReady = () => true) => {
@@ -132,10 +134,10 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
     };
     const startImperativeScroll = (resolve: () => void) => {
         // A new imperative scroll supersedes any previous unresolved one.
+        state.scheduledWork.cancel("imperativeScrollReady");
         const token = ++imperativeScrollToken;
 
-        state.pendingScrollToEnd = undefined;
-        state.pendingScrollResolve?.();
+        settlePendingImperativeScroll(state);
         state.pendingScrollResolve = resolve;
 
         return token;
@@ -144,6 +146,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
         new Promise<void>((resolve) => {
             const token = startImperativeScroll(resolve);
 
+            supersedeInitialScroll(ctx);
             runScrollRequest(token, resolve, run, isReady);
         });
 
@@ -225,6 +228,7 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
             end: state.endNoBuffer,
             endBuffered: state.endBuffered,
             getAverageItemSizes: () => getAverageItemSizes(state),
+            indexByKey: (key: string) => state.indexByKey.get(key),
             isAtEnd: peek$(ctx, "isAtEnd"),
             isAtStart: peek$(ctx, "isAtStart"),
             isEndReached: state.isEndReached!,
@@ -275,9 +279,9 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
                     token,
                 };
 
-                if (scheduleImperativeScrollCommit) {
-                    scheduleImperativeScrollCommit();
-                } else {
+                scheduleImperativeScrollCommit?.();
+                supersedeInitialScroll(ctx);
+                if (!scheduleImperativeScrollCommit) {
                     state.runPendingScrollToEnd?.();
                 }
             }),

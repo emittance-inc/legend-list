@@ -20,6 +20,7 @@ import {
     handleBootstrapInitialScrollLayoutChange,
 } from "@/core/bootstrapInitialScroll";
 import { calculateItemsInView } from "@/core/calculateItemsInView";
+import { cancelImperativeScroll } from "@/core/cancelImperativeScroll";
 import { checkFinishedScrollFallback } from "@/core/checkFinishedScroll";
 import { checkResetContainers } from "@/core/checkResetContainers";
 import { checkStructuralDataChange } from "@/core/checkStructuralDataChange";
@@ -30,6 +31,7 @@ import { advanceCurrentInitialScrollSession, resolveInitialScrollOffset } from "
 import { handleInitialScrollDataChange, initializeInitialScrollOnMount } from "@/core/initialScrollLifecycle";
 import { onScroll } from "@/core/onScroll";
 import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataChange";
+import { ScheduledWork } from "@/core/ScheduledWork";
 import { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { updateContentInsetEndAdjustment } from "@/core/updateContentInsetEndAdjustment";
@@ -50,7 +52,12 @@ import type { LooseScrollView, LooseScrollViewProps, LooseView, ViewStyle } from
 import { useStickyScrollHandler } from "@/platform/useStickyScrollHandler";
 import { listen$, peek$, StateProvider, set$, useStateContext } from "@/state/state";
 import type { LegendListMetrics, LegendListRef, LegendListRenderItemProps } from "@/types.base";
-import type { InternalState, LegendListPropsBase, LegendListScrollerRef } from "@/types.internal";
+import type {
+    AnchoredEndSpaceOwner,
+    InternalState,
+    LegendListPropsBase,
+    LegendListScrollerRef,
+} from "@/types.internal";
 import { typedForwardRef, typedMemo } from "@/types.internal";
 import type { StylesAsSharedValue } from "@/typesInternal";
 import { createColumnWrapperStyle } from "@/utils/createColumnWrapperStyle";
@@ -64,7 +71,7 @@ import { extractPadding, isArray, warnDevOnce } from "@/utils/helpers";
 import { normalizeMaintainScrollAtEnd } from "@/utils/normalizeMaintainScrollAtEnd";
 import { normalizeMaintainVisibleContentPosition } from "@/utils/normalizeMaintainVisibleContentPosition";
 import { requestAdjust } from "@/utils/requestAdjust";
-import { isHorizontalRTLProps } from "@/utils/rtl";
+import { getStylePaddingEnd, isHorizontalRTLProps } from "@/utils/rtl";
 import { resetInitialRenderState } from "@/utils/setInitialRenderState";
 import { setPaddingTop } from "@/utils/setPaddingTop";
 import { useThrottledOnScroll } from "@/utils/throttledOnScroll";
@@ -187,11 +194,14 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     } = props;
 
     const animatedPropsInternal = (props as any).animatedPropsInternal as StylesAsSharedValue<LooseScrollViewProps>;
+    const anchoredEndSpaceOwner =
+        ((props as any).anchoredEndSpaceOwnerInternal as AnchoredEndSpaceOwner | undefined) ?? "list";
     const positionComponentInternal = (props as any).positionComponentInternal as React.ComponentType<any> | undefined;
     const stickyPositionComponentInternal = (props as any).stickyPositionComponentInternal as
         | React.ComponentType<any>
         | undefined;
     const {
+        anchoredEndSpaceOwnerInternal: _anchoredEndSpaceOwnerInternal,
         positionComponentInternal: _positionComponentInternal,
         stickyPositionComponentInternal: _stickyPositionComponentInternal,
         ...restProps
@@ -220,6 +230,13 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const stylePaddingBottomState = extractPadding(style, contentContainerStyle, "Bottom");
     const stylePaddingLeftState = extractPadding(style, contentContainerStyle, "Left");
     const stylePaddingRightState = extractPadding(style, contentContainerStyle, "Right");
+    const stylePaddingEndState = getStylePaddingEnd({
+        horizontal,
+        rtl,
+        stylePaddingBottom: stylePaddingBottomState,
+        stylePaddingLeft: stylePaddingLeftState,
+        stylePaddingRight: stylePaddingRightState,
+    });
     const maintainScrollAtEndConfig = normalizeMaintainScrollAtEnd(maintainScrollAtEnd);
     const maintainVisibleContentPositionConfig = normalizeMaintainVisibleContentPosition(
         maintainVisibleContentPositionProp,
@@ -239,7 +256,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         ? {
               index: Math.max(0, dataProp.length - 1),
               preserveForBottomPadding: true,
-              viewOffset: -stylePaddingBottomState,
+              viewOffset: -stylePaddingEndState,
               viewPosition: 1,
           }
         : hasInitialScrollIndex
@@ -252,7 +269,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                             : undefined,
                     viewOffset:
                         initialScrollIndexProp.viewOffset ??
-                        (initialScrollIndexProp.viewPosition === 1 ? -stylePaddingBottomState : 0),
+                        (initialScrollIndexProp.viewPosition === 1 ? -stylePaddingEndState : 0),
                     viewPosition: initialScrollIndexProp.viewPosition ?? 0,
                 }
               : {
@@ -332,6 +349,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 endNoBuffer: -1,
                 endReachedSnapshot: undefined,
                 firstFullyOnScreenIndex: -1,
+                freshDataTransitionEpoch: 0,
                 hasHadNonEmptyData: dataProp.length > 0,
                 idCache: [],
                 idsInView: [],
@@ -358,8 +376,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 positions: [],
                 props: {} as any,
                 queuedCalculateItemsInView: 0,
-                queuedFullDrawDistancePrewarm: undefined,
                 refScroller: { current: null } as React.RefObject<LegendListScrollerRef | null>,
+                scheduledWork: new ScheduledWork(),
                 scroll: 0,
                 scrollAdjustHandler: new ScrollAdjustHandler(ctx),
                 scrollForNextCalculateItemsInView: undefined,
@@ -377,8 +395,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 startReachedSnapshot: undefined,
                 stickyContainerPool: new Set(),
                 stickyContainers: new Map(),
-                timeoutAdaptiveRender: undefined,
-                timeouts: new Set(),
                 totalSize: 0,
                 viewabilityConfigCallbackPairs: undefined as never,
             };
@@ -434,14 +450,15 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         state.didDataChange = true;
         state.previousData = state.props.data;
     }
+    if (shouldResetFreshDataLayout) {
+        state.freshDataTransitionEpoch += 1;
+    }
     const throttledOnScroll = useThrottledOnScroll(onScrollProp ?? noopOnScroll, scrollEventThrottle ?? 0);
     const throttleScrollFn = scrollEventThrottle && onScrollProp ? throttledOnScroll : onScrollProp;
-    const anchoredEndSpaceResolved =
-        Platform.OS === "web" && anchoredEndSpace ? { ...anchoredEndSpace, includeInEndInset: true } : anchoredEndSpace;
     const didAnchoredEndSpaceAnchorIndexChange =
         !isFirstLocal &&
         !didDataChangeLocal &&
-        state.props.anchoredEndSpace?.anchorIndex !== anchoredEndSpaceResolved?.anchorIndex;
+        state.props.anchoredEndSpace?.anchorIndex !== anchoredEndSpace?.anchorIndex;
 
     state.props = {
         adaptiveRender: experimental_adaptiveRender,
@@ -450,7 +467,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         alwaysRender,
         alwaysRenderIndicesArr: alwaysRenderIndices.arr,
         alwaysRenderIndicesSet: alwaysRenderIndices.set,
-        anchoredEndSpace: anchoredEndSpaceResolved,
+        anchoredEndSpace,
+        anchoredEndSpaceOwner,
         animatedProps: animatedPropsInternal,
         contentContainerAlignItems: contentContainerStyle.alignItems,
         contentInset,
@@ -501,13 +519,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     if (!isFirstLocal && previousAdaptiveRender && !experimental_adaptiveRender) {
         resetAdaptiveRender(ctx);
     }
-    if (shouldResetFreshDataLayout) {
-        resetInitialRenderState(ctx, {
-            resetInitialScroll: !!initialScrollProp,
-            resetLayout: true,
-        });
-    }
-
     const memoizedLastItemKeys = useMemo(() => {
         if (!dataProp.length) return [];
         return Array.from({ length: Math.min(numColumnsProp, dataProp.length) }, (_, i) =>
@@ -591,6 +602,12 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     }
 
     useLayoutEffect(() => {
+        if (shouldResetFreshDataLayout) {
+            resetInitialRenderState(ctx, {
+                resetInitialScroll: !!initialScrollProp,
+                resetLayout: true,
+            });
+        }
         handleInitialScrollDataChange(ctx, {
             dataLength: dataProp.length,
             didDataChange: didDataChangeLocal,
@@ -598,7 +615,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             initialScrollAtEnd,
             latestInitialScroll: initialScrollProp,
             latestInitialScrollSessionKind: initialScrollUsesOffsetOnly ? "offset" : "bootstrap",
-            stylePaddingBottom: stylePaddingBottomState,
+            stylePaddingEnd: stylePaddingEndState,
             useBootstrapInitialScroll: usesBootstrapInitialScroll,
         });
     }, [
@@ -607,7 +624,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         didDataChangeLocal,
         shouldResetFreshDataLayout,
         initialScrollAtEnd,
-        stylePaddingBottomState,
+        stylePaddingEndState,
         usesBootstrapInitialScroll,
     ]);
 
@@ -625,7 +642,12 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         anchoredEndSpace?.anchorMaxSize,
         anchoredEndSpace?.anchorOffset,
         didAnchoredEndSpaceAnchorIndexChange,
+        horizontal,
         numColumnsProp,
+        rtl,
+        stylePaddingBottomState,
+        stylePaddingLeftState,
+        stylePaddingRightState,
     ]);
 
     useLayoutEffect(() => {
@@ -644,10 +666,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 dataLength: dataProp.length,
                 footerSize: layout[horizontal ? "width" : "height"],
                 initialScrollAtEnd,
-                stylePaddingBottom: stylePaddingBottomState,
+                stylePaddingEnd: stylePaddingEndState,
             });
         },
-        [dataProp.length, initialScrollAtEnd, horizontal, stylePaddingBottomState, usesBootstrapInitialScroll],
+        [dataProp.length, initialScrollAtEnd, horizontal, stylePaddingEndState, usesBootstrapInitialScroll],
     );
 
     const onLayoutChange = useCallback(
@@ -667,7 +689,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
             advanceCurrentInitialScrollSession(ctx);
         },
-        [dataProp.length, initialScrollAtEnd, stylePaddingBottomState, usesBootstrapInitialScroll],
+        [dataProp.length, initialScrollAtEnd, stylePaddingEndState, usesBootstrapInitialScroll],
     );
 
     const { onLayout } = useOnLayoutSync({
@@ -784,14 +806,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     useEffect(() => {
         return () => {
-            if (state.queuedFullDrawDistancePrewarm !== undefined) {
-                cancelAnimationFrame(state.queuedFullDrawDistancePrewarm);
-                state.queuedFullDrawDistancePrewarm = undefined;
-            }
-            for (const timeout of state.timeouts) {
-                clearTimeout(timeout);
-            }
-            state.timeouts.clear();
+            cancelImperativeScroll(state);
+            state.scheduledWork.dispose();
         };
     }, [state]);
 
@@ -843,6 +859,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 canRender={canRender}
                 contentContainerStyle={contentContainerStyle}
                 contentInset={contentInset}
+                freshDataTransitionEpoch={state.freshDataTransitionEpoch}
                 getRenderedItem={fns.getRenderedItem}
                 horizontal={horizontal!}
                 initialContentOffset={initialContentOffset}

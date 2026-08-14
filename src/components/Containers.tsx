@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { ContainerLayoutCoordinator } from "@/components/ContainerLayoutCoordinator";
 import { ContainerSlot } from "@/components/ContainerSlot";
 import { useDOMOrder } from "@/hooks/useDOMOrder";
+import { useFreshDataTransitionVisibility } from "@/hooks/useFreshDataTransitionVisibility";
 import { useArr$, useStateContext } from "@/state/state";
 import type { StickyHeaderConfig } from "@/types.base";
 import { type GetRenderedItem, typedMemo } from "@/types.internal";
@@ -12,6 +13,7 @@ import { isHorizontalRTL } from "@/utils/rtl";
 
 interface ContainersProps<ItemT> {
     activeItemKeys: ReadonlySet<string>;
+    freshDataTransitionEpoch: number;
     horizontal: boolean;
     recycleItems: boolean;
     ItemSeparatorComponent?: React.ComponentType<{ leadingItem: ItemT }>;
@@ -20,18 +22,25 @@ interface ContainersProps<ItemT> {
 }
 
 interface ContainersInnerProps {
+    freshDataTransitionEpoch: number;
     horizontal: boolean;
     numColumns: number;
     children: React.ReactNode;
 }
 
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
-const ContainersInner = typedMemo(function ContainersInner({ horizontal, numColumns, children }: ContainersInnerProps) {
+const ContainersInner = typedMemo(function ContainersInner({
+    freshDataTransitionEpoch,
+    horizontal,
+    numColumns,
+    children,
+}: ContainersInnerProps) {
     const ref = useRef<HTMLDivElement | null>(null);
     const ctx = useStateContext();
     const columnWrapperStyle = ctx.columnWrapperStyle;
     const isHorizontalRTLList = isHorizontalRTL(ctx.state);
     const [otherAxisSize, readyToRender, totalSize] = useArr$(["otherAxisSize", "readyToRender", "totalSize"]);
+    const isVisible = useFreshDataTransitionVisibility(!!readyToRender, freshDataTransitionEpoch);
 
     // Initialize DOM reordering hook - noop in react namtive
     useDOMOrder(ref);
@@ -41,13 +50,13 @@ const ContainersInner = typedMemo(function ContainersInner({ horizontal, numColu
               direction: isHorizontalRTLList ? "ltr" : undefined,
               flexShrink: 0,
               minHeight: otherAxisSize,
-              opacity: readyToRender ? 1 : 0,
+              opacity: isVisible ? 1 : 0,
               position: "relative",
               width: totalSize,
           }
-        : { height: totalSize, minWidth: otherAxisSize, opacity: readyToRender ? 1 : 0, position: "relative" };
+        : { height: totalSize, minWidth: otherAxisSize, opacity: isVisible ? 1 : 0, position: "relative" };
 
-    if (!readyToRender) {
+    if (!isVisible) {
         style.pointerEvents = "none";
     }
 
@@ -81,6 +90,7 @@ const ContainersInner = typedMemo(function ContainersInner({ horizontal, numColu
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
 export const Containers = typedMemo(function Containers<ItemT>({
     activeItemKeys,
+    freshDataTransitionEpoch,
     horizontal,
     recycleItems,
     ItemSeparatorComponent,
@@ -108,7 +118,11 @@ export const Containers = typedMemo(function Containers<ItemT>({
     }
 
     return (
-        <ContainersInner horizontal={horizontal} numColumns={numColumns}>
+        <ContainersInner
+            freshDataTransitionEpoch={freshDataTransitionEpoch}
+            horizontal={horizontal}
+            numColumns={numColumns}
+        >
             {containers}
         </ContainersInner>
     );

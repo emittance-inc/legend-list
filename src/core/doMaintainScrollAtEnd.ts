@@ -1,6 +1,22 @@
+import { clampScrollOffset } from "@/core/clampScrollOffset";
+import { getAlignItemsAtEndPadding } from "@/core/updateContentMetricsState";
 import { getContentSize } from "@/state/getContentSize";
-import { peek$, type StateContext } from "@/state/state";
+import { peek$, type StateContext, set$ } from "@/state/state";
+import { requestAdjust } from "@/utils/requestAdjust";
 import { getLogicalHorizontalMaxOffset, isHorizontalRTL, toNativeHorizontalOffset } from "@/utils/rtl";
+
+export function finishMaintainScrollAtEnd(ctx: StateContext) {
+    const { state } = ctx;
+    const currentPadding = peek$(ctx, "alignItemsAtEndPadding") || 0;
+    const nextPadding = getAlignItemsAtEndPadding(ctx);
+    state.maintainingScrollAtEnd = undefined;
+    state.pendingMaintainScrollAtEnd = false;
+    if (currentPadding !== nextPadding) {
+        set$(ctx, "alignItemsAtEndPadding", nextPadding);
+        const nextScroll = clampScrollOffset(ctx, state.scroll + nextPadding - currentPadding);
+        requestAdjust(ctx, nextScroll - state.scroll);
+    }
+}
 
 export function doMaintainScrollAtEnd(ctx: StateContext) {
     const state = ctx.state;
@@ -37,11 +53,16 @@ export function doMaintainScrollAtEnd(ctx: StateContext) {
         if (!state.maintainingScrollAtEnd) {
             const pendingState = maintainScrollAtEnd.animated ? "pending-animated" : "pending-instant";
             const activeState = maintainScrollAtEnd.animated ? "animated" : "instant";
+            const scrollAtRequest = state.scroll;
             state.maintainingScrollAtEnd = pendingState;
 
             requestAnimationFrame(() => {
-                // Make sure we're still at the end after the animation frame, before scrolling to the end
-                if (peek$(ctx, "isWithinMaintainScrollAtEndThreshold")) {
+                const isStillWithinThreshold = peek$(ctx, "isWithinMaintainScrollAtEndThreshold");
+                const didScrollSinceRequest = state.scroll !== scrollAtRequest;
+
+                // Layout and content changes can move the end beyond the threshold while this request is pending.
+                // Keep the original end anchor unless the scroll position changed in the meantime.
+                if (isStillWithinThreshold || !didScrollSinceRequest) {
                     state.maintainingScrollAtEnd = activeState;
 
                     const scroller = refScroller.current;
@@ -62,16 +83,18 @@ export function doMaintainScrollAtEnd(ctx: StateContext) {
                     setTimeout(
                         () => {
                             if (state.maintainingScrollAtEnd === activeState) {
-                                state.maintainingScrollAtEnd = undefined;
                                 if (state.pendingMaintainScrollAtEnd) {
+                                    state.maintainingScrollAtEnd = undefined;
                                     doMaintainScrollAtEnd(ctx);
+                                } else {
+                                    finishMaintainScrollAtEnd(ctx);
                                 }
                             }
                         },
                         maintainScrollAtEnd.animated ? 500 : 0,
                     );
                 } else if (state.maintainingScrollAtEnd === pendingState) {
-                    state.maintainingScrollAtEnd = undefined;
+                    finishMaintainScrollAtEnd(ctx);
                 }
             });
         } else {
@@ -82,6 +105,6 @@ export function doMaintainScrollAtEnd(ctx: StateContext) {
         return true;
     }
 
-    state.pendingMaintainScrollAtEnd = false;
+    finishMaintainScrollAtEnd(ctx);
     return false;
 }

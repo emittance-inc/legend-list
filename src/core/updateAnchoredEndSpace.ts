@@ -1,7 +1,9 @@
+import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { updateScroll } from "@/core/updateScroll";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import { getId } from "@/utils/getId";
 import { getKnownOrFixedItemSize } from "@/utils/getItemSize";
+import { getStylePaddingEnd } from "@/utils/rtl";
 
 export function maybeUpdateAnchoredEndSpace(ctx: StateContext) {
     const state = ctx.state;
@@ -22,8 +24,6 @@ export function maybeUpdateAnchoredEndSpace(ctx: StateContext) {
         if (anchorIndex >= 0 && anchorIndex < data.length && state.scrollLength > 0) {
             nextAnchorKey = getId(state, anchorIndex);
             let contentBelowAnchor = 0;
-            const footerSize = ctx.values.get("footerSize") || 0;
-            const stylePaddingBottom = state.props.stylePaddingBottom || 0;
             let hasUnknownTailSize = false;
 
             for (let index = anchorIndex; index < data.length; index++) {
@@ -42,7 +42,8 @@ export function maybeUpdateAnchoredEndSpace(ctx: StateContext) {
                 }
             }
 
-            contentBelowAnchor += footerSize + stylePaddingBottom;
+            contentBelowAnchor = Math.max(0, contentBelowAnchor - ctx.scrollAxisGap);
+            contentBelowAnchor += (ctx.values.get("footerSize") || 0) + getStylePaddingEnd(state.props);
             // Ready means we've processed this valid anchor and all tail items that affect
             // anchored end-space math have authoritative sizes.
             isReady = !hasUnknownTailSize;
@@ -54,7 +55,8 @@ export function maybeUpdateAnchoredEndSpace(ctx: StateContext) {
         }
     }
 
-    const didSizeChange = previousSize !== nextSize;
+    const didSizeChange = previousSize !== nextSize && (previousSize !== undefined || anchoredEndSpace !== undefined);
+    const didEffectiveSizeChange = (previousSize || 0) !== nextSize;
     const didReadyAnchorChange =
         previousReadyAnchorIndex !== nextAnchorIndex || previousReadyAnchorKey !== nextAnchorKey;
 
@@ -67,8 +69,9 @@ export function maybeUpdateAnchoredEndSpace(ctx: StateContext) {
             anchoredEndSpace?.onSizeChanged?.(nextSize);
         }
 
-        if (didSizeChange && anchoredEndSpace?.includeInEndInset) {
-            updateScroll(ctx, state.scroll, true);
+        if (didEffectiveSizeChange) {
+            updateContentMetricsState(ctx);
+            updateScroll(ctx, state.scroll, true, { markHasScrolled: false });
         }
 
         anchoredEndSpace?.onReady?.({ anchorIndex: nextAnchorIndex, anchorKey: nextAnchorKey, size: nextSize });

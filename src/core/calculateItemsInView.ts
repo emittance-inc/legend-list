@@ -14,7 +14,7 @@ import { batchedUpdates } from "@/platform/batchedUpdates";
 import { Platform } from "@/platform/Platform";
 import { getContentSize } from "@/state/getContentSize";
 import { peek$, type StateContext, set$ } from "@/state/state";
-import type { InternalState } from "@/types.internal";
+import type { InternalState, ScrollAdjustmentSource } from "@/types.internal";
 import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
 import { getExpandedContainerPoolSize } from "@/utils/containerPool";
 import { findAvailableContainers } from "@/utils/findAvailableContainers";
@@ -42,20 +42,14 @@ function getProjectedBufferAdjustment(scrollVelocity: number, trailingBuffer: nu
 
 function scheduleRenderRangeProjectionSettle(ctx: StateContext) {
     const state = ctx.state;
-    const previousTimeout = state.timeoutRenderRangeProjectionSettle;
-    if (previousTimeout !== undefined) {
-        clearTimeout(previousTimeout);
-        state.timeouts.delete(previousTimeout);
-    }
-
-    const timeout: any = setTimeout(() => {
-        state.timeoutRenderRangeProjectionSettle = undefined;
-        state.timeouts.delete(timeout);
-        state.scrollHistory.length = 0;
-        state.triggerCalculateItemsInView?.();
-    }, RENDER_RANGE_PROJECTION_SETTLE_DELAY);
-    state.timeoutRenderRangeProjectionSettle = timeout;
-    state.timeouts.add(timeout);
+    state.scheduledWork.timeout(
+        () => {
+            state.scrollHistory.length = 0;
+            state.triggerCalculateItemsInView?.();
+        },
+        RENDER_RANGE_PROJECTION_SETTLE_DELAY,
+        "renderRangeProjection",
+    );
 }
 
 function findCurrentStickyIndex(stickyArray: number[], scroll: number, state: InternalState): number {
@@ -328,6 +322,7 @@ export function calculateItemsInView(
         dataChanged?: boolean;
         drawDistanceMode?: DrawDistanceMode;
         forceFullItemPositions?: boolean;
+        mvcpAdjustmentSource?: ScrollAdjustmentSource;
         scrollVelocity?: number;
     } = {},
 ) {
@@ -352,7 +347,7 @@ export function calculateItemsInView(
         const stickyHeaderIndicesArr = state.props.stickyHeaderIndicesArr || [];
         const stickyHeaderIndicesSet = state.props.stickyHeaderIndicesSet || new Set<number>();
         const drawDistance = getEffectiveDrawDistance(ctx, params.drawDistanceMode);
-        const { dataChanged, doMVCP, forceFullItemPositions } = params;
+        const { dataChanged, doMVCP, forceFullItemPositions, mvcpAdjustmentSource } = params;
         const bootstrapInitialScrollState =
             state.initialScrollSession?.kind === "bootstrap" ? state.initialScrollSession.bootstrap : undefined;
         const suppressInitialScrollSideEffects = !!bootstrapInitialScrollState;
@@ -508,7 +503,10 @@ export function calculateItemsInView(
 
         ////// Update item positions and do MVCP
         // Handle maintainVisibleContentPosition adjustment early
-        const checkMVCP = doMVCP && !suppressInitialScrollSideEffects ? prepareMVCP(ctx, dataChanged) : undefined;
+        const checkMVCP =
+            doMVCP && !suppressInitialScrollSideEffects
+                ? prepareMVCP(ctx, dataChanged, mvcpAdjustmentSource)
+                : undefined;
 
         if (dataChanged) {
             resetLayoutCachesForDataChange(state);

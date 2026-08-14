@@ -1,6 +1,7 @@
 import type { Key } from "react";
 import * as React from "react";
 
+import type { ScheduledWork } from "@/core/ScheduledWork";
 import type { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
 import type {
     AlwaysRenderConfig,
@@ -20,6 +21,8 @@ import type { StylesAsSharedValue } from "@/typesInternal";
 import type { DrawDistanceMode } from "@/utils/getEffectiveDrawDistance";
 
 export type { BaseScrollViewProps, LegendListPropsBase } from "@/types.base";
+
+export type ScrollAdjustmentSource = "data" | "item-size";
 
 export interface ScrollEventTargetLike {
     addEventListener(type: string, listener: (...args: any[]) => void): void;
@@ -147,10 +150,11 @@ export interface PendingDataComparison {
 
 export type AverageSizes = Record<string, { num: number; avg: number }>;
 
+export type AnchoredEndSpaceOwner = "list" | "scroll";
+
 export interface InternalState {
     activeItemKeys: ReadonlySet<string>;
     adjustingFromInitialMount?: number;
-    animFrameCheckFinishedScroll?: any;
     anchoredEndSpaceReadyAnchorIndex?: number;
     anchoredEndSpaceReadyAnchorKey?: string;
     averageSizes: AverageSizes;
@@ -161,6 +165,7 @@ export interface InternalState {
     containerItemMetadata: Map<number, ContainerItemMetadata>;
     dataChangeEpoch: number;
     dataChangeNeedsScrollUpdate: boolean;
+    freshDataTransitionEpoch: number;
     deferredPublicOnScrollEvent?: NativeSyntheticEvent<NativeScrollEvent>;
     didColumnsChange?: boolean;
     didDataChange?: boolean;
@@ -183,14 +188,10 @@ export interface InternalState {
     idsInView: string[];
     ignoreScrollFromMVCP?: { lt?: number; gt?: number };
     ignoreScrollFromMVCPIgnored?: boolean;
-    ignoreScrollFromMVCPTimeout?: any;
     indexByKey: Map<string, number>;
     clearPreservedInitialScrollOnNextFinish?: boolean;
     initialScrollSession?: InternalInitialScrollSession;
     initialScroll: InternalInitialScrollTarget | undefined;
-    timeoutPreservedInitialScrollClear?: any;
-    timeoutAdaptiveRender?: any;
-    timeoutRenderRangeProjectionSettle?: any;
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;
@@ -234,7 +235,6 @@ export interface InternalState {
     positions: Array<number | undefined>;
     previousData?: readonly unknown[];
     queuedCalculateItemsInView: number | undefined;
-    queuedMVCPRecalculate?: number;
     queuedInitialLayout?: boolean | undefined;
     reprocessCurrentScroll?: () => void;
     refScroller: React.RefObject<LegendListScrollerRef | null>;
@@ -252,6 +252,7 @@ export interface InternalState {
     scrollPrevTime: number;
     scrollProcessingEnabled: boolean;
     scrollTime: number;
+    scheduledWork: ScheduledWork;
     sizes: Map<string, number>;
     sizesKnown: Map<string, number>;
     startBuffered: number;
@@ -260,18 +261,16 @@ export interface InternalState {
     startReachedSnapshot: ThresholdSnapshot | undefined;
     stickyContainerPool: Set<number>;
     stickyContainers: Map<number, number>;
-    timeouts: Set<number>;
     timeoutSetPaddingTop?: any;
-    timeoutCheckFinishedScrollFallback?: any;
     totalSize: number;
     triggerCalculateItemsInView?: (params?: {
         doMVCP?: boolean;
         dataChanged?: boolean;
         drawDistanceMode?: DrawDistanceMode;
         forceFullItemPositions?: boolean;
+        mvcpAdjustmentSource?: ScrollAdjustmentSource;
         scrollVelocity?: number;
     }) => void;
-    queuedFullDrawDistancePrewarm?: number;
     userScrollAnchorReset?: {
         keys: Set<string>;
     };
@@ -281,6 +280,7 @@ export interface InternalState {
         alignItemsAtEndPaddingEnabled: boolean;
         animatedProps: StylesAsSharedValue<Record<string, any>>;
         anchoredEndSpace: AnchoredEndSpaceConfig | undefined;
+        anchoredEndSpaceOwner: AnchoredEndSpaceOwner;
         alwaysRender: AlwaysRenderConfig | undefined;
         contentContainerAlignItems: ViewStyle["alignItems"] | undefined;
         alwaysRenderIndicesArr: number[];

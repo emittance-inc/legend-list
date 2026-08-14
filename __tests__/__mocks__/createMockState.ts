@@ -1,3 +1,4 @@
+import { ScheduledWork } from "../../src/core/ScheduledWork";
 import type { MaintainScrollAtEndOptions } from "../../src/types.base";
 import type { InternalState } from "../../src/types.internal";
 import { normalizeMaintainScrollAtEnd } from "../../src/utils/normalizeMaintainScrollAtEnd";
@@ -46,7 +47,6 @@ export function createMockState(
         idsInView: [],
         ignoreScrollFromMVCP: undefined,
         ignoreScrollFromMVCPIgnored: false,
-        ignoreScrollFromMVCPTimeout: undefined,
         indexByKey: new Map(),
         initialScroll: undefined,
         initialScrollSession: undefined,
@@ -72,10 +72,10 @@ export function createMockState(
         pendingNativeMVCPAdjust: undefined,
         positions: [],
         queuedCalculateItemsInView: undefined,
-        queuedFullDrawDistancePrewarm: undefined,
         queuedInitialLayout: false,
         refScroller: { current: null } as InternalState["refScroller"],
         reprocessCurrentScroll: () => {},
+        scheduledWork: new ScheduledWork(),
         scroll: 0,
         scrollAdjustHandler: {
             getAdjust: () => 0,
@@ -99,9 +99,6 @@ export function createMockState(
         // Sticky container setup (empty by default)
         stickyContainerPool: new Set(),
         stickyContainers: new Map(),
-        timeoutPreservedInitialScrollClear: undefined,
-        timeoutSetPaddingTop: undefined,
-        timeouts: new Set(),
         totalSize: 1000,
         triggerCalculateItemsInView: () => {},
         viewabilityConfigCallbackPairs: undefined,
@@ -114,6 +111,7 @@ export function createMockState(
             alwaysRenderIndicesArr: [],
             alwaysRenderIndicesSet: new Set<number>(),
             anchoredEndSpace: undefined,
+            anchoredEndSpaceOwner: "list",
             contentInset: DEFAULT_CONTENT_INSET,
             contentInsetEndAdjustment: undefined,
             data: [],

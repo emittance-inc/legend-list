@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import "../setup";
 
 import { checkFinishedScroll, checkFinishedScrollFallback } from "../../src/core/checkFinishedScroll";
@@ -137,6 +137,81 @@ describe("checkFinishedScrollFallback", () => {
         checkFinishedScrollFallback(ctx);
 
         flushTimers(8);
+        expect(ctx.state.scrollingTo).toBeUndefined();
+    });
+
+    it("settles an interrupted non-end request after observing native movement", () => {
+        Platform.OS = "ios";
+        const resolveScroll = mock(() => {});
+        const ctx = createMockContext(
+            { totalSize: 1000 },
+            {
+                hasScrolled: true,
+                pendingScrollResolve: resolveScroll,
+                scroll: 300,
+                scrollingTo: {
+                    animated: true,
+                    index: 5,
+                    offset: 500,
+                    targetOffset: 500,
+                    viewPosition: 0,
+                } as any,
+                scrollLength: 200,
+                scrollPending: 300,
+            },
+        );
+
+        checkFinishedScrollFallback(ctx);
+        flushTimers(1);
+
+        expect(resolveScroll).toHaveBeenCalledTimes(1);
+        expect(ctx.state.pendingScrollResolve).toBeUndefined();
+        expect(ctx.state.scrollingTo).toBeUndefined();
+    });
+
+    it("preserves the retry budget when momentum completion re-enters the fallback", () => {
+        Platform.OS = "ios";
+        const scrollToCalls: Array<{ animated: boolean; x: number; y: number }> = [];
+        const ctx = createMockContext(
+            { totalSize: 500 },
+            {
+                didContainersLayout: true,
+                hasScrolled: true,
+                positions: [400],
+                props: {
+                    data: [{ id: 0 }],
+                    estimatedItemSize: 100,
+                } as any,
+                refScroller: {
+                    current: {
+                        scrollTo: (params: { animated: boolean; x: number; y: number }) => scrollToCalls.push(params),
+                    },
+                } as any,
+                scroll: 268,
+                scrollingTo: {
+                    animated: false,
+                    index: 0,
+                    offset: 332,
+                    targetOffset: 332,
+                    viewOffset: -32,
+                    viewPosition: 1,
+                } as any,
+                scrollLength: 200,
+                scrollPending: 268,
+                sizesKnown: new Map([["item_0", 100]]),
+            },
+        );
+
+        checkFinishedScrollFallback(ctx);
+
+        for (let i = 0; i < 8 && ctx.state.scrollingTo; i++) {
+            flushTimers(1);
+            if (ctx.state.scrollingTo) {
+                checkFinishedScrollFallback(ctx);
+            }
+        }
+
+        expect(scrollToCalls).toHaveLength(5);
         expect(ctx.state.scrollingTo).toBeUndefined();
     });
 
@@ -517,22 +592,40 @@ describe("checkFinishedScrollFallback", () => {
 
 describe("checkFinishedScroll", () => {
     let originalPlatform: typeof Platform.OS;
+    let originalCancelAnimationFrame: typeof globalThis.cancelAnimationFrame;
     let originalRequestAnimationFrame: typeof globalThis.requestAnimationFrame;
+    let cancelCalls: number[];
     let pendingFrame: FrameRequestCallback | undefined;
 
     beforeEach(() => {
         originalPlatform = Platform.OS;
+        originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
         originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+        cancelCalls = [];
         pendingFrame = undefined;
+        globalThis.cancelAnimationFrame = ((id: number) => {
+            cancelCalls.push(id);
+        }) as typeof globalThis.cancelAnimationFrame;
         globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
             pendingFrame = callback;
-            return 1;
+            return 0;
         }) as typeof globalThis.requestAnimationFrame;
     });
 
     afterEach(() => {
         Platform.OS = originalPlatform;
+        globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
         globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    });
+
+    it("replaces an existing completion frame even when its handle is zero", () => {
+        const ctx = createMockContext({}, { scrollingTo: { animated: true, offset: 100 } as any });
+
+        checkFinishedScroll(ctx);
+        checkFinishedScroll(ctx);
+
+        expect(cancelCalls).toEqual([0]);
+        expect(ctx.state.scheduledWork.has("checkFinishedScrollFrame")).toBe(true);
     });
 
     it("finishes when the scroll reaches the resolved end clamp target", () => {

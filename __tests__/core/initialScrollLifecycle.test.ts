@@ -72,7 +72,7 @@ describe("initialScrollLifecycle", () => {
             initialScrollAtEnd: false,
             latestInitialScroll: ctx.state.initialScroll,
             latestInitialScrollSessionKind: "offset",
-            stylePaddingBottom: 0,
+            stylePaddingEnd: 0,
             useBootstrapInitialScroll: false,
         });
 
@@ -238,10 +238,7 @@ describe("initialScrollLifecycle", () => {
 
         expect(retargetActiveInitialScrollAtEnd(ctx)).toBe(true);
         rafCallbacks.shift()?.(0);
-        if (ctx.state.ignoreScrollFromMVCPTimeout) {
-            clearTimeout(ctx.state.ignoreScrollFromMVCPTimeout);
-            ctx.state.ignoreScrollFromMVCPTimeout = undefined;
-        }
+        ctx.state.scheduledWork.cancel("ignoreScrollFromMVCP");
         expect(advanceCurrentInitialScrollSessionSpy).not.toHaveBeenCalledWith(
             ctx,
             expect.objectContaining({ forceScroll: true }),
@@ -294,7 +291,7 @@ describe("initialScrollLifecycle", () => {
             initialScrollAtEnd: true,
             latestInitialScroll: ctx.state.initialScroll,
             latestInitialScrollSessionKind: "bootstrap",
-            stylePaddingBottom: 0,
+            stylePaddingEnd: 0,
             useBootstrapInitialScroll: true,
         });
 
