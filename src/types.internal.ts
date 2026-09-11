@@ -37,6 +37,7 @@ export interface ScrollableNodeLike {
 export interface LegendListScrollerRef {
     flashScrollIndicators(): void;
     getCurrentScrollOffset?(): number;
+    getMaxScrollOffset?(): number;
     getNativeScrollRef?(): unknown;
     getScrollEventTarget?(): ScrollEventTargetLike | null;
     getScrollableNode(): ScrollableNodeLike | null;
@@ -93,6 +94,7 @@ type BootstrapInitialScrollSession = {
 };
 
 type InternalScrollTarget = ScrollTarget & {
+    isScrollToEnd?: boolean;
     waitForInitialScrollCompletionFrame?: boolean;
 };
 
@@ -132,6 +134,7 @@ type LegendListPropsInternal = LegendListPropsBase<any, Record<string, any>, str
 };
 
 export interface ContainerItemMetadata {
+    data: readonly any[];
     dataChangeEpoch: number;
     didResolveFixedItemSize?: boolean;
     fixedItemSize?: number;
@@ -155,6 +158,7 @@ export type AnchoredEndSpaceOwner = "list" | "scroll";
 export interface InternalState {
     activeItemKeys: ReadonlySet<string>;
     adjustingFromInitialMount?: number;
+    anchoredEndSpacePendingReady?: boolean;
     anchoredEndSpaceReadyAnchorIndex?: number;
     anchoredEndSpaceReadyAnchorKey?: string;
     averageSizes: AverageSizes;
@@ -166,6 +170,8 @@ export interface InternalState {
     dataChangeEpoch: number;
     dataChangeNeedsScrollUpdate: boolean;
     freshDataTransitionEpoch: number;
+    handledDataChangeEpoch: number;
+    handledFreshDataTransitionEpoch: number;
     deferredPublicOnScrollEvent?: NativeSyntheticEvent<NativeScrollEvent>;
     didColumnsChange?: boolean;
     didDataChange?: boolean;
@@ -294,6 +300,7 @@ export interface InternalState {
         estimatedItemSize: number | undefined;
         getFixedItemSize: LegendListPropsInternal["getFixedItemSize"];
         getItemType: LegendListPropsInternal["getItemType"];
+        hideItemsUntilMeasured: LegendListPropsInternal["experimental_hideItemsUntilMeasured"];
         horizontal: boolean;
         rtl?: boolean;
         itemsAreEqual: LegendListPropsInternal["itemsAreEqual"];
@@ -340,7 +347,7 @@ export interface ViewableRange<T> {
 }
 
 export type GetRenderedItemResult<ItemT> = { index: number; item: ItemT; renderedItem: React.ReactNode };
-export type GetRenderedItem = (key: string) => GetRenderedItemResult<any> | null;
+export type GetRenderedItem = (key: string, containerId: number) => GetRenderedItemResult<any> | null;
 
 // biome-ignore lint/complexity/noBannedTypes: This is correct
 export type TypedForwardRef = <T, P = {}>(

@@ -24,7 +24,9 @@ import { cancelImperativeScroll } from "@/core/cancelImperativeScroll";
 import { checkFinishedScrollFallback } from "@/core/checkFinishedScroll";
 import { checkResetContainers } from "@/core/checkResetContainers";
 import { checkStructuralDataChange } from "@/core/checkStructuralDataChange";
+import { resetContainerLayoutReady } from "@/core/containerLayoutReady";
 import { doInitialAllocateContainers } from "@/core/doInitialAllocateContainers";
+import { interruptMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import { clearPreservedInitialScrollTarget } from "@/core/finishInitialScroll";
 import { handleLayout } from "@/core/handleLayout";
 import { advanceCurrentInitialScrollSession, resolveInitialScrollOffset } from "@/core/initialScroll";
@@ -33,6 +35,7 @@ import { onScroll } from "@/core/onScroll";
 import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataChange";
 import { ScheduledWork } from "@/core/ScheduledWork";
 import { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
+import { scrollToEnd } from "@/core/scrollToEnd";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { updateContentInsetEndAdjustment } from "@/core/updateContentInsetEndAdjustment";
 import { updateContentMetricsState } from "@/core/updateContentMetricsState";
@@ -150,6 +153,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         initialScrollIndex: initialScrollIndexProp,
         initialScrollOffset: initialScrollOffsetProp,
         experimental_adaptiveRender,
+        experimental_hideItemsUntilMeasured,
         itemsAreEqual,
         keyExtractor: keyExtractorProp,
         ListEmptyComponent,
@@ -252,6 +256,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const initialScrollUsesOffsetOnly =
         !initialScrollAtEnd && !hasInitialScrollIndex && (hasInitialScrollOffset || shouldInitializeHorizontalRTL);
     const usesBootstrapInitialScroll = initialScrollAtEnd || hasInitialScrollIndex;
+    const shouldBottomAlignNumericInitialScrollIndex =
+        typeof initialScrollIndexProp === "number" &&
+        !hasInitialScrollOffset &&
+        dataProp.length > 1 &&
+        initialScrollIndexProp >= dataProp.length - 1;
     const initialScrollProp: InternalState["initialScroll"] = initialScrollAtEnd
         ? {
               index: Math.max(0, dataProp.length - 1),
@@ -274,7 +283,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 }
               : {
                     index: initialScrollIndexProp ?? 0,
-                    viewOffset: initialScrollOffsetProp ?? 0,
+                    preserveForBottomPadding: shouldBottomAlignNumericInitialScrollIndex ? true : undefined,
+                    viewOffset:
+                        initialScrollOffsetProp ??
+                        (shouldBottomAlignNumericInitialScrollIndex ? -stylePaddingEndState : 0),
+                    viewPosition: shouldBottomAlignNumericInitialScrollIndex ? 1 : undefined,
                 }
           : initialScrollUsesOffsetOnly
             ? {
@@ -350,6 +363,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 endReachedSnapshot: undefined,
                 firstFullyOnScreenIndex: -1,
                 freshDataTransitionEpoch: 0,
+                handledDataChangeEpoch: 0,
+                handledFreshDataTransitionEpoch: 0,
                 hasHadNonEmptyData: dataProp.length > 0,
                 idCache: [],
                 idsInView: [],
@@ -400,6 +415,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             };
 
             const internalState = ctx.state;
+            // Late-bind this command so updateScroll can maintain the end without importing back through scrollTo.
+            ctx.scrollToEnd = (options) => scrollToEnd(ctx, options);
             internalState.triggerCalculateItemsInView = (params) => calculateItemsInView(ctx, params);
             internalState.reprocessCurrentScroll = () => updateScroll(ctx, internalState.scroll, true);
 
@@ -415,6 +432,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const state = refState.current!;
     const isFirstLocal = state.isFirst;
     const previousAdaptiveRender = state.props.adaptiveRender;
+    const previousHideItemsUntilMeasured = state.props.hideItemsUntilMeasured;
     const previousNumColumnsProp = state.props.numColumns;
     const didScrollAxisGapChange = !isFirstLocal && ctx.scrollAxisGap !== nextScrollAxisGap;
 
@@ -453,6 +471,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     if (shouldResetFreshDataLayout) {
         state.freshDataTransitionEpoch += 1;
     }
+    const dataChangeEpoch = state.dataChangeEpoch;
+    const freshDataTransitionEpoch = state.freshDataTransitionEpoch;
     const throttledOnScroll = useThrottledOnScroll(onScrollProp ?? noopOnScroll, scrollEventThrottle ?? 0);
     const throttleScrollFn = scrollEventThrottle && onScrollProp ? throttledOnScroll : onScrollProp;
     const didAnchoredEndSpaceAnchorIndexChange =
@@ -480,6 +500,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         estimatedItemSize,
         getFixedItemSize: useWrapIfItem(getFixedItemSize),
         getItemType: useWrapIfItem(getItemType),
+        hideItemsUntilMeasured: experimental_hideItemsUntilMeasured,
         horizontal: !!horizontal,
         itemsAreEqual,
         keyExtractor: useWrapIfItem(keyExtractor),
@@ -518,6 +539,9 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     if (!isFirstLocal && previousAdaptiveRender && !experimental_adaptiveRender) {
         resetAdaptiveRender(ctx);
+    }
+    if (!isFirstLocal && previousHideItemsUntilMeasured && !experimental_hideItemsUntilMeasured) {
+        resetContainerLayoutReady(ctx);
     }
     const memoizedLastItemKeys = useMemo(() => {
         if (!dataProp.length) return [];
@@ -602,7 +626,14 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     }
 
     useLayoutEffect(() => {
-        if (shouldResetFreshDataLayout) {
+        // Data-change detection updates shared state during render, and React may restart that render
+        // before committing effects. Consume monotonic epochs so the committed render cannot lose the change.
+        const didDataChange = state.handledDataChangeEpoch !== dataChangeEpoch;
+        const didStartFreshData = state.handledFreshDataTransitionEpoch !== freshDataTransitionEpoch;
+        state.handledDataChangeEpoch = dataChangeEpoch;
+        state.handledFreshDataTransitionEpoch = freshDataTransitionEpoch;
+
+        if (didStartFreshData) {
             resetInitialRenderState(ctx, {
                 resetInitialScroll: !!initialScrollProp,
                 resetLayout: true,
@@ -610,8 +641,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         }
         handleInitialScrollDataChange(ctx, {
             dataLength: dataProp.length,
-            didDataChange: didDataChangeLocal,
-            didStartFreshData: shouldResetFreshDataLayout,
+            didDataChange,
+            didStartFreshData,
             initialScrollAtEnd,
             latestInitialScroll: initialScrollProp,
             latestInitialScrollSessionKind: initialScrollUsesOffsetOnly ? "offset" : "bootstrap",
@@ -621,8 +652,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     }, [
         dataProp.length,
         dataKey,
-        didDataChangeLocal,
-        shouldResetFreshDataLayout,
+        dataChangeEpoch,
+        freshDataTransitionEpoch,
         initialScrollAtEnd,
         stylePaddingEndState,
         usesBootstrapInitialScroll,
@@ -826,7 +857,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     const fns = useMemo(
         () => ({
-            getRenderedItem: (key: string) => getRenderedItem(ctx, key),
+            getRenderedItem: (key: string, containerId: number) => getRenderedItem(ctx, key, containerId),
             onMomentumScrollEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
                 // This should be handled by checkFinishedScrollFrame in the scroll handler
                 // but just in case it doesn't setup the falback
@@ -839,6 +870,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             },
             onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => onScroll(ctx, event),
             onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                interruptMaintainScrollAtEnd(ctx);
                 prepareReachedEdgeForNextUserScroll(ctx);
                 state.props.onScrollBeginDrag?.(event as any);
             },

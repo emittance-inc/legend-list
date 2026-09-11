@@ -95,11 +95,11 @@ async function waitForTailWindow(
     state: any,
     dataLength: number,
     observedRenderedIndices: Set<number>,
-    getRenderedItem: ((key: string) => { index: number } | null) | undefined,
+    getRenderedItem: ((key: string, containerId: number) => { index: number } | null) | undefined,
 ) {
     for (let i = 0; i < 20; i++) {
-        for (const key of state.containerItemKeys.keys()) {
-            const rendered = getRenderedItem?.(key);
+        for (const [key, containerId] of state.containerItemKeys) {
+            const rendered = getRenderedItem?.(key, containerId);
             if (rendered?.index !== undefined) {
                 observedRenderedIndices.add(rendered.index);
             }
@@ -186,6 +186,27 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
+    it("registers internal end scrolling without creating a public imperative handle", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const { LegendList } = await import("../../src/components/LegendList?props-test-internal-imperative-runner");
+
+        const rendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={renderItem}
+            />,
+        );
+        const ctx = await getContextFromRender();
+
+        expect(ctx.state.runPendingScrollToEnd).toBeUndefined();
+        expect(typeof ctx.scrollToEnd).toBe("function");
+        rendered.unmount();
+    });
+
     it("prepares the reached-edge gate when a native drag begins", async () => {
         const data = [{ id: "item-1", label: "Alpha" }];
         const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
@@ -208,6 +229,71 @@ describe("LegendList props behavior", () => {
         });
 
         expect(state.edgeReachedGate).toBe("prepared");
+        rendered.unmount();
+    });
+
+    for (const maintaining of ["animated", "pending-animated"] as const) {
+        it(`cancels ${maintaining} end following when a native drag begins`, async () => {
+            const data = [{ id: "item-1", label: "Alpha" }];
+            const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+            const resolveScroll = mock(() => {});
+            const { LegendList } = await import("../../src/components/LegendList?props-test-maintain-end-drag-cancel");
+
+            const rendered = render(
+                <LegendList
+                    data={data}
+                    estimatedItemSize={100}
+                    keyExtractor={(item: { id: string }) => item.id}
+                    recycleItems={false}
+                    renderItem={renderItem}
+                />,
+            );
+            const state = await getStateFromRender();
+            state.maintainingScrollAtEnd = maintaining;
+            state.pendingMaintainScrollAtEnd = true;
+            state.pendingScrollResolve = resolveScroll;
+            state.scrollingTo = { animated: true, isScrollToEnd: true, offset: 100 };
+
+            act(() => {
+                lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+            });
+
+            expect(resolveScroll).toHaveBeenCalledTimes(1);
+            expect(state.scrollingTo).toBeUndefined();
+            expect(state.maintainingScrollAtEnd).toBeUndefined();
+            expect(state.pendingMaintainScrollAtEnd).toBe(false);
+            rendered.unmount();
+        });
+    }
+
+    it("does not cancel another imperative scroll while end maintenance is only pending", async () => {
+        const data = [{ id: "item-1", label: "Alpha" }];
+        const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
+        const resolveScroll = mock(() => {});
+        const { LegendList } = await import("../../src/components/LegendList?props-test-pending-maintain-drag");
+
+        const rendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={renderItem}
+            />,
+        );
+        const state = await getStateFromRender();
+        const scrollingTo = { animated: true, offset: 100 };
+        state.maintainingScrollAtEnd = "pending-animated";
+        state.pendingScrollResolve = resolveScroll;
+        state.scrollingTo = scrollingTo;
+
+        act(() => {
+            lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+        });
+
+        expect(resolveScroll).not.toHaveBeenCalled();
+        expect(state.scrollingTo).toBe(scrollingTo);
+        expect(state.maintainingScrollAtEnd).toBeUndefined();
         rendered.unmount();
     });
 
@@ -707,6 +793,74 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
+    it("forwards experimental_hideItemsUntilMeasured to internal props", async () => {
+        const data = [
+            { id: "item-1", label: "Alpha" },
+            { id: "item-2", label: "Beta" },
+        ];
+        const { LegendList } = await import("../../src/components/LegendList?props-test-hide-items-until-measured");
+
+        const renderList = (experimental_hideItemsUntilMeasured?: boolean) => (
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                experimental_hideItemsUntilMeasured={experimental_hideItemsUntilMeasured}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />
+        );
+
+        const rendered = render(renderList(true));
+        const ctx = await getContextFromRender();
+        expect(ctx.state.props.hideItemsUntilMeasured).toBe(true);
+
+        await act(async () => {
+            rendered.rerender(renderList(undefined));
+        });
+        expect(ctx.state.props.hideItemsUntilMeasured).toBeUndefined();
+
+        rendered.unmount();
+    });
+
+    it("clears hidden containers when experimental_hideItemsUntilMeasured is turned off", async () => {
+        const data = [
+            { id: "item-1", label: "Alpha" },
+            { id: "item-2", label: "Beta" },
+        ];
+        const { LegendList } = await import("../../src/components/LegendList?props-test-hide-items-reset");
+
+        const renderList = (experimental_hideItemsUntilMeasured?: boolean) => (
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                experimental_hideItemsUntilMeasured={experimental_hideItemsUntilMeasured}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />
+        );
+
+        const rendered = render(renderList(true));
+        const ctx = await getContextFromRender();
+
+        // Simulate a container left hidden because its measurement never landed.
+        await act(async () => {
+            set$(ctx, "containerLayoutReady0", false);
+            set$(ctx, "containerLayoutReady1", false);
+        });
+        expect(peek$(ctx, "containerLayoutReady0")).toBe(false);
+
+        // Opting out must not strand those containers invisible forever.
+        await act(async () => {
+            rendered.rerender(renderList(false));
+        });
+        expect(peek$(ctx, "containerLayoutReady0")).toBeUndefined();
+        expect(peek$(ctx, "containerLayoutReady1")).toBeUndefined();
+
+        rendered.unmount();
+    });
+
     it("uses the configured adaptive render initial mode before readyToRender", async () => {
         const data = [
             { id: "item-1", label: "Alpha" },
@@ -1190,6 +1344,70 @@ describe("LegendList props behavior", () => {
         expect(state.initialScroll?.viewOffset).toBe(-12);
 
         rendered.unmount();
+    });
+
+    it("bottom-aligns only an unoffset numeric initialScrollIndex targeting the last item", async () => {
+        const data = [
+            { id: "item-1", label: "Alpha" },
+            { id: "item-2", label: "Beta" },
+            { id: "item-3", label: "Gamma" },
+        ];
+
+        const { LegendList } = await import("../../src/components/LegendList?props-test-numeric-last-index");
+        const rendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                initialScrollIndex={2}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        const state = await getStateFromRender();
+        expect(state.initialScroll?.index).toBe(2);
+        expect(state.initialScroll?.preserveForBottomPadding).toBe(true);
+        expect(state.initialScroll?.viewOffset).toBeCloseTo(0);
+        expect(state.initialScroll?.viewPosition).toBe(1);
+
+        rendered.unmount();
+
+        const middleRendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                initialScrollIndex={1}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        const middleState = await getStateFromRender();
+        expect(middleState.initialScroll?.viewPosition).toBeUndefined();
+        expect(middleState.initialScroll?.preserveForBottomPadding).toBeUndefined();
+
+        middleRendered.unmount();
+
+        const offsetRendered = render(
+            <LegendList
+                data={data}
+                estimatedItemSize={100}
+                initialScrollIndex={2}
+                initialScrollOffset={20}
+                keyExtractor={(item: { id: string }) => item.id}
+                recycleItems={false}
+                renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
+            />,
+        );
+
+        const offsetState = await getStateFromRender();
+        expect(offsetState.initialScroll?.viewOffset).toBe(20);
+        expect(offsetState.initialScroll?.viewPosition).toBeUndefined();
+        expect(offsetState.initialScroll?.preserveForBottomPadding).toBeUndefined();
+
+        offsetRendered.unmount();
     });
 
     it("offsets the built-in RefreshControl by contentContainerStyle.paddingTop", async () => {
