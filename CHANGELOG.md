@@ -1,3 +1,21 @@
+## 3.6.0
+
+- Feat: Add `viewPositionFallback` to align oversized items to the start or end of the viewport during initial or programmatic scrolling, while keeping `viewPosition` alignment for items that fit.
+
+## 3.5.0
+
+- Feat: Add `scrollElement` so web lists can share an ancestor element's scrollbar
+- Fix: Stopping scrolling keeps rows prepared in the last scroll direction instead of shifting the render buffer backward.
+- Perf: Single-column lists do less layout work during initial rendering and scrolling when item sizes and data are unchanged.
+
+## 3.4.0
+
+- Feat: Add `onReady`, called after each initial placement and scroll cycle completes, including cycles restarted by a `dataKey` change.
+- Fix: End-following and animated programmatic scrolling now stay aligned through footer, viewport, and native layout changes, while user dragging cancels queued follow requests.
+- Fix: `onStartReached` and `onEndReached` callbacks now fire reliably after layout and dataset resets, including short lists and gestures that cross a threshold over multiple events.
+- Fix: Numeric `initialScrollIndex` values that target the last row now include the footer when opening at the end.
+- Perf: Fast scrolling now prepares rows in the direction you are moving, including upward and end-aligned scrolling, so the next content is ready sooner.
+
 ## 3.3.11
 
 - Fix: `scrollToEnd` and `maintainScrollAtEnd` keep reaching the end as content changes, while scrolling away or requesting another position cancels automatic following.

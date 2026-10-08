@@ -44,8 +44,7 @@ export function checkAtBottom(ctx: StateContext, allowedEdge?: ReachedEdge, allo
             isContentLess ||
                 distanceFromEnd <= maintainScrollAtEndThreshold! * scrollLength ||
                 state.pendingMaintainScrollAtEnd ||
-                maintainingScrollAtEnd === "animated" ||
-                maintainingScrollAtEnd === "instant",
+                !!maintainingScrollAtEnd,
         );
 
         const shouldSkipThresholdChecks = hasActiveInitialScroll(state) || maintainingScrollAtEnd;
@@ -62,10 +61,16 @@ export function checkAtBottom(ctx: StateContext, allowedEdge?: ReachedEdge, allo
                     scrollPosition: scroll,
                 },
                 (distance) => {
-                    if (canDispatchReachedEdge(ctx, "end", allowedEdge, allowGateCreatedInCurrentCheck)) {
+                    let dispatched = false;
+                    if (
+                        state.props.onEndReached &&
+                        canDispatchReachedEdge(ctx, "end", allowedEdge, allowGateCreatedInCurrentCheck)
+                    ) {
                         markReachedEdge(ctx);
-                        state.props.onEndReached?.({ distanceFromEnd: distance });
+                        state.props.onEndReached({ distanceFromEnd: distance });
+                        dispatched = true;
                     }
+                    return dispatched;
                 },
                 (snapshot) => {
                     state.endReachedSnapshot = snapshot;

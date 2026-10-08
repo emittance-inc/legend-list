@@ -18,6 +18,9 @@ const schedule = mock(() => true);
 const flush = mock(() => {});
 const cancel = mock(() => {});
 let supportsScrollEnd = false;
+let listPosition = 0;
+let ownerScroll = 0;
+let emitScroll: () => void;
 const mockCtx = {
     state: {
         anchoredEndSpaceSize: undefined as number | undefined,
@@ -41,24 +44,33 @@ function registerWebScrollMocks() {
     }));
 
     mock.module("@/utils/useRafCoalescer", () => ({
-        useRafCoalescer: () => ({
-            cancel,
-            flush,
-            schedule,
-        }),
+        useRafCoalescer: (callback: () => void) => {
+            emitScroll = callback;
+            return { cancel, flush, schedule };
+        },
+    }));
+
+    mock.module("../../src/components/observeScrollLayout", () => ({
+        observeScrollLayout: (_element: unknown, owner: unknown, onLayout: () => void) => {
+            if (owner !== null) onLayout();
+            return () => {};
+        },
     }));
 
     mock.module("../../src/components/webScrollUtils", () => ({
-        clampOffset: (offset: number) => offset,
+        clampOffset: (offset: number) => Math.max(0, Math.min(1000, offset)),
         getContentSize: () => ({ height: 0, width: 0 }),
-        getElementDocumentPosition: () => ({ left: 0, top: 0 }),
+        getElementScrollPosition: () => ({ left: listPosition, top: listPosition }),
         getLayoutMeasurement: () => ({ height: 0, width: 0 }),
         getLayoutRectangle: () => ({ height: 0, width: 0, x: 0, y: 0 }),
         getMaxOffset: () => 0,
         getScrollContentSize: () => ({ height: 0, width: 0 }),
-        getWindowScrollPosition: () => ({ x: 0, y: 0 }),
+        getScrollPosition: () => ({ x: ownerScroll, y: ownerScroll }),
+        isWindowTarget: (target: unknown) => target === window,
+        resolveExternalScrollOffset: () => ({ left: 0, top: 0 }),
         resolveScrollableNode: () => null,
-        resolveScrollEventTarget: () => {
+        resolveScrollEventTarget: (_element: unknown, externalTarget: unknown) => {
+            if (externalTarget !== undefined && externalTarget !== window) return externalTarget;
             const target = {
                 addEventListener,
                 removeEventListener,
@@ -72,7 +84,6 @@ function registerWebScrollMocks() {
             }
             return target;
         },
-        resolveWindowScrollTarget: () => ({ left: 0, top: 0 }),
     }));
 }
 
@@ -85,6 +96,9 @@ function resetMocks() {
     flush.mockClear();
     cancel.mockClear();
     supportsScrollEnd = false;
+    listPosition = 0;
+    ownerScroll = 0;
+    mockCtx.state.lastLayout = undefined;
     mockCtx.state.anchoredEndSpaceSize = undefined;
     mockCtx.state.dataChangeNeedsScrollUpdate = false;
     mockCtx.state.didFinishInitialScroll = true;
@@ -102,6 +116,56 @@ describe("ListComponentScrollView (web)", () => {
     beforeEach(() => {
         registerWebScrollMocks();
     });
+
+    for (const useWindowScroll of [false, true]) {
+        for (const horizontal of [false, true]) {
+            it(`preserves the real external viewport offset (window=${useWindowScroll}, horizontal=${horizontal})`, async () => {
+                resetMocks();
+                listPosition = 216;
+                const { ListComponentScrollView } = await import(
+                    "../../src/components/ListComponentScrollView?external-viewport-offset"
+                );
+                const ref = { current: null as any };
+                const onScroll = mock();
+                const onLayout = mock(() => {
+                    expect(mockCtx.state.scroll).toBe(-216);
+                });
+                const owner = { addEventListener: mock(), removeEventListener: mock() } as unknown as HTMLElement;
+                let renderer: TestRenderer.ReactTestRenderer | undefined;
+                try {
+                    act(() => {
+                        renderer = TestRenderer.create(
+                            <ListComponentScrollView
+                                horizontal={horizontal}
+                                onLayout={onLayout}
+                                onScroll={onScroll}
+                                ref={ref}
+                                scrollElement={useWindowScroll ? undefined : owner}
+                                style={{}}
+                                useWindowScroll={useWindowScroll}
+                            >
+                                <div />
+                            </ListComponentScrollView>,
+                            { createNodeMock: () => ({ parentElement: null }) },
+                        );
+                    });
+                    expect(onLayout).toHaveBeenCalled();
+                    const axis = horizontal ? "x" : "y";
+                    expect(onScroll.mock.calls.at(-1)?.[0].nativeEvent.contentOffset[axis]).toBe(-216);
+                    expect(ref.current.getCurrentScrollOffset()).toBe(0);
+                    listPosition = 835;
+                    expect(ref.current.getRawScrollOffset()).toBe(-835);
+                    expect(ref.current.getCurrentScrollOffset()).toBe(0);
+                    listPosition = 216;
+                    ownerScroll = 316;
+                    act(() => emitScroll());
+                    expect(onScroll.mock.calls.at(-1)?.[0].nativeEvent.contentOffset[axis]).toBe(100);
+                } finally {
+                    act(() => renderer?.unmount());
+                }
+            });
+        }
+    }
 
     it("interrupts end following only for a wheel gesture away from the end and cleans up the listener", async () => {
         resetMocks();
@@ -240,6 +304,55 @@ describe("ListComponentScrollView (web)", () => {
             });
         }
     });
+
+    for (const finish of ["native", "unmount", "inactivity"] as const) {
+        it(`cleans up the pending scroll-end fallback after ${finish}`, async () => {
+            resetMocks();
+            supportsScrollEnd = finish === "native";
+            const boundaries: string[] = [];
+            const onInternalScrollEnd = mock(() => boundaries.push("end"));
+            const { ListComponentScrollView } = await import(
+                "../../src/components/ListComponentScrollView?web-scroll-end-cleanup"
+            );
+            let renderer: TestRenderer.ReactTestRenderer | undefined;
+            try {
+                act(() => {
+                    renderer = TestRenderer.create(
+                        <ListComponentScrollView
+                            onInternalScrollEnd={onInternalScrollEnd}
+                            onLayout={() => {}}
+                            onScroll={() => {}}
+                            style={{}}
+                        >
+                            <div />
+                        </ListComponentScrollView>,
+                    );
+                });
+                act(() => {
+                    // A burst of scroll events should schedule only one boundary.
+                    scrollListeners.get("scroll")?.({} as Event);
+                    scrollListeners.get("scroll")?.({} as Event);
+                    scrollListeners.get("scroll")?.({} as Event);
+                });
+                expect(onInternalScrollEnd).not.toHaveBeenCalled();
+                if (finish === "native") {
+                    act(() => scrollListeners.get("scrollend")?.({} as Event));
+                    expect(onInternalScrollEnd).toHaveBeenCalledTimes(1);
+                } else if (finish === "unmount") {
+                    act(() => renderer?.unmount());
+                    renderer = undefined;
+                    expect(scrollListeners.has("scroll")).toBe(false);
+                }
+                await act(async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 230));
+                });
+                expect(boundaries).toEqual(finish === "unmount" ? [] : ["end"]);
+                expect(flush).toHaveBeenCalledTimes(finish === "unmount" ? 0 : 1);
+            } finally {
+                act(() => renderer?.unmount());
+            }
+        });
+    }
 
     it("flushes immediately for any active programmatic scroll target", async () => {
         resetMocks();
@@ -895,4 +1008,33 @@ describe("ListComponentScrollView (web)", () => {
             });
         }
     });
+});
+
+it("moves listeners to a replacement external owner and detaches while the owner is null", async () => {
+    registerWebScrollMocks();
+    resetMocks();
+    const { ListComponentScrollView } = await import(
+        "../../src/components/ListComponentScrollView?external-owner-lifecycle"
+    );
+    const first = { addEventListener: mock(), removeEventListener: mock() } as unknown as HTMLElement;
+    const second = { addEventListener: mock(), removeEventListener: mock() } as unknown as HTMLElement;
+    const render = (scrollElement: HTMLElement | null) => (
+        <ListComponentScrollView onLayout={() => {}} onScroll={() => {}} scrollElement={scrollElement} style={{}}>
+            <div />
+        </ListComponentScrollView>
+    );
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+        renderer = TestRenderer.create(render(null));
+    });
+    expect(addEventListener).not.toHaveBeenCalled();
+    act(() => renderer!.update(render(first)));
+    expect(first.addEventListener).toHaveBeenCalledWith("scroll", expect.any(Function), { passive: true });
+    act(() => renderer!.update(render(second)));
+    expect(first.removeEventListener).toHaveBeenCalledWith("scroll", expect.any(Function));
+    expect(second.addEventListener).toHaveBeenCalledWith("scroll", expect.any(Function), { passive: true });
+    act(() => renderer!.update(render(null)));
+    expect(second.removeEventListener).toHaveBeenCalledWith("scroll", expect.any(Function));
+    expect(addEventListener).not.toHaveBeenCalled();
+    act(() => renderer!.unmount());
 });

@@ -232,7 +232,7 @@ describe("LegendList props behavior", () => {
         rendered.unmount();
     });
 
-    for (const maintaining of ["animated", "pending-animated"] as const) {
+    for (const maintaining of ["animated", "pending-animated", "instant", "pending-instant"] as const) {
         it(`cancels ${maintaining} end following when a native drag begins`, async () => {
             const data = [{ id: "item-1", label: "Alpha" }];
             const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
@@ -252,7 +252,7 @@ describe("LegendList props behavior", () => {
             state.maintainingScrollAtEnd = maintaining;
             state.pendingMaintainScrollAtEnd = true;
             state.pendingScrollResolve = resolveScroll;
-            state.scrollingTo = { animated: true, isScrollToEnd: true, offset: 100 };
+            state.scrollingTo = { animated: maintaining.includes("animated"), isScrollToEnd: true, offset: 100 };
 
             act(() => {
                 lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
@@ -301,6 +301,7 @@ describe("LegendList props behavior", () => {
         const data = [{ id: "item-1", label: "Alpha" }];
         const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
         const dragCalls: string[] = [];
+        const dragEndCalls: string[] = [];
         const momentumCalls: string[] = [];
         const { LegendList } = await import("../../src/components/LegendList?props-test-current-scroll-callbacks");
         const renderList = (version: string) => (
@@ -310,14 +311,19 @@ describe("LegendList props behavior", () => {
                 keyExtractor={(item: { id: string }) => item.id}
                 onMomentumScrollEnd={() => momentumCalls.push(version)}
                 onScrollBeginDrag={() => dragCalls.push(version)}
+                onScrollEndDrag={() => dragEndCalls.push(version)}
                 recycleItems={false}
                 renderItem={renderItem}
             />
         );
         const rendered = render(renderList("first"));
+        const state = await getStateFromRender();
 
         act(() => {
             lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+            expect(state.isDragging).toBe(true);
+            lastListProps.onInternalScrollEndDrag({ nativeEvent: {} });
+            expect(state.isDragging).toBe(false);
             lastListProps.onMomentumScrollEnd({ nativeEvent: {} });
         });
 
@@ -325,10 +331,14 @@ describe("LegendList props behavior", () => {
 
         act(() => {
             lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
+            expect(state.isDragging).toBe(true);
+            lastListProps.onInternalScrollEndDrag({ nativeEvent: {} });
+            expect(state.isDragging).toBe(false);
             lastListProps.onMomentumScrollEnd({ nativeEvent: {} });
         });
 
         expect(dragCalls).toEqual(["first", "next"]);
+        expect(dragEndCalls).toEqual(["first", "next"]);
         expect(momentumCalls).toEqual(["first", "next"]);
         rendered.unmount();
     });
@@ -1011,6 +1021,8 @@ describe("LegendList props behavior", () => {
             { id: "item-4", label: "Delta" },
         ];
         const { LegendList } = await import("../../src/components/LegendList?props-test-data-key-fresh-dataset");
+        const readyKeys: string[] = [];
+        const onLoad = mock(() => {});
         const consoleError = mock(() => {});
         const originalConsoleError = console.error;
         console.error = consoleError;
@@ -1021,6 +1033,8 @@ describe("LegendList props behavior", () => {
                 estimatedItemSize={100}
                 experimental_adaptiveRender={{ initialMode: "light" }}
                 keyExtractor={(item: { id: string }) => item.id}
+                onLoad={onLoad}
+                onReady={() => readyKeys.push(dataKey)}
                 recycleItems={false}
                 renderItem={({ item }: { item: { label: string } }) => <Text>{item.label}</Text>}
             />
@@ -1038,6 +1052,8 @@ describe("LegendList props behavior", () => {
             expect(ctx.values.get("readyToRender")).toBe(true);
             expect(ctx.values.get("adaptiveRender")).toBe("normal");
             const initialFreshDataTransitionEpoch = lastListProps.freshDataTransitionEpoch;
+            expect(readyKeys).toEqual(["conversation-1"]);
+            expect(onLoad).toHaveBeenCalledTimes(1);
 
             rendered.rerender(renderList(nextData, "conversation-2"));
             await flushAsync();
@@ -1047,6 +1063,7 @@ describe("LegendList props behavior", () => {
             expect(ctx.values.get("readyToRender")).toBe(false);
             expect(ctx.values.get("adaptiveRender")).toBe("light");
             expect(lastListProps.freshDataTransitionEpoch).toBe(initialFreshDataTransitionEpoch + 1);
+            expect(readyKeys).toEqual(["conversation-1"]);
             expect(consoleError.mock.calls.flat().join(" ")).not.toContain("Cannot update a component");
 
             await act(async () => {
@@ -1056,6 +1073,12 @@ describe("LegendList props behavior", () => {
 
             expect(ctx.values.get("readyToRender")).toBe(true);
             expect(ctx.values.get("adaptiveRender")).toBe("normal");
+
+            expect(readyKeys).toEqual(["conversation-1", "conversation-2"]);
+            expect(onLoad).toHaveBeenCalledTimes(1);
+            rendered.rerender(renderList([...nextData, { id: "item-5", label: "Epsilon" }], "conversation-2"));
+            await flushAsync();
+            expect(readyKeys).toEqual(["conversation-1", "conversation-2"]);
 
             rendered.unmount();
         } finally {

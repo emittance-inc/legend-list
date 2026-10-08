@@ -123,6 +123,7 @@ export function updateItemSizes(ctx: StateContext, measurement: ItemSizeMeasurem
 export function updateItemSizesBatch(ctx: StateContext, measurements: ItemSizeMeasurement[]) {
     const state = ctx.state;
     const result: ItemSizeUpdateResult = {};
+    const previousTotalSize = state.totalSize;
 
     for (const measurement of measurements) {
         // Measurements can arrive after recycling. Only explicit imperative sizes,
@@ -140,6 +141,12 @@ export function updateItemSizesBatch(ctx: StateContext, measurements: ItemSizeMe
             const nextResult = applyItemSize(ctx, measurement.itemKey, measurement.size, metadata);
             mergeItemSizeUpdateResult(result, nextResult);
         }
+    }
+
+    // Publish the batch total before recalculating scroll positions. If the total is unchanged,
+    // preserve any published old-architecture pending shrink or temporary padding compensation.
+    if (state.totalSize !== previousTotalSize) {
+        set$(ctx, "totalSize", state.totalSize);
     }
 
     flushItemSizeUpdates(ctx, result);
@@ -188,15 +195,16 @@ function applyItemSize(
     // Need to calculate if haven't all laid out yet
     let needsRecalculate = !didContainersLayout;
     let shouldMaintainScrollAtEnd = false;
-    let minIndexSizeChanged: number | undefined;
+    let positionRecalculationStartIndex: number | undefined;
 
     const prevSizeKnown = state.sizesKnown.get(itemKey);
 
-    const diff = updateOneItemSize(ctx, itemKey, sizeObj, resolvedMeasurementItem);
+    const diff = updateOneItemSize(ctx, itemKey, sizeObj, resolvedMeasurementItem, false);
     const size = roundSize(horizontal ? sizeObj.width : sizeObj.height);
 
     if (diff !== 0) {
-        minIndexSizeChanged = minIndexSizeChanged !== undefined ? Math.min(minIndexSizeChanged, index) : index;
+        positionRecalculationStartIndex =
+            positionRecalculationStartIndex !== undefined ? Math.min(positionRecalculationStartIndex, index) : index;
 
         // Check if item is in view
         const { startBuffered, endBuffered } = state;
@@ -223,11 +231,11 @@ function applyItemSize(
     }
 
     // Update state with minimum changed index
-    if (minIndexSizeChanged !== undefined) {
-        state.minIndexSizeChanged =
-            state.minIndexSizeChanged !== undefined
-                ? Math.min(state.minIndexSizeChanged, minIndexSizeChanged)
-                : minIndexSizeChanged;
+    if (positionRecalculationStartIndex !== undefined) {
+        state.positionRecalculationStartIndex =
+            state.positionRecalculationStartIndex !== undefined
+                ? Math.min(state.positionRecalculationStartIndex, positionRecalculationStartIndex)
+                : positionRecalculationStartIndex;
     }
 
     updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
@@ -253,6 +261,7 @@ export function updateOneItemSize(
     itemKey: string,
     sizeObj: { width: number; height: number },
     resolvedMeasurementItem?: ResolvedItemSize,
+    notifyTotalSize = true,
 ) {
     const state = ctx.state;
     const {
@@ -280,7 +289,16 @@ export function updateOneItemSize(
                   itemType,
               }
             : undefined;
-    const prevSize = getItemSize(ctx, itemKey, index, itemData, undefined, undefined, undefined, resolvedItemSize);
+    const prevSize = getItemSize(
+        ctx,
+        itemKey,
+        index,
+        itemData,
+        undefined,
+        undefined,
+        notifyTotalSize,
+        resolvedItemSize,
+    );
     const rawSize = horizontal ? sizeObj.width : sizeObj.height;
     const prevSizeKnown = sizesKnown.get(itemKey);
     if (Platform.OS !== "web" && prevSizeKnown !== undefined && isNativeLayoutNoise(rawSize - prevSizeKnown)) {
@@ -289,6 +307,7 @@ export function updateOneItemSize(
 
     // On web, prefer whole-pixel sizes to avoid cumulative subpixel gaps/overlaps with transforms
     const size = Platform.OS === "web" ? Math.round(rawSize) : roundSize(rawSize);
+    if (prevSizeKnown !== size) state.positionsAreCurrent = false;
     sizesKnown.set(itemKey, size);
 
     // Update averages per item type
@@ -320,7 +339,7 @@ export function updateOneItemSize(
 
     // Update saved size if it changed
     if (!prevSize || Math.abs(prevSize - size) > 0.1) {
-        setSize(ctx, itemKey, size);
+        setSize(ctx, itemKey, size, notifyTotalSize);
         return size - prevSize;
     }
     return 0;

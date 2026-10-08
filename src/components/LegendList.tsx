@@ -27,6 +27,7 @@ import { checkStructuralDataChange } from "@/core/checkStructuralDataChange";
 import { resetContainerLayoutReady } from "@/core/containerLayoutReady";
 import { doInitialAllocateContainers } from "@/core/doInitialAllocateContainers";
 import { interruptMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
+import { getEndAlignedViewOffset } from "@/core/endOfContentTarget";
 import { clearPreservedInitialScrollTarget } from "@/core/finishInitialScroll";
 import { handleLayout } from "@/core/handleLayout";
 import { advanceCurrentInitialScrollSession, resolveInitialScrollOffset } from "@/core/initialScroll";
@@ -83,7 +84,7 @@ import { updateSnapToOffsets } from "@/utils/updateSnapToOffsets";
 export const LegendList = typedMemo(
     // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
     typedForwardRef(function LegendList<T>(
-        props: LegendListPropsBase<T, LooseScrollViewProps>,
+        props: LegendListPropsBase<T, LooseScrollViewProps> & { scrollElement?: HTMLElement | null },
         forwardedRef: ForwardedRef<LegendListRef>,
     ) {
         // Handle children mode - convert children to data array at the top level
@@ -112,6 +113,7 @@ export const LegendList = typedMemo(
 );
 
 type LegendListInnerProps<T> = Omit<LegendListPropsBase<T, LooseScrollViewProps>, "children"> & {
+    scrollElement?: HTMLElement | null;
     childrenMode?: boolean;
     data: ReadonlyArray<T>;
     renderItem: (props: LegendListRenderItemProps<T, string | undefined>) => React.ReactNode;
@@ -171,10 +173,12 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onMetricsChange,
         onLayout: onLayoutProp,
         onLoad,
+        onReady,
         onMomentumScrollEnd,
         onRefresh,
         onScroll: onScrollProp,
         onScrollBeginDrag,
+        onScrollEndDrag,
         onStartReached,
         onStartReachedThreshold = 0.5,
         onStickyHeaderChange,
@@ -192,6 +196,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         stickyHeaderIndices: stickyHeaderIndicesProp,
         style: styleProp,
         useWindowScroll = false,
+        scrollElement,
         viewabilityConfig,
         viewabilityConfigCallbackPairs,
         ...rest
@@ -265,7 +270,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         ? {
               index: Math.max(0, dataProp.length - 1),
               preserveForBottomPadding: true,
-              viewOffset: -stylePaddingEndState,
+              viewOffset: getEndAlignedViewOffset(stylePaddingEndState),
               viewPosition: 1,
           }
         : hasInitialScrollIndex
@@ -273,20 +278,28 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
               ? {
                     index: initialScrollIndexProp.index ?? 0,
                     preserveForBottomPadding:
-                        initialScrollIndexProp.viewOffset === undefined && initialScrollIndexProp.viewPosition === 1
+                        initialScrollIndexProp.viewOffset === undefined &&
+                        initialScrollIndexProp.viewPosition === 1 &&
+                        initialScrollIndexProp.viewPositionFallback === undefined
                             ? true
                             : undefined,
                     viewOffset:
                         initialScrollIndexProp.viewOffset ??
-                        (initialScrollIndexProp.viewPosition === 1 ? -stylePaddingEndState : 0),
+                        (initialScrollIndexProp.viewPosition === 1 &&
+                        initialScrollIndexProp.viewPositionFallback === undefined
+                            ? getEndAlignedViewOffset(stylePaddingEndState)
+                            : 0),
                     viewPosition: initialScrollIndexProp.viewPosition ?? 0,
+                    viewPositionFallback: initialScrollIndexProp.viewPositionFallback,
                 }
               : {
                     index: initialScrollIndexProp ?? 0,
                     preserveForBottomPadding: shouldBottomAlignNumericInitialScrollIndex ? true : undefined,
                     viewOffset:
                         initialScrollOffsetProp ??
-                        (shouldBottomAlignNumericInitialScrollIndex ? -stylePaddingEndState : 0),
+                        (shouldBottomAlignNumericInitialScrollIndex
+                            ? getEndAlignedViewOffset(stylePaddingEndState)
+                            : 0),
                     viewPosition: shouldBottomAlignNumericInitialScrollIndex ? 1 : undefined,
                 }
           : initialScrollUsesOffsetOnly
@@ -329,7 +342,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         keyExtractor,
     ]);
 
-    const useWindowScrollResolved = Platform.OS === "web" && !!useWindowScroll && !renderScrollComponent;
+    const scrollElementResolved = Platform.OS === "web" && !renderScrollComponent ? scrollElement : undefined;
+    const useWindowScrollResolved =
+        Platform.OS === "web" && !!useWindowScroll && scrollElementResolved === undefined && !renderScrollComponent;
+
+    const hasExternalScroll = useWindowScrollResolved || scrollElementResolved !== undefined;
 
     const refState = useRef<InternalState | undefined>(undefined);
     const hasOverrideItemLayout = !!overrideItemLayout;
@@ -383,11 +400,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 lastLayout: undefined,
                 lastScrollDelta: 0,
                 loadStartTime: Date.now(),
-                minIndexSizeChanged: 0,
                 nativeContentInset: undefined,
                 nativeMarginTop: 0,
                 pendingDataComparison: undefined,
                 pendingNativeMVCPAdjust: undefined,
+                positionRecalculationStartIndex: 0,
                 positions: [],
                 props: {} as any,
                 queuedCalculateItemsInView: 0,
@@ -500,6 +517,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         estimatedItemSize,
         getFixedItemSize: useWrapIfItem(getFixedItemSize),
         getItemType: useWrapIfItem(getItemType),
+        hasExternalScroll,
         hideItemsUntilMeasured: experimental_hideItemsUntilMeasured,
         horizontal: !!horizontal,
         itemsAreEqual,
@@ -514,8 +532,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onItemSizeChanged,
         onLoad,
         onMomentumScrollEnd,
+        onReady,
         onScroll: throttleScrollFn,
         onScrollBeginDrag,
+        onScrollEndDrag,
         onStartReached,
         onStartReachedThreshold,
         onStickyHeaderChange,
@@ -727,6 +747,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onLayoutChange,
         onLayoutProp,
         ref: refScroller as unknown as React.RefObject<LooseView | null>, // the type of ScrollView doesn't include measure?
+        webExternalScroll: hasExternalScroll,
     });
 
     useLayoutEffect(() => {
@@ -870,11 +891,16 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             },
             onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => onScroll(ctx, event),
             onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                state.isDragging = true;
                 interruptMaintainScrollAtEnd(ctx);
                 prepareReachedEdgeForNextUserScroll(ctx);
                 state.props.onScrollBeginDrag?.(event as any);
             },
             onScrollEnd: () => prepareReachedEdgeForNextUserScroll(ctx),
+            onScrollEndDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                state.isDragging = false;
+                state.props.onScrollEndDrag?.(event as any);
+            },
         }),
         [],
     );
@@ -901,6 +927,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 ListHeaderComponent={ListHeaderComponent}
                 onInternalScrollBeginDrag={fns.onScrollBeginDrag}
                 onInternalScrollEnd={fns.onScrollEnd}
+                onInternalScrollEndDrag={fns.onScrollEndDrag}
                 onLayout={onLayout!}
                 onLayoutFooter={onLayoutFooter}
                 onMomentumScrollEnd={fns.onMomentumScrollEnd}
@@ -925,6 +952,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 refScrollView={combinedRef}
                 renderScrollComponent={renderScrollComponent}
                 scrollAdjustHandler={refState.current?.scrollAdjustHandler}
+                scrollElement={scrollElementResolved}
                 scrollEventThrottle={0}
                 snapToIndices={snapToIndices}
                 stickyHeaderIndices={stickyHeaderIndices}
