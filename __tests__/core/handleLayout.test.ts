@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import "../setup"; // Import global test setup
 import { Dimensions } from "react-native";
 
+import * as calculateItemsModule from "../../src/core/calculateItemsInView";
+import { doInitialAllocateContainers } from "../../src/core/doInitialAllocateContainers";
 import * as doMaintainScrollAtEndModule from "../../src/core/doMaintainScrollAtEnd";
 import { handleLayout } from "../../src/core/handleLayout";
 import { getScrollRequestTracker } from "../../src/core/scrollRequestTracker";
+import * as scrollToIndexModule from "../../src/core/scrollToIndex";
+import { updateItemPositions } from "../../src/core/updateItemPositions";
 import type { StateContext } from "../../src/state/state";
 import type { InternalState } from "../../src/types.internal";
 import { createMockContext } from "../__mocks__/createMockContext";
@@ -49,6 +53,88 @@ describe("handleLayout", () => {
             x: 0,
             y: 0,
         };
+    });
+
+    for (const fallback of [undefined, "start", "end"] as const) {
+        it(`recomputes only opt-in active targets after viewport resize (${fallback})`, () => {
+            const calculate = spyOn(calculateItemsModule, "calculateItemsInView").mockImplementation(() => {});
+            const scroll = spyOn(scrollToIndexModule, "scrollToIndex").mockImplementation(() => {});
+            try {
+                mockState.queuedInitialLayout = false;
+                mockState.scrollLength = 800;
+                mockState.scrollingTo = { index: 1, viewPosition: 0.5, viewPositionFallback: fallback };
+                handleLayout(mockCtx, mockLayout, setCanRender);
+                if (fallback) {
+                    expect(scroll).toHaveBeenCalledWith(mockCtx, {
+                        forceScroll: true,
+                        index: 1,
+                        viewPosition: 0.5,
+                        viewPositionFallback: fallback,
+                    });
+                } else {
+                    expect(scroll).not.toHaveBeenCalled();
+                }
+            } finally {
+                calculate.mockRestore();
+                scroll.mockRestore();
+            }
+        });
+    }
+
+    it("uses the initial positions and allocates the first range only once", () => {
+        mockState.props.data = Array.from({ length: 200 }, (_, id) => ({ id }));
+        updateItemPositions(mockCtx, true);
+        const positions = [...mockState.positions];
+        const calculate = spyOn(calculateItemsModule, "calculateItemsInView");
+        const clearKeys = spyOn(mockState.indexByKey, "clear");
+        try {
+            handleLayout(mockCtx, mockLayout, setCanRender);
+            expect(calculate).toHaveBeenCalledTimes(1);
+            expect(mockState.positions).toEqual(positions);
+            expect(clearKeys).not.toHaveBeenCalled();
+            expect(mockState.positionsAreCurrent).toBe(true);
+            expect(mockCtx.values.get("numContainers")).toBeGreaterThan(0);
+        } finally {
+            calculate.mockRestore();
+            clearKeys.mockRestore();
+        }
+    });
+
+    for (const startsEmpty of [false, true]) {
+        it(`rebuilds keys when data changes before allocation (startsEmpty=${startsEmpty})`, () => {
+            mockState.props.keyExtractor = (item: { id: string }) => item.id;
+            mockState.props.data = startsEmpty ? [] : [{ id: "old-a" }, { id: "old-b" }];
+            updateItemPositions(mockCtx, true);
+            if (startsEmpty) handleLayout(mockCtx, mockLayout, setCanRender);
+            mockState.props.data = [{ id: "new-a" }, { id: "new-b" }];
+            mockState.didDataChange = true;
+            mockState.didLoad = false;
+            mockState.lastLayout = mockLayout;
+            mockState.scrollLength = mockLayout.height;
+
+            doInitialAllocateContainers(mockCtx);
+
+            expect(mockState.idCache).toEqual(["new-a", "new-b"]);
+            expect([...mockState.indexByKey.keys()]).toEqual(["new-a", "new-b"]);
+            expect(mockState.positions).toEqual([0, 100]);
+            expect(mockCtx.values.get("numContainers")).toBeGreaterThan(0);
+        });
+    }
+
+    it("rebuilds column layout changed before allocation", () => {
+        mockState.props.data = [{ id: 0 }, { id: 1 }];
+        updateItemPositions(mockCtx, true);
+        mockState.didColumnsChange = true;
+        mockState.props.numColumns = 2;
+        mockCtx.values.set("numColumns", 2);
+        const clearKeys = spyOn(mockState.indexByKey, "clear");
+        try {
+            handleLayout(mockCtx, mockLayout, setCanRender);
+            expect(clearKeys).toHaveBeenCalled();
+            expect(mockState.positions).toEqual([0, 0]);
+        } finally {
+            clearKeys.mockRestore();
+        }
     });
 
     describe("basic layout handling", () => {
@@ -245,7 +331,9 @@ describe("handleLayout", () => {
 
                 handleLayout(mockCtx, mockLayout, setCanRender);
 
-                expect(mockState.isWithinMaintainScrollAtEndThreshold).toBe(false);
+                expect(mockState.isAtEnd).toBe(false);
+                // The queued follow retains the original end anchor across the resize.
+                expect(mockState.isWithinMaintainScrollAtEndThreshold).toBe(true);
                 expect(animationFrameCallback).toBeDefined();
 
                 animationFrameCallback?.(0);
@@ -283,7 +371,7 @@ describe("handleLayout", () => {
 
             handleLayout(mockCtx, mockLayout, setCanRender);
 
-            expect(doMaintainScrollAtEndSpy).toHaveBeenCalledWith(mockCtx);
+            expect(doMaintainScrollAtEndSpy).toHaveBeenCalledWith(mockCtx, { immediate: true });
             doMaintainScrollAtEndSpy.mockRestore();
         });
 

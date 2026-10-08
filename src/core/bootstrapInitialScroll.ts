@@ -1,3 +1,4 @@
+import { getEndAlignedViewOffset, isEndOfContentTarget } from "@/core/endOfContentTarget";
 import { clearPreservedInitialScrollTarget, finishInitialScroll } from "@/core/finishInitialScroll";
 import { dispatchInitialScroll, resolveInitialScrollOffset, setInitialScrollTarget } from "@/core/initialScroll";
 import { setInitialScrollSession } from "@/core/initialScrollSession";
@@ -274,16 +275,17 @@ function rearmBootstrapInitialScroll(
 function createInitialScrollAtEndTarget(options: {
     dataLength: number;
     footerSize: number;
+    index?: number;
     preserveForFooterLayout?: boolean;
     stylePaddingEnd: number;
-}) {
-    const { dataLength, footerSize, preserveForFooterLayout, stylePaddingEnd } = options;
+}): InternalInitialScrollTarget {
+    const { dataLength, footerSize, index, preserveForFooterLayout, stylePaddingEnd } = options;
     return {
         contentOffset: undefined,
-        index: Math.max(0, dataLength - 1),
+        index: index ?? Math.max(0, dataLength - 1),
         preserveForBottomPadding: true,
         preserveForFooterLayout,
-        viewOffset: -stylePaddingEnd - footerSize,
+        viewOffset: getEndAlignedViewOffset(stylePaddingEnd, footerSize),
         viewPosition: 1 as const,
     };
 }
@@ -313,13 +315,16 @@ function createRetargetedBottomAlignedInitialScroll(options: {
 }) {
     const { dataLength, footerSize, initialScrollAtEnd, stylePaddingEnd, target } = options;
     const preserveForFooterLayout = shouldPreserveInitialScrollForFooterLayout(target);
+    // Numeric last-row targets align the end of the content like initialScrollAtEnd. Once
+    // data grows past the target row it is an ordinary row again and stops counting the footer.
+    const alignsToContentEnd = initialScrollAtEnd || isEndOfContentTarget(target, dataLength);
     return {
         ...target,
         contentOffset: undefined,
         index: initialScrollAtEnd ? Math.max(0, dataLength - 1) : target.index,
         preserveForBottomPadding: true,
         preserveForFooterLayout,
-        viewOffset: -stylePaddingEnd - (preserveForFooterLayout ? footerSize : 0),
+        viewOffset: getEndAlignedViewOffset(stylePaddingEnd, alignsToContentEnd ? footerSize : 0),
         viewPosition: 1 as const,
     };
 }
@@ -333,7 +338,8 @@ function areEquivalentBootstrapInitialScrollTargets(
         current.preserveForBottomPadding === next.preserveForBottomPadding &&
         current.preserveForFooterLayout === next.preserveForFooterLayout &&
         current.viewOffset === next.viewOffset &&
-        current.viewPosition === next.viewPosition
+        current.viewPosition === next.viewPosition &&
+        current.viewPositionFallback === next.viewPositionFallback
     );
 }
 
@@ -357,11 +363,12 @@ function clearPendingInitialScrollFooterLayout(
     /*
      * Once footer layout is no longer part of the active correction, convert the
      * richer footer-aware target back into the normal end-aligned target shape.
-     * The important part is rebuilding viewOffset without the footer size.
+     * Keep the footer in the end offset even after its preservation marker
+     * expires; item alignment does not otherwise include the footer.
      */
     const clearedFooterTarget = createInitialScrollAtEndTarget({
         dataLength,
-        footerSize: 0,
+        footerSize: peek$(ctx, "footerSize") || 0,
         preserveForFooterLayout: undefined,
         stylePaddingEnd,
     });
@@ -399,7 +406,10 @@ function getPreservedEndAnchorOffsetDiff(ctx: StateContext) {
     const initialScroll = state.initialScroll;
     if (
         !state.didFinishInitialScroll ||
-        state.scrollingTo?.isInitialScroll ||
+        state.scrollingTo ||
+        state.pendingScrollResolve ||
+        state.maintainingScrollAtEnd ||
+        state.isDragging ||
         !initialScroll ||
         initialScroll.viewPosition !== 1 ||
         state.props.data.length === 0 ||
@@ -409,7 +419,7 @@ function getPreservedEndAnchorOffsetDiff(ctx: StateContext) {
     }
 
     const currentOffset =
-        typeof state.lastNativeScroll === "number" && Number.isFinite(state.lastNativeScroll)
+        Platform.OS !== "web" && typeof state.lastNativeScroll === "number" && Number.isFinite(state.lastNativeScroll)
             ? state.lastNativeScroll
             : getObservedBootstrapInitialScrollOffset(state);
 
@@ -451,6 +461,12 @@ function schedulePreservedEndAnchorCorrectionFrame(
 
         if (hasObservedNativeScrollAfterRequest) {
             activeCorrection.lastRequestTime = Date.now();
+            // Web layout/end following may already have moved the DOM before
+            // its scroll event arrives. Apply the remaining delta from that
+            // observed position, not from an already advanced cached target.
+            if (Platform.OS === "web") {
+                state.scroll = getObservedBootstrapInitialScrollOffset(state);
+            }
             requestAdjust(ctx, offsetDiff);
         }
 
@@ -708,14 +724,14 @@ export function handleBootstrapInitialScrollFooterLayout(
 ) {
     const { dataLength, footerSize, initialScrollAtEnd, stylePaddingEnd } = options;
     const state = ctx.state;
+    const initialScroll = state.initialScroll;
     /*
-     * Only initialScrollAtEnd uses footer size as part of its target math.
+     * Only end-of-content targets use footer size as part of their target math.
      */
-    if (!initialScrollAtEnd) {
+    if (!initialScrollAtEnd && !isEndOfContentTarget(initialScroll, dataLength)) {
         return;
     }
 
-    const initialScroll = state.initialScroll;
     /*
      * Footer layout cannot affect offset-session targets, empty lists, or
      * already-cleared initial-scroll targets.
@@ -752,12 +768,14 @@ export function handleBootstrapInitialScrollFooterLayout(
         const updatedInitialScroll = createInitialScrollAtEndTarget({
             dataLength,
             footerSize,
+            index: initialScrollAtEnd ? undefined : initialScroll.index,
             preserveForFooterLayout: shouldPreserveInitialScrollForFooterLayout(initialScroll),
             stylePaddingEnd,
         });
         const didTargetChange =
             initialScroll.index !== updatedInitialScroll.index ||
             initialScroll.viewPosition !== updatedInitialScroll.viewPosition ||
+            initialScroll.viewPositionFallback !== updatedInitialScroll.viewPositionFallback ||
             initialScroll.viewOffset !== updatedInitialScroll.viewOffset;
 
         /*

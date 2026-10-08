@@ -37,7 +37,7 @@ export function doScrollTo(ctx: StateContext, params: DoScrollToParams) {
     // so if it's not aniamted we set it up here
     if (!isAnimated) {
         state.scroll = offset;
-
-        checkFinishedScrollFallback(ctx);
     }
+    // Clamped animated requests may never emit a momentum end event.
+    checkFinishedScrollFallback(ctx);
 }

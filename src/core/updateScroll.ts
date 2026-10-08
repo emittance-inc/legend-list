@@ -2,6 +2,7 @@ import { updateAdaptiveRender } from "@/core/adaptiveRender";
 import { doMaintainScrollAtEnd, finishMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
 import { resolvePendingNativeMVCPAdjust } from "@/core/mvcp";
 import { flushSync } from "@/platform/flushSync";
+import { Platform } from "@/platform/Platform";
 import type { StateContext } from "@/state/state";
 import { checkThresholds } from "@/utils/checkThresholds";
 import { beginReachedEdgeUserScroll } from "@/utils/edgeReachedGate";
@@ -75,7 +76,14 @@ export function updateScroll(
         !adjustChanged &&
         scrollingTo === undefined &&
         !state.pendingNativeMVCPAdjust;
+    if (isUserScrollEvent) {
+        // The first sample after a pause has zero velocity, but a fresh direction.
+        state.scrollBufferDirection = newScroll > prevScroll ? 1 : -1;
+    }
+    // Native measurement/MVCP events can arrive after scroll completion.
+    // Native user intent is handled by onScrollBeginDrag, not inferred from those offsets.
     const didCancelMaintainScrollAtEnd =
+        Platform.OS === "web" &&
         isUserScrollEvent &&
         newScroll < prevScroll &&
         !!(state.maintainingScrollAtEnd || state.pendingMaintainScrollAtEnd);

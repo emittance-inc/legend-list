@@ -1,9 +1,21 @@
 import { getStartOffsetAdjustment } from "@/core/getStartOffsetAdjustment";
 import { getContentInsetEnd } from "@/state/getContentInsetEnd";
-import { peek$, type StateContext } from "@/state/state";
+import type { StateContext } from "@/state/state";
 import type { ScrollIndexWithOffsetPosition } from "@/types.base";
 import { getId } from "@/utils/getId";
 import { getItemSize } from "@/utils/getItemSize";
+
+export function getViewPositionOffset(
+    availableSpace: number,
+    viewPosition: number,
+    viewPositionFallback?: "start" | "end",
+) {
+    let alignment = viewPosition;
+    if (availableSpace < 0 && viewPositionFallback !== undefined) {
+        alignment = viewPositionFallback === "start" ? 0 : 1;
+    }
+    return -alignment * availableSpace;
+}
 
 export function calculateOffsetWithOffsetPosition(
     ctx: StateContext,
@@ -11,7 +23,7 @@ export function calculateOffsetWithOffsetPosition(
     params: Partial<ScrollIndexWithOffsetPosition>,
 ) {
     const state = ctx.state;
-    const { index, viewOffset, viewPosition } = params;
+    const { index, viewOffset, viewPosition, viewPositionFallback } = params;
     let offset = offsetParam;
 
     if (viewOffset) {
@@ -40,12 +52,12 @@ export function calculateOffsetWithOffsetPosition(
         const itemSize = Math.max(0, measuredItemSize - (isOutOfBounds ? 0 : ctx.scrollAxisGap));
         const trailingInset = getContentInsetEnd(ctx);
 
-        offset -= viewPosition * (state.scrollLength - trailingInset - itemSize);
+        const availableSpace = state.scrollLength - trailingInset - itemSize;
+        offset += getViewPositionOffset(availableSpace, viewPosition, viewPositionFallback);
 
-        if (!isOutOfBounds && index === state.props.data.length - 1) {
-            const footerSize = peek$(ctx, "footerSize") || 0;
-            offset += footerSize;
-        }
+        // Aligns the item itself. End-of-content targets carry padding and footer
+        // in viewOffset (see endOfContentTarget.ts); adding the footer here would
+        // count it twice and shift top/center alignment of the last item.
     }
 
     return offset;

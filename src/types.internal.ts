@@ -37,6 +37,9 @@ export interface ScrollableNodeLike {
 export interface LegendListScrollerRef {
     flashScrollIndicators(): void;
     getCurrentScrollOffset?(): number;
+    getRawScrollOffset?(): number;
+    isScrollInRange?(): boolean;
+    getContentNode?(): unknown;
     getMaxScrollOffset?(): number;
     getNativeScrollRef?(): unknown;
     getScrollEventTarget?(): ScrollEventTargetLike | null;
@@ -80,6 +83,8 @@ export interface ScrollTarget {
     targetOffset?: number;
     viewOffset?: number;
     viewPosition?: number;
+    /** Alignment used only when the item exceeds the viewport. Omit to preserve viewPosition. */
+    viewPositionFallback?: "start" | "end";
 }
 
 type BootstrapInitialScrollSession = {
@@ -198,6 +203,7 @@ export interface InternalState {
     clearPreservedInitialScrollOnNextFinish?: boolean;
     initialScrollSession?: InternalInitialScrollSession;
     initialScroll: InternalInitialScrollTarget | undefined;
+    isDragging?: boolean;
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;
@@ -210,7 +216,7 @@ export interface InternalState {
     lastScrollDelta: number;
     loadStartTime: number;
     maintainingScrollAtEnd?: MaintainingScrollAtEndState;
-    minIndexSizeChanged: number | undefined;
+    positionRecalculationStartIndex: number | undefined;
     mvcpAnchorLock?: {
         id: string;
         position: number;
@@ -239,6 +245,7 @@ export interface InternalState {
     pendingScrollResolve?: (() => void) | undefined;
     runPendingScrollToEnd?: () => void;
     positions: Array<number | undefined>;
+    positionsAreCurrent?: boolean;
     previousData?: readonly unknown[];
     queuedCalculateItemsInView: number | undefined;
     queuedInitialLayout?: boolean | undefined;
@@ -248,6 +255,7 @@ export interface InternalState {
     scrollAdjustHandler: ScrollAdjustHandler;
     scrollForNextCalculateItemsInView: { top: number | null; bottom: number | null } | undefined;
     scrollHistory: Array<{ scroll: number; time: number }>;
+    scrollBufferDirection?: -1 | 1;
     scrollingTo?: InternalScrollTarget | undefined;
     scrollTargetPinnedRange?: { end: number; start: number };
     horizontalRTLScrollType?: "normal" | "inverted" | "negative";
@@ -314,9 +322,11 @@ export interface InternalState {
         adaptiveRender: LegendListPropsInternal["experimental_adaptiveRender"];
         onItemSizeChanged: LegendListPropsInternal["onItemSizeChanged"];
         onLoad: LegendListPropsInternal["onLoad"];
+        onReady: LegendListPropsInternal["onReady"];
         onMomentumScrollEnd: LegendListPropsInternal["onMomentumScrollEnd"];
         onScroll: LegendListPropsInternal["onScroll"];
         onScrollBeginDrag: LegendListPropsInternal["onScrollBeginDrag"];
+        onScrollEndDrag: LegendListPropsInternal["onScrollEndDrag"];
         onStartReached: LegendListPropsInternal["onStartReached"];
         onStartReachedThreshold: number | null | undefined;
         onStickyHeaderChange: LegendListPropsInternal["onStickyHeaderChange"];
@@ -335,6 +345,7 @@ export interface InternalState {
         stylePaddingRight: number | undefined;
         stylePaddingTop: number | undefined;
         useWindowScroll: boolean;
+        hasExternalScroll?: boolean;
     };
 }
 

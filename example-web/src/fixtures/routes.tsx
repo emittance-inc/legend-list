@@ -8,11 +8,14 @@ import AddToEndExample from "./AddToEndExample";
 import AiChatFloatingComposerExample from "./AiChatFloatingComposerExample";
 import AlwaysRenderExample from "./AlwaysRenderExample";
 import BidirectionalInfiniteListExample from "./BidirectionalInfiniteListExample";
+import ChatEndFollowExample from "./ChatEndFollowExample";
 import ChatExample from "./ChatExample";
 import ChatFloatingComposerExample from "./ChatFloatingComposerExample";
 import ColumnsExample from "./ColumnsExample";
 import CountriesExample from "./CountriesExample";
 import CountriesWithHeadersStickyExample from "./CountriesWithHeadersStickyExample";
+import EndResizeExample from "./EndResizeExample";
+import ExternalScrollExample from "./ExternalScrollExample";
 import ExtraDataExample from "./ExtraDataExample";
 import FixedSizeItemsExample from "./FixedSizeItemsExample";
 import HeaderMvcpExample from "./HeaderMvcpExample";
@@ -22,6 +25,7 @@ import LazyListExample from "./LazyListExample";
 import MutableCellsExample from "./MutableCellsExample";
 import MVCPTestExample from "./MVCPTestExample";
 import PrependLargeItemsJumpExample from "./PrependLargeItemsJumpExample";
+import RecycleImagePriorityExample from "./RecycleImagePriorityExample";
 import SnapToIndicesExample from "./SnapToIndicesExample";
 import WindowScrollExample from "./WindowScrollExample";
 
@@ -35,6 +39,35 @@ export type FixtureRoute = {
 };
 
 export const FIXTURE_ROUTES: FixtureRoute[] = [
+    {
+        description: "Two virtual lists share an ancestor scrollbar with dynamic content above them.",
+        element: () => <ExternalScrollExample />,
+        group: "Scroll & Position",
+        path: "external-scroll",
+        title: "External Scroll",
+    },
+    {
+        description:
+            "Checks instant end following when a late pinned bar resizes the viewport, with and without a footer.",
+        element: () => <EndResizeExample />,
+        group: "Chat & Messaging",
+        path: "end-resize",
+        title: "End Resize",
+    },
+    {
+        description: "Checks image request priority with slow recycled rows and fast scrolling.",
+        element: () => <RecycleImagePriorityExample />,
+        group: "Scroll & Position",
+        path: "recycle-image-priority",
+        title: "Recycled Image Priority",
+    },
+    {
+        description: "Regresses typing during animated end scrolling, footer removal, and history-target priority.",
+        element: () => <ChatEndFollowExample />,
+        group: "Chat & Messaging",
+        path: "chat-end-follow",
+        title: "Chat End Follow",
+    },
     {
         description: "Verifies indexed scrollTo accuracy on variable-height content.",
         element: () => <AccurateScrollToExample />,

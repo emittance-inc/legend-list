@@ -1,6 +1,7 @@
 import { calculateItemsInView } from "@/core/calculateItemsInView";
 import { doInitialAllocateContainers } from "@/core/doInitialAllocateContainers";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
+import { scrollToIndex } from "@/core/scrollToIndex";
 import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { getWindowSize } from "@/platform/getWindowSize";
 import type { LayoutRectangle } from "@/platform/scrollview-types";
@@ -54,19 +55,28 @@ export function handleLayout(
         state.lastBatchingAction = Date.now();
         state.scrollForNextCalculateItemsInView = undefined;
 
-        if (scrollLength > 0) {
-            doInitialAllocateContainers(ctx);
-        }
+        const didAllocate = scrollLength > 0 && doInitialAllocateContainers(ctx);
 
-        if (needsCalculate) {
+        // Allocation calculates the first range synchronously unless an initial
+        // scroll target defers it to a frame.
+        if (needsCalculate && (!didAllocate || state.initialScroll)) {
             calculateItemsInView(ctx, { doMVCP: true });
+        }
+        const scrollTarget = state.scrollingTo;
+        if (
+            scrollLength !== previousLength &&
+            scrollTarget?.viewPositionFallback &&
+            !scrollTarget.isInitialScroll &&
+            scrollTarget.index !== undefined
+        ) {
+            scrollToIndex(ctx, { ...scrollTarget, forceScroll: true, index: scrollTarget.index });
         }
         if (didChange || otherAxisSize !== prevOtherAxisSize) {
             set$(ctx, "scrollSize", { height: layout.height, width: layout.width });
         }
 
         if (maintainScrollAtEnd?.onLayout) {
-            doMaintainScrollAtEnd(ctx);
+            doMaintainScrollAtEnd(ctx, { immediate: true });
         }
         checkThresholds(ctx);
 

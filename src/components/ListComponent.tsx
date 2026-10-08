@@ -56,6 +56,7 @@ interface ListComponentProps<ItemT>
     onLayout: (event: LayoutChangeEvent) => void;
     onLayoutFooter?: (rect: LayoutRectangle, fromLayoutEffect: boolean) => void;
     onInternalScrollBeginDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+    onInternalScrollEndDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     onInternalScrollEnd?: () => void;
     renderScrollComponent?: (props: LooseScrollViewProps) => React.ReactElement | null;
     style: ViewStyle;
@@ -64,6 +65,7 @@ interface ListComponentProps<ItemT>
     snapToIndices: number[] | undefined;
     stickyHeaderIndices: number[] | undefined;
     useWindowScroll?: boolean;
+    scrollElement?: HTMLElement | null;
 }
 
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
@@ -111,12 +113,14 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
     renderScrollComponent,
     onLayoutFooter,
     onInternalScrollBeginDrag,
+    onInternalScrollEndDrag,
     onInternalScrollEnd,
     scrollAdjustHandler,
     snapToIndices,
     stickyHeaderConfig,
     stickyHeaderIndices,
     useWindowScroll = false,
+    scrollElement,
     ...rest
 }: ListComponentProps<ItemT>) {
     const ctx = useStateContext();
@@ -199,9 +203,9 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
             {...rest}
             {...(Platform.OS === "web"
                 ? ScrollComponent === ListComponentScrollView
-                    ? { onInternalScrollEnd, useWindowScroll }
+                    ? { onInternalScrollEnd, scrollElement, useWindowScroll }
                     : {}
-                : { onScrollBeginDrag: onInternalScrollBeginDrag })}
+                : { onScrollBeginDrag: onInternalScrollBeginDrag, onScrollEndDrag: onInternalScrollEndDrag })}
             contentContainerStyle={[
                 horizontal ? { height: "100%" } : {},
                 contentContainerStyle,

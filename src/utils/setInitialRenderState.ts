@@ -16,6 +16,15 @@ export function resetInitialRenderState(
     if (resetLayout) {
         state.didContainersLayout = false;
         state.queuedInitialLayout = false;
+        state.scrollBufferDirection = undefined;
+        state.scrollHistory.length = 0;
+        state.scheduledWork.cancel("renderRangeProjection");
+        // A fresh dataset has not delivered either edge notification yet.
+        state.edgeReachedGate = undefined;
+        state.isStartReached = null;
+        state.isEndReached = null;
+        state.startReachedSnapshot = undefined;
+        state.endReachedSnapshot = undefined;
     }
     if (resetInitialScroll) {
         state.didFinishInitialScroll = false;
@@ -38,7 +47,7 @@ export function setInitialRenderState(
     const { state } = ctx;
     const {
         loadStartTime,
-        props: { onLoad },
+        props: { onLoad, onReady },
     } = state;
     if (didLayout) {
         state.didContainersLayout = true;
@@ -62,5 +71,6 @@ export function setInitialRenderState(
                 onLoad({ elapsedTimeInMs: Date.now() - loadStartTime });
             }
         }
+        onReady?.();
     }
 }

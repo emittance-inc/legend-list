@@ -195,6 +195,8 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
               index: number;
               viewOffset?: number | undefined;
               viewPosition?: number | undefined;
+              /** Alignment used only when the item exceeds the viewport. Omit to preserve viewPosition. */
+              viewPositionFallback?: "start" | "end";
           };
 
     /**
@@ -319,6 +321,13 @@ interface LegendListSpecificProps<ItemT, TItemType extends string | undefined> {
      * Called after the initial render work completes.
      */
     onLoad?: (info: { elapsedTimeInMs: number }) => void;
+
+    /**
+     * Called after layout and initial scrolling complete, including after a
+     * dataKey reset. Unlike onLoad, this runs for each initial placement cycle.
+     * Ordinary data updates do not trigger it unless they restart initial placement.
+     */
+    onReady?: () => void;
 
     /**
      * Called when list layout metrics change.
@@ -680,6 +689,8 @@ export type LegendListRef = {
         index: number;
         viewOffset?: number | undefined;
         viewPosition?: number | undefined;
+        /** Alignment used only when the item exceeds the viewport. Omit to preserve viewPosition. */
+        viewPositionFallback?: "start" | "end";
     }): Promise<void>;
 
     /**
@@ -695,6 +706,8 @@ export type LegendListRef = {
         item: any;
         viewOffset?: number | undefined;
         viewPosition?: number | undefined;
+        /** Alignment used only when the item exceeds the viewport. Omit to preserve viewPosition. */
+        viewPositionFallback?: "start" | "end";
     }): Promise<void>;
 
     /**
@@ -808,6 +821,8 @@ export interface ScrollIndexWithOffset {
     index: number;
     viewOffset?: number;
     viewPosition?: number;
+    /** Alignment used only when the item exceeds the viewport. Omit to preserve viewPosition. */
+    viewPositionFallback?: "start" | "end";
 }
 
 export interface ScrollIndexWithOffsetPosition extends ScrollIndexWithOffset {
