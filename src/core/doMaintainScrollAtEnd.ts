@@ -1,5 +1,6 @@
 import { cancelImperativeScroll } from "@/core/cancelImperativeScroll";
 import { clampScrollOffset } from "@/core/clampScrollOffset";
+import { supersedeInitialScroll } from "@/core/finishInitialScroll";
 import { getScrollRequestTracker } from "@/core/scrollRequestTracker";
 import { getAlignItemsAtEndPadding } from "@/core/updateContentMetricsState";
 import { updateScroll } from "@/core/updateScroll";
@@ -11,12 +12,11 @@ import { requestAdjust } from "@/utils/requestAdjust";
 export function interruptMaintainScrollAtEnd(ctx: StateContext) {
     const { state } = ctx;
     const maintaining = state.maintainingScrollAtEnd;
-    const cancelActiveScroll = !!(
-        maintaining === "animated" ||
-        maintaining === "instant" ||
-        (maintaining && state.scrollingTo?.isScrollToEnd)
-    );
+    // A user drag also cancels explicit and queued scroll requests.
+    const cancelActiveScroll = !!(state.scrollingTo || state.pendingScrollResolve || state.pendingScrollToEnd);
     if (cancelActiveScroll) {
+        // Finish initial rendering before dropping the scroll target.
+        supersedeInitialScroll(ctx);
         cancelImperativeScroll(state);
     }
     if (maintaining || state.pendingMaintainScrollAtEnd) {

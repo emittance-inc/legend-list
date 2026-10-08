@@ -266,7 +266,7 @@ describe("LegendList props behavior", () => {
         });
     }
 
-    it("does not cancel another imperative scroll while end maintenance is only pending", async () => {
+    it("cancels another imperative scroll when the user drags while end maintenance is only pending", async () => {
         const data = [{ id: "item-1", label: "Alpha" }];
         const renderItem = ({ item }: { item: { label: string } }) => <Text>{item.label}</Text>;
         const resolveScroll = mock(() => {});
@@ -291,8 +291,8 @@ describe("LegendList props behavior", () => {
             lastListProps.onInternalScrollBeginDrag({ nativeEvent: {} });
         });
 
-        expect(resolveScroll).not.toHaveBeenCalled();
-        expect(state.scrollingTo).toBe(scrollingTo);
+        expect(resolveScroll).toHaveBeenCalledTimes(1);
+        expect(state.scrollingTo).toBeUndefined();
         expect(state.maintainingScrollAtEnd).toBeUndefined();
         rendered.unmount();
     });

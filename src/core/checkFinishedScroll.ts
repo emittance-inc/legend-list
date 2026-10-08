@@ -189,6 +189,15 @@ export function checkFinishedScrollFallback(ctx: StateContext) {
     const checkHasScrolled = () => {
         const isStillScrollingTo = state.scrollingTo;
         if (isStillScrollingTo) {
+            // Let native animations finish while they are still making progress.
+            if (
+                isStillScrollingTo.animated &&
+                state.lastNativeScrollTime !== undefined &&
+                Date.now() - state.lastNativeScrollTime < 100
+            ) {
+                scheduleFallbackCheck(100);
+                return;
+            }
             numChecks++;
             const isNativeInitialPending = isNativeInitialNonZeroTarget(state) && !state.hasScrolled;
             const maxChecks = silentInitialDispatch
