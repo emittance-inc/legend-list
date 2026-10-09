@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import "../setup";
 
+import * as doScrollToModule from "@/core/doScrollTo";
 import { prepareMVCP, resolvePendingNativeMVCPAdjust } from "@/core/mvcp";
 import { Platform } from "@/platform/Platform";
 import type { StateContext } from "@/state/state";
@@ -234,6 +235,86 @@ describe("mvcp helpers", () => {
             expect(requestAdjustSpy).toHaveBeenCalledWith(mockCtx, -50, undefined);
         } finally {
             requestAdjustSpy.mockRestore();
+        }
+    });
+
+    const createAnimatedEndScrollContext = () =>
+        createMockContext(
+            { totalSize: 800 },
+            {
+                idCache: ["item-0", "item-1", "item-2"],
+                indexByKey: new Map([
+                    ["item-0", 0],
+                    ["item-1", 1],
+                    ["item-2", 2],
+                ]),
+                positions: [0, 200, 700],
+                props: {
+                    data: [{ id: 0 }, { id: 1 }, { id: 2 }],
+                    keyExtractor: (item: { id: number }) => `item-${item.id}`,
+                    maintainVisibleContentPosition: normalizeMaintainVisibleContentPosition(true),
+                },
+                scroll: 300,
+                scrollingTo: {
+                    animated: true,
+                    index: 2,
+                    itemSize: 100,
+                    offset: 700,
+                    targetOffset: 500,
+                    viewPosition: 1,
+                },
+                scrollLength: 300,
+                scrollPending: 300,
+                sizes: new Map([
+                    ["item-0", 200],
+                    ["item-1", 500],
+                    ["item-2", 100],
+                ]),
+            },
+        );
+
+    it("retargets a native animated end scroll when the target item measures smaller", () => {
+        // A newly appended chat message is scrolled to with its estimated size, then measures smaller.
+        Platform.OS = "ios";
+        const mockCtx = createAnimatedEndScrollContext();
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const doScrollToSpy = spyOn(doScrollToModule, "doScrollTo").mockImplementation(() => undefined);
+        try {
+            const adjustFunction = prepareMVCP(mockCtx);
+            mockCtx.state.sizes.set("item-2", 52);
+            mockCtx.state.totalSize = 752;
+
+            adjustFunction?.();
+
+            expect(requestAdjustSpy).not.toHaveBeenCalled();
+            expect(doScrollToSpy).toHaveBeenCalledTimes(1);
+            expect(doScrollToSpy).toHaveBeenCalledWith(mockCtx, { animated: true, horizontal: false, offset: 452 });
+            expect(mockCtx.state.scrollingTo?.targetOffset).toBe(452);
+            expect(mockCtx.state.scrollingTo?.itemSize).toBe(52);
+            expect(mockCtx.state.scroll).toBe(300);
+        } finally {
+            requestAdjustSpy.mockRestore();
+            doScrollToSpy.mockRestore();
+        }
+    });
+
+    it("keeps adjusting the current position for an animated end scroll on web", () => {
+        Platform.OS = "web";
+        const mockCtx = createAnimatedEndScrollContext();
+        const requestAdjustSpy = spyOn(requestAdjustModule, "requestAdjust");
+        const doScrollToSpy = spyOn(doScrollToModule, "doScrollTo").mockImplementation(() => undefined);
+        try {
+            const adjustFunction = prepareMVCP(mockCtx);
+            mockCtx.state.sizes.set("item-2", 52);
+            mockCtx.state.totalSize = 752;
+
+            adjustFunction?.();
+
+            expect(requestAdjustSpy).toHaveBeenCalledWith(mockCtx, -48, undefined);
+            expect(doScrollToSpy).not.toHaveBeenCalled();
+        } finally {
+            requestAdjustSpy.mockRestore();
+            doScrollToSpy.mockRestore();
         }
     });
 
