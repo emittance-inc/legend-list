@@ -1,5 +1,8 @@
 import { IsNewArchitecture } from "@/constants-platform";
-import { getViewPositionOffset } from "@/core/calculateOffsetWithOffsetPosition";
+import { calculateOffsetForIndex } from "@/core/calculateOffsetForIndex";
+import { calculateOffsetWithOffsetPosition, getViewPositionOffset } from "@/core/calculateOffsetWithOffsetPosition";
+import { clampScrollOffset } from "@/core/clampScrollOffset";
+import { doScrollTo } from "@/core/doScrollTo";
 import { Platform } from "@/platform/Platform";
 import { getContentInsetEnd } from "@/state/getContentInsetEnd";
 import { getContentSize } from "@/state/getContentSize";
@@ -405,6 +408,16 @@ export function prepareMVCP(
                 }
             }
 
+            // A native animated scroll to the end is still headed for the offset computed from the
+            // target's old size. Shifting the current position for the new size would jump now and
+            // then overshoot or stop short of the end, so retarget the animation instead.
+            const shouldRetargetEndScroll =
+                Platform.OS !== "web" &&
+                !!scrollingTo?.animated &&
+                isEndAnchoredScrollTarget &&
+                !scrollingTo.viewPositionFallback;
+            let shouldRetargetAfterAdjust = false;
+
             if (
                 scrollingTo &&
                 scrollingToViewPosition !== undefined &&
@@ -413,7 +426,9 @@ export function prepareMVCP(
                 const newSize = getItemSize(ctx, targetId!, scrollTarget!, state.props.data[scrollTarget!]);
                 const prevSize = scrollingTo.itemSize;
                 if (newSize !== undefined && prevSize !== undefined && newSize !== prevSize) {
-                    if (scrollingTo.viewPositionFallback) {
+                    if (shouldRetargetEndScroll) {
+                        shouldRetargetAfterAdjust = true;
+                    } else if (scrollingTo.viewPositionFallback) {
                         const viewport = state.scrollLength - getContentInsetEnd(ctx);
                         const previousSpace = viewport - Math.max(0, prevSize - ctx.scrollAxisGap);
                         const nextSpace = viewport - Math.max(0, newSize - ctx.scrollAxisGap);
@@ -464,6 +479,24 @@ export function prepareMVCP(
 
                 if (!shouldSkipAdjustForMaintainedEnd) {
                     requestAdjust(ctx, positionDiff, dataChanged && mvcpData ? "data" : adjustmentSource);
+                }
+            }
+
+            if (shouldRetargetAfterAdjust && scrollingTo && state.scrollingTo === scrollingTo) {
+                // Same target computation as scrollToIndex, now with the measured size.
+                const offset = calculateOffsetForIndex(ctx, scrollTarget!);
+                const targetOffset = clampScrollOffset(
+                    ctx,
+                    calculateOffsetWithOffsetPosition(ctx, offset, scrollingTo),
+                    scrollingTo,
+                );
+                if (
+                    scrollingTo.targetOffset === undefined ||
+                    Math.abs(targetOffset - scrollingTo.targetOffset) > MVCP_POSITION_EPSILON
+                ) {
+                    scrollingTo.offset = offset;
+                    scrollingTo.targetOffset = targetOffset;
+                    doScrollTo(ctx, { animated: true, horizontal: state.props.horizontal, offset: targetOffset });
                 }
             }
         };
