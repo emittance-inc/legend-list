@@ -296,6 +296,31 @@ describe("createImperativeHandle.scrollToEnd", () => {
         retargetSpy.mockRestore();
     });
 
+    it("leaves the end anchor to the reporting scroll view after the initial scroll", () => {
+        const retargetSpy = spyOn(initialScrollLifecycleModule, "retargetActiveInitialScrollAtEnd");
+        const ctx = createMockContext(
+            {},
+            {
+                didFinishInitialScroll: true,
+                initialScroll: {
+                    index: 2,
+                    viewPosition: 1,
+                },
+                props: {
+                    data: [1, 2, 3],
+                },
+            },
+        );
+
+        const handle = createImperativeHandle(ctx);
+        handle.reportContentInset({ bottom: 300 });
+
+        expect(ctx.state.contentInsetOverride).toEqual({ bottom: 300 });
+        expect(retargetSpy).not.toHaveBeenCalled();
+
+        retargetSpy.mockRestore();
+    });
+
     it("exposes positions and indices through accessors", () => {
         const ctx = createMockContext(
             {},

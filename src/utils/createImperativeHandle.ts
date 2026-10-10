@@ -233,7 +233,9 @@ export function createImperativeHandle(ctx: StateContext, scheduleImperativeScro
         reportContentInset: (inset) => {
             const didChange = setContentInsetOverride(ctx, inset);
             updateScroll(ctx, state.scroll, true, { markHasScrolled: false });
-            if (didChange) {
+            // the reporting scroll view moves its own offset with the inset. after the initial
+            // scroll an end correction would start from a scroll event that predates that move
+            if (didChange && !state.didFinishInitialScroll) {
                 retargetActiveInitialScrollAtEnd(ctx);
             }
         },
