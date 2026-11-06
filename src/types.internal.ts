@@ -161,7 +161,9 @@ export type AverageSizes = Record<string, { num: number; avg: number }>;
 export type AnchoredEndSpaceOwner = "list" | "scroll";
 
 export interface InternalState {
-    activeItemKeys: ReadonlySet<string>;
+    // Undefined once a render has reassigned the containers of a data change itself.
+    activeItemKeys: ReadonlySet<string> | undefined;
+    appliedDataChangeEpoch?: number;
     adjustingFromInitialMount?: number;
     anchoredEndSpacePendingReady?: boolean;
     anchoredEndSpaceReadyAnchorIndex?: number;

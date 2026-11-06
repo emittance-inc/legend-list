@@ -111,6 +111,14 @@ export function createMockContext(
         mapViewabilityValues: new Map() as StateContext["mapViewabilityValues"],
         pendingContainerIds: undefined,
         positionListeners: new Map(),
+        renderUpdate: {
+            callbacks: [],
+            containerVersions: [],
+            epoch: 0,
+            isActive: false,
+            positions: new Map(),
+            signals: new Set(),
+        },
         scrollAxisGap: 0,
         get state() {
             return currentState as InternalState;

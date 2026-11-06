@@ -158,6 +158,7 @@ export interface StateContext {
     >;
     pendingContainerIds: Set<number> | null | undefined;
     positionListeners: Map<string, Set<(value: any) => void>>;
+    renderUpdate: RenderUpdate;
     state: InternalState;
     scrollAxisGap: number;
     scrollRequestTracker?: ScrollRequestTracker;
@@ -166,7 +167,22 @@ export interface StateContext {
     viewRefs: Map<number, React.RefObject<LooseView | null>>;
 }
 
+// A data change applied during a render writes signals before React can be told about them.
+// The writes are held here until that render commits.
+export interface RenderUpdate {
+    callbacks: Array<() => void>;
+    // Bumped for each container whose signals changed, so its components read them in the same render.
+    containerVersions: number[];
+    epoch: number;
+    isActive: boolean;
+    positions: Map<string, any>;
+    signals: Set<ListenerType>;
+}
+
 const ContextState = React.createContext<StateContext | null>(null);
+const ContextRenderEpoch = React.createContext(0);
+export const RenderEpochProvider = ContextRenderEpoch.Provider;
+const CONTAINER_SIGNAL_ID = /^container[A-Za-z]+(\d+)$/;
 const SIGNAL_NAMES_SEPARATOR = "\0";
 type NonEmptySignalNames = readonly [ListenerType, ...ListenerType[]];
 
@@ -186,6 +202,14 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         mapViewabilityValues: new Map<string, ViewToken>(),
         pendingContainerIds: undefined,
         positionListeners: new Map(),
+        renderUpdate: {
+            callbacks: [],
+            containerVersions: [],
+            epoch: 0,
+            isActive: false,
+            positions: new Map(),
+            signals: new Set(),
+        },
         scrollAxisGap: 0,
         state: undefined as any,
         values: new Map<ListenerType, any>([
@@ -211,6 +235,12 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
 export function useStateContext() {
     return React.useContext(ContextState)!;
+}
+
+// Rerenders a component that reads list-wide signals when a render applied a data change,
+// so it reads them in that render instead of one commit later.
+export function useRenderEpoch() {
+    return React.useContext(ContextRenderEpoch);
 }
 
 function createSelectorFunctionsArr(ctx: StateContext | null, signalNames: readonly ListenerType[]) {
@@ -302,9 +332,17 @@ export function set$<T extends ListenerType>(
     signalName: T,
     value: ListenerTypeValueMap[T] | undefined,
 ) {
-    const { listeners, values } = ctx;
+    const { listeners, renderUpdate, values } = ctx;
     if (values.get(signalName) !== value) {
         values.set(signalName, value);
+        if (renderUpdate.isActive) {
+            renderUpdate.signals.add(signalName);
+            const containerId = CONTAINER_SIGNAL_ID.exec(signalName)?.[1];
+            if (containerId !== undefined) {
+                renderUpdate.containerVersions[+containerId] = (renderUpdate.containerVersions[+containerId] ?? 0) + 1;
+            }
+            return;
+        }
         const setListeners = listeners.get(signalName);
         if (setListeners) {
             for (const listener of setListeners) {
@@ -335,11 +373,53 @@ export function notifyPosition$<T extends ListenerType>(
     key: string,
     value: ListenerTypeValueMap[T] | undefined,
 ) {
-    const { positionListeners } = ctx;
+    const { positionListeners, renderUpdate } = ctx;
+    if (renderUpdate.isActive) {
+        renderUpdate.positions.set(key, value);
+        return;
+    }
     const setListeners = positionListeners.get(key);
     if (setListeners) {
         for (const listener of setListeners) {
             listener(value);
+        }
+    }
+}
+
+export function flushRenderUpdate(ctx: StateContext) {
+    const { listeners, positionListeners, renderUpdate, values } = ctx;
+    const { callbacks, positions, signals } = renderUpdate;
+
+    if (signals.size > 0) {
+        const signalNames = Array.from(signals);
+        signals.clear();
+        for (const signalName of signalNames) {
+            const setListeners = listeners.get(signalName);
+            if (setListeners) {
+                const value = values.get(signalName);
+                for (const listener of setListeners) {
+                    listener(value);
+                }
+            }
+        }
+    }
+
+    if (positions.size > 0) {
+        const entries = Array.from(positions);
+        positions.clear();
+        for (const [key, value] of entries) {
+            const setListeners = positionListeners.get(key);
+            if (setListeners) {
+                for (const listener of setListeners) {
+                    listener(value);
+                }
+            }
+        }
+    }
+
+    if (callbacks.length > 0) {
+        for (const callback of callbacks.splice(0)) {
+            callback();
         }
     }
 }

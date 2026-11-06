@@ -28,7 +28,10 @@ export function checkResetContainers(
         state.scrollForNextCalculateItemsInView = undefined;
     }
 
-    calculateItemsInView(ctx, { dataChanged: true, doMVCP: true });
+    // The render that received the data may have reassigned the containers already.
+    if (didColumnsChange || state.appliedDataChangeEpoch !== state.dataChangeEpoch) {
+        calculateItemsInView(ctx, { dataChanged: true, doMVCP: true });
+    }
 
     const shouldMaintainScrollAtEnd = !didColumnsChange && maintainScrollAtEnd?.onDataChange;
 
