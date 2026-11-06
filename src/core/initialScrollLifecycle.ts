@@ -3,12 +3,14 @@ import {
     schedulePreservedEndAnchorCorrection,
     startBootstrapInitialScrollOnMount,
 } from "@/core/bootstrapInitialScroll";
-import { cancelImperativeScroll } from "@/core/cancelImperativeScroll";
+import { cancelImperativeScroll, syncScrollActive } from "@/core/cancelImperativeScroll";
 import { checkFinishedScroll } from "@/core/checkFinishedScroll";
 import { clearPreservedInitialScrollTarget, finishInitialScroll } from "@/core/finishInitialScroll";
 import { advanceCurrentInitialScrollSession, setInitialScrollTarget } from "@/core/initialScroll";
 import { setInitialScrollSession } from "@/core/initialScrollSession";
-import type { StateContext } from "@/state/state";
+import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataChange";
+import { updateItemPositions } from "@/core/updateItemPositions";
+import { type StateContext, set$ } from "@/state/state";
 import { resetInitialRenderState, setInitialRenderState } from "@/utils/setInitialRenderState";
 
 export function retargetActiveInitialScrollAtEnd(ctx: StateContext) {
@@ -134,6 +136,12 @@ export function handleInitialScrollDataChange(
     if (didStartFreshData) {
         // The previous dataset's scroll must not block or finish the new bootstrap.
         cancelImperativeScroll(state);
+        syncScrollActive(ctx);
+        state.endFollowInterrupted = false;
+        state.userScrollContentSize = undefined;
+        state.visibleContentAnchor = undefined;
+        state.pendingEndMeasurements = undefined;
+        set$(ctx, "isFollowingEnd", false);
         state.maintainingScrollAtEnd = undefined;
         state.pendingMaintainScrollAtEnd = false;
     }
@@ -160,11 +168,16 @@ export function handleInitialScrollDataChange(
     setInitialScrollSession(state);
 
     if (useBootstrapInitialScroll) {
+        if (didStartFreshData && !state.didColumnsChange) {
+            resetLayoutCachesForDataChange(state);
+            updateItemPositions(ctx, true);
+        }
         handleBootstrapInitialScrollDataChange(ctx, {
             dataLength,
             didDataChange,
             initialScrollAtEnd,
-            previousDataLength: previousInitialScrollDataLength,
+            // A new dataset reuses the empty-to-non-empty bootstrap handoff.
+            previousDataLength: didStartFreshData ? 0 : previousInitialScrollDataLength,
             stylePaddingEnd,
         });
         return;

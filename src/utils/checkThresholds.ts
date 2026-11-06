@@ -1,3 +1,4 @@
+import { rearmEndFollowIfSettled } from "@/core/finishMaintainScrollAtEnd";
 import type { StateContext } from "@/state/state";
 import { checkAtBottom } from "@/utils/checkAtBottom";
 import { checkAtTop } from "@/utils/checkAtTop";
@@ -7,4 +8,5 @@ export function checkThresholds(ctx: StateContext, allowedEdge?: ReachedEdge) {
     const allowGateCreatedInCurrentCheck = !ctx.state.edgeReachedGate;
     checkAtBottom(ctx, allowedEdge, allowGateCreatedInCurrentCheck);
     checkAtTop(ctx, allowedEdge, allowGateCreatedInCurrentCheck);
+    rearmEndFollowIfSettled(ctx);
 }

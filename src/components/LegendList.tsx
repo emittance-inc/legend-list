@@ -17,19 +17,25 @@ import { IsNewArchitecture } from "@/constants-platform";
 import { resetAdaptiveRender } from "@/core/adaptiveRender";
 import { applyDataChangeInRender, canApplyDataChangeInRender } from "@/core/applyDataChangeInRender";
 import {
+    cancelBootstrapInitialScrollFrame,
     handleBootstrapInitialScrollFooterLayout,
     handleBootstrapInitialScrollLayoutChange,
 } from "@/core/bootstrapInitialScroll";
 import { calculateItemsInView } from "@/core/calculateItemsInView";
-import { cancelImperativeScroll } from "@/core/cancelImperativeScroll";
+import { cancelImperativeScroll, syncScrollActive } from "@/core/cancelImperativeScroll";
+import { interruptUserScroll } from "@/core/cancelScroll";
 import { checkFinishedScrollFallback } from "@/core/checkFinishedScroll";
 import { checkResetContainers } from "@/core/checkResetContainers";
 import { checkStructuralDataChange } from "@/core/checkStructuralDataChange";
+import { getContentInsetTop } from "@/core/clampScrollOffset";
+import { invalidateFixedItemSizes } from "@/core/containerItemMetadata";
 import { resetContainerLayoutReady } from "@/core/containerLayoutReady";
 import { doInitialAllocateContainers } from "@/core/doInitialAllocateContainers";
-import { interruptMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
+import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
+import { doScrollTo } from "@/core/doScrollTo";
 import { getEndAlignedViewOffset } from "@/core/endOfContentTarget";
 import { clearPreservedInitialScrollTarget } from "@/core/finishInitialScroll";
+import { finishMaintainScrollAtEnd } from "@/core/finishMaintainScrollAtEnd";
 import { handleLayout } from "@/core/handleLayout";
 import { advanceCurrentInitialScrollSession, resolveInitialScrollOffset } from "@/core/initialScroll";
 import { handleInitialScrollDataChange, initializeInitialScrollOnMount } from "@/core/initialScrollLifecycle";
@@ -37,12 +43,14 @@ import { onScroll } from "@/core/onScroll";
 import { resetLayoutCachesForDataChange } from "@/core/resetLayoutCachesForDataChange";
 import { ScheduledWork } from "@/core/ScheduledWork";
 import { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
+import { scrollTo } from "@/core/scrollTo";
 import { scrollToEnd } from "@/core/scrollToEnd";
 import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { updateContentInsetEndAdjustment } from "@/core/updateContentInsetEndAdjustment";
 import { updateContentMetricsState } from "@/core/updateContentMetricsState";
 import { updateItemPositions } from "@/core/updateItemPositions";
 import { updateScroll } from "@/core/updateScroll";
+import { armUserScrollSettle, settleUserScroll } from "@/core/userMomentum";
 import { useWrapIfItem } from "@/core/useWrapIfItem";
 import { setupViewability } from "@/core/viewability";
 import { useCombinedRef } from "@/hooks/useCombinedRef";
@@ -53,8 +61,10 @@ import { Platform } from "@/platform/Platform";
 import type { LayoutRectangle, NativeScrollEvent, NativeSyntheticEvent } from "@/platform/platform-types";
 import { RefreshControl } from "@/platform/RefreshControl";
 import { StyleSheet } from "@/platform/StyleSheet";
+import { subscribeScreenReader } from "@/platform/screenReader";
 import type { LooseScrollView, LooseScrollViewProps, LooseView, ViewStyle } from "@/platform/scrollview-types";
 import { useStickyScrollHandler } from "@/platform/useStickyScrollHandler";
+import { getContentSize } from "@/state/getContentSize";
 import {
     flushRenderUpdate,
     listen$,
@@ -73,6 +83,7 @@ import type {
 } from "@/types.internal";
 import { typedForwardRef, typedMemo } from "@/types.internal";
 import type { StylesAsSharedValue } from "@/typesInternal";
+import { checkThresholds } from "@/utils/checkThresholds";
 import { createColumnWrapperStyle } from "@/utils/createColumnWrapperStyle";
 import { createImperativeHandle } from "@/utils/createImperativeHandle";
 import { IS_DEV } from "@/utils/devEnvironment";
@@ -133,6 +144,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     props: LegendListInnerProps<T>,
     forwardedRef: ForwardedRef<LegendListRef>,
 ) {
+    useEffect(subscribeScreenReader, []);
     const noopOnScroll = useCallback((_event: NativeSyntheticEvent<NativeScrollEvent>) => {}, []);
     if (props.recycleItems === undefined) {
         warnDevOnce(
@@ -180,9 +192,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onEndReachedThreshold = 0.5,
         onItemSizeChanged,
         onMetricsChange,
+        onUserScroll,
         onLayout: onLayoutProp,
         onLoad,
         onReady,
+        onMomentumScrollBegin,
         onMomentumScrollEnd,
         onRefresh,
         onScroll: onScrollProp,
@@ -232,6 +246,13 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         alignItemsAtEnd &&
         !useAlignItemsAtEndPadding &&
         (horizontal ? contentContainerStyleBase?.minWidth == null : contentContainerStyleBase?.minHeight == null);
+    const contentContainerMinSizeStyle = horizontal
+        ? contentContainerStyleBase?.minWidth
+        : contentContainerStyleBase?.minHeight;
+    const contentContainerMinSize =
+        typeof contentContainerMinSizeStyle === "number" && Number.isFinite(contentContainerMinSizeStyle)
+            ? contentContainerMinSizeStyle
+            : undefined;
     const contentContainerStyle: ViewStyle = {
         ...contentContainerStyleBase,
         ...(alignItemsAtEnd && !useAlignItemsAtEndPadding
@@ -267,8 +288,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         !hasInitialScrollIndex &&
         !hasInitialScrollOffset &&
         isHorizontalRTLProps({ horizontal, rtl });
+    const initialInsetTop = Platform.OS === "ios" && !horizontal ? Math.max(0, contentInset?.top ?? 0) : 0;
     const initialScrollUsesOffsetOnly =
-        !initialScrollAtEnd && !hasInitialScrollIndex && (hasInitialScrollOffset || shouldInitializeHorizontalRTL);
+        !initialScrollAtEnd &&
+        !hasInitialScrollIndex &&
+        (hasInitialScrollOffset || shouldInitializeHorizontalRTL || initialInsetTop > 0);
     const usesBootstrapInitialScroll = initialScrollAtEnd || hasInitialScrollIndex;
     const shouldBottomAlignNumericInitialScrollIndex =
         typeof initialScrollIndexProp === "number" &&
@@ -313,7 +337,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 }
           : initialScrollUsesOffsetOnly
             ? {
-                  contentOffset: initialScrollOffsetProp ?? 0,
+                  contentOffset: initialScrollOffsetProp ?? -initialInsetTop,
                   index: 0,
                   viewOffset: 0,
               }
@@ -441,7 +465,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             };
 
             const internalState = ctx.state;
-            // Late-bind this command so updateScroll can maintain the end without importing back through scrollTo.
+            // Late-bind these commands so lower-level scroll modules can call back up without import cycles.
+            ctx.doMaintainScrollAtEnd = () => doMaintainScrollAtEnd(ctx);
+            ctx.doScrollTo = (params) => doScrollTo(ctx, params);
+            ctx.interruptUserScroll = () => interruptUserScroll(ctx);
+            ctx.scrollTo = (params) => scrollTo(ctx, params);
             ctx.scrollToEnd = (options) => scrollToEnd(ctx, options);
             internalState.triggerCalculateItemsInView = (params) => calculateItemsInView(ctx, params);
             internalState.reprocessCurrentScroll = () => updateScroll(ctx, internalState.scroll, true);
@@ -516,6 +544,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         anchoredEndSpaceOwner,
         animatedProps: animatedPropsInternal,
         contentContainerAlignItems: contentContainerStyle.alignItems,
+        contentContainerMinSize,
         contentInset,
         contentInsetEndAdjustment: contentInsetEndAdjustmentResolved,
         data: dataProp,
@@ -539,6 +568,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onFirstVisibleItemChanged,
         onItemSizeChanged,
         onLoad,
+        onMetricsChange,
+        onMomentumScrollBegin,
         onMomentumScrollEnd,
         onReady,
         onScroll: throttleScrollFn,
@@ -547,6 +578,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         onStartReached,
         onStartReachedThreshold,
         onStickyHeaderChange,
+        onUserScroll,
         overrideItemLayout,
         positionComponentInternal,
         recycleItems: !!recycleItems,
@@ -600,9 +632,11 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             prevPaddingTop !== undefined &&
             Platform.OS === "ios"
         ) {
-            // Scroll can be negative if being animated and that can break the pendingDiff
-            if (state.scroll < 0) {
-                paddingDiff += state.scroll;
+            // Scroll can overscroll the start if being animated and that can break the pendingDiff.
+            // The start is the -contentInset.top resting offset, not native zero.
+            const distanceFromStart = state.scroll + getContentInsetTop(ctx);
+            if (distanceFromStart < 0) {
+                paddingDiff += distanceFromStart;
             }
 
             requestAdjust(ctx, paddingDiff);
@@ -626,6 +660,21 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             ? undefined
             : resolvedOffset;
     }, [usesBootstrapInitialScroll]);
+
+    // Re-arm lifecycle ownership before layout effects can request scroll work.
+    useLayoutEffect(() => {
+        state.isUnmounted = false;
+        if (state.userScrollContentSize !== undefined || state.isMomentumScrolling) armUserScrollSettle(ctx);
+        return () => {
+            state.isUnmounted = true;
+            state.maintainingScrollAtEnd = undefined;
+            state.pendingMaintainScrollAtEnd = false;
+            cancelImperativeScroll(state);
+            syncScrollActive(ctx);
+            cancelBootstrapInitialScrollFrame(state);
+            state.scheduledWork.dispose();
+        };
+    }, [ctx, state]);
 
     useLayoutEffect(() => {
         initializeInitialScrollOnMount(ctx, {
@@ -711,6 +760,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         anchoredEndSpace?.anchorIndex,
         anchoredEndSpace?.anchorMaxSize,
         anchoredEndSpace?.anchorOffset,
+        anchoredEndSpaceOwner,
+        contentInset?.bottom,
+        contentInset?.left,
+        contentInset?.right,
         didAnchoredEndSpaceAnchorIndexChange,
         horizontal,
         numColumnsProp,
@@ -777,6 +830,8 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     useLayoutEffect(
         () => initializeStateVars(true),
         [
+            contentInset?.bottom,
+            contentInset?.top,
             dataKey,
             dataVersion,
             memoizedLastItemKeys.join(","),
@@ -794,7 +849,58 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         flushRenderUpdate(ctx);
     });
 
+    // UIKit leaves contentOffset alone when contentInset changes, so a list resting at its
+    // start would end up under (or away from) a new top inset. Keep it at the new start.
+    const previousContentInsetTop = useRef(contentInset?.top);
     useLayoutEffect(() => {
+        const prevTop = Math.max(0, previousContentInsetTop.current ?? 0);
+        const didChange = previousContentInsetTop.current !== contentInset?.top;
+        previousContentInsetTop.current = contentInset?.top;
+        if (
+            didChange &&
+            Platform.OS === "ios" &&
+            !horizontal &&
+            !state.contentInsetOverride &&
+            !state.isDragging &&
+            !state.isMomentumScrolling
+        ) {
+            const offset = -getContentInsetTop(ctx);
+            if (
+                !state.didFinishInitialScroll &&
+                !initialScrollAtEnd &&
+                !hasInitialScrollIndex &&
+                !hasInitialScrollOffset &&
+                state.initialScrollSession?.kind === "offset" &&
+                state.initialScroll &&
+                (!state.scrollingTo || state.scrollingTo.isInitialScroll)
+            ) {
+                state.initialScroll.contentOffset = offset;
+                advanceCurrentInitialScrollSession(ctx, { forceScroll: true });
+            } else if (state.didFinishInitialScroll && !state.scrollingTo && Math.abs(state.scroll + prevTop) < 1) {
+                scrollTo(ctx, { animated: false, offset });
+            }
+        }
+    }, [contentInset?.top]);
+
+    useLayoutEffect(() => {
+        checkThresholds(ctx);
+    }, [maintainScrollAtEndThreshold]);
+
+    useLayoutEffect(() => {
+        if (!maintainScrollAtEndConfig) {
+            finishMaintainScrollAtEnd(ctx);
+        } else if (peek$(ctx, "isFollowingEnd")) {
+            doMaintainScrollAtEnd(ctx);
+        }
+    }, [!!maintainScrollAtEndConfig]);
+
+    const previousAlwaysRenderIndices = useRef(alwaysRenderIndices);
+    useLayoutEffect(() => {
+        const previousPins = previousAlwaysRenderIndices.current;
+        const didPinsChange =
+            previousPins.set.size !== alwaysRenderIndices.set.size ||
+            previousPins.arr.some((index) => !alwaysRenderIndices.set.has(index));
+        previousAlwaysRenderIndices.current = alwaysRenderIndices;
         // Get these out of state because react-dom's double render can cause issues when
         // accessing local variables
         const {
@@ -807,6 +913,10 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         if (!didAllocateContainers && !isFirst && (didDataChange || didColumnsChange)) {
             checkResetContainers(ctx, data, { didColumnsChange });
         }
+        if (didPinsChange && !didDataChange && !didColumnsChange && !isFirst) {
+            state.scrollForNextCalculateItemsInView = undefined;
+            calculateItemsInView(ctx);
+        }
         if (didDataChange) {
             state.pendingDataComparison = undefined;
         }
@@ -814,7 +924,22 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         state.didColumnsChange = false;
         state.didDataChange = false;
         state.isFirst = false;
-    }, [dataProp, dataKey, dataVersion, numColumnsProp, nextScrollAxisGap]);
+    }, [dataProp, dataKey, dataVersion, numColumnsProp, nextScrollAxisGap, alwaysRenderIndices.arr.join(",")]);
+
+    const previousGetFixedItemSize = useRef(getFixedItemSize);
+    useLayoutEffect(() => {
+        const hadFixedItemSize = !!previousGetFixedItemSize.current;
+        previousGetFixedItemSize.current = getFixedItemSize;
+        if (!isFirstLocal && (getFixedItemSize || hadFixedItemSize)) {
+            // Re-resolve fixed sizes while preserving measured sizes and rendered estimates.
+            invalidateFixedItemSizes(state);
+            state.positionsAreCurrent = false;
+            state.positionRecalculationStartIndex = 0;
+            state.scrollForNextCalculateItemsInView = undefined;
+            state.triggerCalculateItemsInView?.({ doMVCP: true, forceFullItemPositions: true });
+            if (state.props.maintainScrollAtEnd?.onItemLayout) doMaintainScrollAtEnd(ctx);
+        }
+    }, [!!getFixedItemSize, extraData]);
 
     useLayoutEffect(() => {
         set$(ctx, "extraData", extraData);
@@ -832,6 +957,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
         let lastMetrics: LegendListMetrics | undefined;
 
+        // Read the latest callback so an inline callback does not resubscribe and re-emit every render.
         const emitMetrics = () => {
             const metrics: LegendListMetrics = {
                 footerSize: peek$(ctx, "footerSize") || 0,
@@ -844,7 +970,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 metrics.footerSize !== lastMetrics.footerSize
             ) {
                 lastMetrics = metrics;
-                onMetricsChange(metrics);
+                state.props.onMetricsChange?.(metrics);
             }
         };
 
@@ -857,7 +983,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 unsub();
             }
         };
-    }, [ctx, onMetricsChange]);
+    }, [ctx, !!onMetricsChange]);
 
     useEffect(() => {
         const viewability = setupViewability({
@@ -881,13 +1007,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
 
     useImperativeHandle(forwardedRef, () => createImperativeHandle(ctx, scheduleImperativeScrollCommit), []);
 
-    useEffect(() => {
-        return () => {
-            cancelImperativeScroll(state);
-            state.scheduledWork.dispose();
-        };
-    }, [state]);
-
     // Run pending scroll to end after props have settled.
     useLayoutEffect(() => {
         state.runPendingScrollToEnd?.();
@@ -904,26 +1023,40 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const fns = useMemo(
         () => ({
             getRenderedItem: (key: string, containerId: number) => getRenderedItem(ctx, key, containerId),
+            onMomentumScrollBegin: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                state.isMomentumScrolling = true;
+                set$(ctx, "isScrollActive", true);
+                armUserScrollSettle(ctx);
+                state.props.onMomentumScrollBegin?.(event as any);
+            },
             onMomentumScrollEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                onScroll(ctx, event, false);
+                settleUserScroll(ctx);
                 // This should be handled by checkFinishedScrollFrame in the scroll handler
                 // but just in case it doesn't setup the falback
                 checkFinishedScrollFallback(ctx);
 
-                if (state.props.onMomentumScrollEnd) {
-                    // TODO type this better
-                    state.props.onMomentumScrollEnd(event as any);
-                }
+                state.props.onMomentumScrollEnd?.(event as any);
             },
             onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => onScroll(ctx, event),
             onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                state.isMomentumScrolling = false;
+                state.userScrollContentSize = undefined;
+                state.scheduledWork.cancel("endFollowRearm");
                 state.isDragging = true;
-                interruptMaintainScrollAtEnd(ctx);
+                interruptUserScroll(ctx);
+                state.props.onUserScroll?.();
                 prepareReachedEdgeForNextUserScroll(ctx);
                 state.props.onScrollBeginDrag?.(event as any);
             },
             onScrollEnd: () => prepareReachedEdgeForNextUserScroll(ctx),
             onScrollEndDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+                onScroll(ctx, event, false);
                 state.isDragging = false;
+                syncScrollActive(ctx);
+                // Suspend from release through momentum, including delayed or missing pairs.
+                state.userScrollContentSize = getContentSize(ctx);
+                armUserScrollSettle(ctx);
                 state.props.onScrollEndDrag?.(event as any);
             },
         }),
@@ -955,6 +1088,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 onInternalScrollEndDrag={fns.onScrollEndDrag}
                 onLayout={onLayout!}
                 onLayoutFooter={onLayoutFooter}
+                onMomentumScrollBegin={fns.onMomentumScrollBegin}
                 onMomentumScrollEnd={fns.onMomentumScrollEnd}
                 onScroll={onScrollHandler}
                 recycleItems={recycleItems}

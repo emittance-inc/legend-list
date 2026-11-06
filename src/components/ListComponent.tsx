@@ -9,13 +9,15 @@ import { getAutoOtherAxisStyle } from "@/components/listComponentStyles";
 import { ScrollAdjust } from "@/components/ScrollAdjust";
 import { SnapWrapper } from "@/components/SnapWrapper";
 import { ENABLE_DEVMODE } from "@/constants";
-import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
+import { interruptUserScroll } from "@/core/cancelScroll";
+import { doMaintainScrollAtEnd, reissueClampedNativeEndScroll } from "@/core/doMaintainScrollAtEnd";
 import type { ScrollAdjustHandler } from "@/core/ScrollAdjustHandler";
 import { setFooterSize, setHeaderSize } from "@/core/updateContentMetrics";
 import { useStableRenderComponent } from "@/hooks/useStableRenderComponent";
 import { LayoutView } from "@/platform/LayoutView";
 import { Platform } from "@/platform/Platform";
 import { StyleSheet } from "@/platform/StyleSheet";
+import { isScreenReaderEnabled } from "@/platform/screenReader";
 import type {
     LayoutChangeEvent,
     LayoutRectangle,
@@ -103,6 +105,7 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
     ItemSeparatorComponent,
     alignItemsAtEnd: _alignItemsAtEnd,
     onScroll,
+    onScrollToTop,
     onLayout,
     ListHeaderComponent,
     ListHeaderComponentStyle,
@@ -181,6 +184,33 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
         }
     }, [ListHeaderComponent, ListFooterComponent, ctx, updateFooterSize]);
 
+    const onScrollToTopInternal = useCallback(
+        (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+            interruptUserScroll(ctx);
+            const accessibility = ctx.state.accessibilityScrollEvent;
+            // UIKit completion can trail the final subpixel frames beyond the burst idle gap.
+            const alreadyReported =
+                isScreenReaderEnabled() &&
+                accessibility?.time !== undefined &&
+                !accessibility.blocked &&
+                accessibility.direction === -1 &&
+                accessibility.scroll <= 1;
+            if (accessibility) accessibility.time = undefined;
+            if (!alreadyReported) ctx.state.props.onUserScroll?.();
+            onScrollToTop?.(event);
+        },
+        [ctx, onScrollToTop],
+    );
+
+    const { onContentSizeChange } = rest;
+    const onContentSizeChangeInternal = useCallback(
+        (width: number, height: number) => {
+            reissueClampedNativeEndScroll(ctx);
+            onContentSizeChange?.(width, height);
+        },
+        [ctx, onContentSizeChange],
+    );
+
     const onLayoutHeader = useCallback(
         (rect: LayoutRectangle) => {
             const size = rect[horizontal ? "width" : "height"];
@@ -206,7 +236,12 @@ export const ListComponent = typedMemo(function ListComponent<ItemT>({
                 ? ScrollComponent === ListComponentScrollView
                     ? { onInternalScrollEnd, scrollElement, useWindowScroll }
                     : {}
-                : { onScrollBeginDrag: onInternalScrollBeginDrag, onScrollEndDrag: onInternalScrollEndDrag })}
+                : {
+                      onContentSizeChange: onContentSizeChangeInternal,
+                      onScrollBeginDrag: onInternalScrollBeginDrag,
+                      onScrollEndDrag: onInternalScrollEndDrag,
+                      onScrollToTop: onScrollToTopInternal,
+                  })}
             contentContainerStyle={[
                 horizontal ? { height: "100%" } : {},
                 contentContainerStyle,

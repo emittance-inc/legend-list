@@ -3,8 +3,33 @@ import { describe, expect, it, mock } from "bun:test";
 import "../setup";
 
 import { createMockContext } from "../__mocks__/createMockContext";
+import { installFakeClock } from "../helpers/webScrollHarness";
 
 describe("doScrollTo (web)", () => {
+    it.each(["negative", "inverted"] as const)("uses the minWidth extent for web RTL %s offsets", async (mode) => {
+        const { doScrollTo } = await import("../../src/core/doScrollTo?web-min-width");
+        const scrollTo = mock();
+        const ctx = createMockContext(
+            { totalSize: 300 },
+            {
+                horizontalRTLScrollType: mode,
+                props: { contentContainerMinSize: 2000, data: [], horizontal: true, rtl: true },
+                refScroller: {
+                    current: {
+                        getCurrentScrollOffset: () => (mode === "negative" ? -1400 : 300),
+                        getMaxScrollOffset: () => 1700,
+                        getScrollableNode: () => ({}),
+                        scrollTo,
+                    },
+                } as any,
+                scrollLength: 300,
+            },
+        );
+        doScrollTo(ctx, { animated: true, horizontal: true, offset: 1400 });
+        expect(scrollTo).toHaveBeenCalledWith({ animated: true, x: mode === "negative" ? -1400 : 300, y: 0 });
+        ctx.state.scheduledWork.dispose();
+    });
+
     it("does not let an already-aligned completion frame finish a newer target", async () => {
         const { doScrollTo } = await import("../../src/core/doScrollTo?web-stale-no-op");
         const ctx = createMockContext();
@@ -38,41 +63,175 @@ describe("doScrollTo (web)", () => {
         }
     });
 
-    it("finishes an already aligned clamped target without waiting for scroll events", async () => {
-        const { doScrollTo } = await import("../../src/core/doScrollTo?web-clamped-no-op");
-        const ctx = createMockContext();
-        const resolve = mock(() => {});
-        const addEventListener = mock(() => {});
-        const originalRAF = globalThis.requestAnimationFrame;
-        let frame: FrameRequestCallback | undefined;
-        globalThis.requestAnimationFrame = (callback) => {
-            frame = callback;
-            return 1;
-        };
-        ctx.state.scrollingTo = { animated: true, offset: 116 };
-        ctx.state.pendingScrollResolve = resolve;
-        ctx.state.refScroller = {
-            current: {
-                getCurrentScrollOffset: () => 100,
-                getMaxScrollOffset: () => 100,
+    for (const rtlMode of [undefined, "negative", "inverted"] as const) {
+        it(`retries the current initial target after a stale DOM extent commits (RTL ${rtlMode})`, async () => {
+            const { scrollTo } = await import("../../src/core/scrollTo");
+            const { onScroll } = await import("../../src/core/onScroll");
+            const { Platform } = await import("../../src/platform/Platform");
+            const originalPlatform = Platform.OS;
+            const clock = installFakeClock();
+            Platform.OS = "web";
+            const ctx = createMockContext(
+                { totalSize: 15100 },
+                {
+                    didContainersLayout: true,
+                    horizontalRTLScrollType: rtlMode,
+                    initialScroll: { index: 75, viewPosition: 0 },
+                    initialScrollSession: { kind: "bootstrap", previousDataLength: 151 },
+                    positions: Array.from({ length: 151 }, (_, index) => index * 100),
+                    props: {
+                        data: Array.from({ length: 151 }, (_, index) => index),
+                        getFixedItemSize: () => 100,
+                        horizontal: !!rtlMode,
+                        rtl: !!rtlMode,
+                    },
+                    scrollLength: 804,
+                },
+            );
+            let physicalScroll = 0;
+            let domHeight = 4316;
+            const calls: number[] = [];
+            const toRaw = () =>
+                rtlMode === "negative"
+                    ? -physicalScroll
+                    : rtlMode === "inverted"
+                      ? domHeight - 804 - physicalScroll
+                      : physicalScroll;
+            ctx.state.refScroller.current = {
+                getCurrentScrollOffset: toRaw,
+                getMaxScrollOffset: () => domHeight - 804,
                 getScrollableNode: () => ({}),
-                getScrollEventTarget: () => ({ addEventListener, removeEventListener: mock(() => {}) }),
-                scrollTo: mock(() => {}),
-            },
-        } as any;
+                scrollTo: ({ x = 0, y = 0 }) => {
+                    calls.push(rtlMode ? x : y);
+                    const logical = rtlMode === "negative" ? -x : rtlMode === "inverted" ? domHeight - 804 - x : y;
+                    physicalScroll = Math.max(0, Math.min(logical, domHeight - 804));
+                },
+            } as any;
+            try {
+                scrollTo(ctx, {
+                    animated: false,
+                    forceScroll: true,
+                    index: 75,
+                    isInitialScroll: true,
+                    offset: 7500,
+                    precomputedWithViewOffset: true,
+                    viewPosition: 0,
+                });
+                clock.tick();
+                expect(ctx.state.didFinishInitialScroll).not.toBe(true);
+                expect(ctx.state.scrollingTo).toBeDefined();
+                // The extent commits, and measured rows move the index before retry.
+                domHeight = 15200;
+                ctx.state.totalSize = domHeight;
+                ctx.state.positions[75] = 7600;
+                clock.advance(500);
+                expect(physicalScroll).toBe(7600);
+                expect(calls.at(-1)).toBe(rtlMode === "negative" ? -7600 : rtlMode === "inverted" ? 6796 : 7600);
+                onScroll(ctx, {
+                    nativeEvent: {
+                        contentOffset: { x: rtlMode ? toRaw() : 0, y: rtlMode ? 0 : physicalScroll },
+                        contentSize: { height: rtlMode ? 1000 : domHeight, width: rtlMode ? domHeight : 1000 },
+                        layoutMeasurement: { height: rtlMode ? 1000 : 804, width: rtlMode ? 804 : 1000 },
+                    },
+                } as any);
+                clock.tick();
+                expect(ctx.state.didFinishInitialScroll).toBe(true);
+            } finally {
+                ctx.state.scheduledWork.dispose();
+                Platform.OS = originalPlatform;
+                clock.restore();
+            }
+        });
+    }
 
+    it("finishes at the published content maximum for an unreachable negative end offset", async () => {
+        const { scrollTo } = await import("../../src/core/scrollTo");
+        const { Platform } = await import("../../src/platform/Platform");
+        const originalPlatform = Platform.OS;
+        const clock = installFakeClock();
+        Platform.OS = "web";
+        const target = { index: 9, viewOffset: -50, viewPosition: 1 };
+        const ctx = createMockContext(
+            { totalSize: 1000 },
+            {
+                didContainersLayout: true,
+                initialScroll: target,
+                initialScrollSession: { kind: "bootstrap", previousDataLength: 10 },
+                positions: Array.from({ length: 10 }, (_, index) => index * 100),
+                props: { data: Array.from({ length: 10 }, (_, index) => index), getFixedItemSize: () => 100 },
+                scrollLength: 300,
+                sizes: new Map(Array.from({ length: 10 }, (_, index) => [`item_${index}`, 100])),
+                sizesKnown: new Map(Array.from({ length: 10 }, (_, index) => [`item_${index}`, 100])),
+            },
+        );
+        let physicalScroll = 0;
+        const nativeScrollTo = mock(({ y = 0 }) => {
+            physicalScroll = Math.max(0, Math.min(y, 700));
+        });
+        ctx.state.refScroller.current = {
+            getCurrentScrollOffset: () => physicalScroll,
+            getMaxScrollOffset: () => 700,
+            getScrollableNode: () => ({}),
+            scrollTo: nativeScrollTo,
+        } as any;
         try {
-            doScrollTo(ctx, { animated: true, offset: 116 });
-            expect(resolve).not.toHaveBeenCalled();
-            expect(addEventListener).not.toHaveBeenCalled();
-            expect(frame).toBeDefined();
-            frame?.(0);
-            expect(resolve).toHaveBeenCalledTimes(1);
+            scrollTo(ctx, {
+                ...target,
+                animated: false,
+                forceScroll: true,
+                isInitialScroll: true,
+                offset: 750,
+                precomputedWithViewOffset: true,
+            });
+            clock.tick();
+            expect(physicalScroll).toBe(700);
+            expect(ctx.state.didFinishInitialScroll).toBe(true);
             expect(ctx.state.scrollingTo).toBeUndefined();
+            expect(nativeScrollTo).toHaveBeenCalledTimes(1);
         } finally {
-            globalThis.requestAnimationFrame = originalRAF;
+            ctx.state.scheduledWork.dispose();
+            Platform.OS = originalPlatform;
+            clock.restore();
         }
     });
+
+    for (const animated of [true, false]) {
+        it(`finishes an aligned clamped target on the next frame (animated: ${animated})`, async () => {
+            const { doScrollTo } = await import("../../src/core/doScrollTo?web-clamped-no-op");
+            const ctx = createMockContext();
+            const resolve = mock(() => {});
+            const addEventListener = mock(() => {});
+            const originalRAF = globalThis.requestAnimationFrame;
+            let frame: FrameRequestCallback | undefined;
+            globalThis.requestAnimationFrame = (callback) => {
+                frame = callback;
+                return 1;
+            };
+            ctx.state.scrollingTo = { animated, offset: 116 };
+            ctx.state.pendingScrollResolve = resolve;
+            ctx.state.refScroller = {
+                current: {
+                    getCurrentScrollOffset: () => 100,
+                    getMaxScrollOffset: () => 100,
+                    getScrollableNode: () => ({}),
+                    getScrollEventTarget: () => ({ addEventListener, removeEventListener: mock(() => {}) }),
+                    scrollTo: mock(() => {}),
+                },
+            } as any;
+
+            try {
+                doScrollTo(ctx, { animated, offset: 116 });
+                expect(resolve).not.toHaveBeenCalled();
+                expect(addEventListener).not.toHaveBeenCalled();
+                expect(frame).toBeDefined();
+                frame?.(0);
+                expect(resolve).toHaveBeenCalledTimes(1);
+                expect(ctx.state.scrollingTo).toBeUndefined();
+            } finally {
+                globalThis.requestAnimationFrame = originalRAF;
+            }
+        });
+    }
 
     it("uses scroller scrollTo options when getScrollableNode returns an element", async () => {
         const { doScrollTo } = await import("../../src/core/doScrollTo?web-dom-scroll-options");
@@ -147,19 +306,23 @@ describe("doScrollTo (web)", () => {
                 scrollTo: scrollerScrollTo,
             },
         } as any;
+        ctx.state.scrollingTo = { animated: true, offset: 80 };
 
         doScrollTo(ctx, { animated: true, horizontal: false, offset: 80 });
 
         expect(scrollerScrollTo).toHaveBeenCalledWith({ animated: true, x: 0, y: 80 });
         expect(addEventListener).toHaveBeenCalledWith("scroll", expect.any(Function));
+        // Input belongs to ListComponentScrollView, which applies ownership and control filters.
+        expect(addEventListener.mock.calls.every(([type]) => type === "scroll")).toBe(true);
     });
 
-    it("does not let an old non-animated timer finish a newer scroll", async () => {
+    it("does not let an old non-animated frame finish a newer scroll", async () => {
         const { doScrollTo } = await import("../../src/core/doScrollTo?web-stale-non-animated-timer");
         const ctx = createMockContext();
         const element = {} as HTMLElement;
-        const scheduledCallbacks: Array<() => void> = [];
-        const originalSetTimeout = globalThis.setTimeout;
+        const scheduledCallbacks: FrameRequestCallback[] = [];
+        const originalRAF = globalThis.requestAnimationFrame;
+        const originalCancelRAF = globalThis.cancelAnimationFrame;
         const resolveSecondScroll = mock(() => {});
 
         ctx.state.refScroller = {
@@ -168,10 +331,11 @@ describe("doScrollTo (web)", () => {
                 scrollTo: mock(() => {}),
             },
         } as any;
-        globalThis.setTimeout = ((callback: () => void) => {
+        globalThis.requestAnimationFrame = (callback) => {
             scheduledCallbacks.push(callback);
             return scheduledCallbacks.length;
-        }) as typeof setTimeout;
+        };
+        globalThis.cancelAnimationFrame = mock(() => {});
 
         try {
             const firstTarget = { animated: false, offset: 40 } as NonNullable<typeof ctx.state.scrollingTo>;
@@ -184,27 +348,28 @@ describe("doScrollTo (web)", () => {
             ctx.state.pendingScrollResolve = resolveSecondScroll;
             doScrollTo(ctx, { animated: false, horizontal: false, offset: 120 });
 
-            scheduledCallbacks[0]!();
+            scheduledCallbacks[0]!(0);
 
             expect(ctx.state.scrollingTo).toBe(secondTarget);
             expect(resolveSecondScroll).not.toHaveBeenCalled();
 
-            scheduledCallbacks[1]!();
+            scheduledCallbacks[1]!(0);
 
             expect(ctx.state.scrollingTo).toBeUndefined();
             expect(resolveSecondScroll).toHaveBeenCalledTimes(1);
         } finally {
-            globalThis.setTimeout = originalSetTimeout;
+            globalThis.requestAnimationFrame = originalRAF;
+            globalThis.cancelAnimationFrame = originalCancelRAF;
         }
     });
 
-    it("exposes cancellation for delayed non-animated completion", async () => {
+    it("exposes cancellation for non-animated completion frames", async () => {
         const { doScrollTo } = await import("../../src/core/doScrollTo?web-cancel-non-animated-completion");
         const ctx = createMockContext();
-        const scheduledCallbacks: Array<() => void> = [];
+        const scheduledCallbacks: FrameRequestCallback[] = [];
         const clearedHandles: number[] = [];
-        const originalSetTimeout = globalThis.setTimeout;
-        const originalClearTimeout = globalThis.clearTimeout;
+        const originalRAF = globalThis.requestAnimationFrame;
+        const originalCancelRAF = globalThis.cancelAnimationFrame;
         const resolveScroll = mock(() => {});
 
         ctx.state.refScroller = {
@@ -215,24 +380,24 @@ describe("doScrollTo (web)", () => {
         } as any;
         ctx.state.scrollingTo = { animated: false, offset: 40 };
         ctx.state.pendingScrollResolve = resolveScroll;
-        globalThis.setTimeout = ((callback: () => void) => {
+        globalThis.requestAnimationFrame = (callback) => {
             scheduledCallbacks.push(callback);
             return 0;
-        }) as typeof setTimeout;
-        globalThis.clearTimeout = ((handle: number) => {
+        };
+        globalThis.cancelAnimationFrame = (handle) => {
             clearedHandles.push(handle);
-        }) as typeof clearTimeout;
+        };
 
         try {
             doScrollTo(ctx, { animated: false, horizontal: false, offset: 40 });
             ctx.state.scheduledWork.cancel("platformScrollCompletion");
 
             expect(clearedHandles).toEqual([0]);
-            scheduledCallbacks[0]!();
+            scheduledCallbacks[0]!(0);
             expect(resolveScroll).not.toHaveBeenCalled();
         } finally {
-            globalThis.setTimeout = originalSetTimeout;
-            globalThis.clearTimeout = originalClearTimeout;
+            globalThis.requestAnimationFrame = originalRAF;
+            globalThis.cancelAnimationFrame = originalCancelRAF;
         }
     });
 
