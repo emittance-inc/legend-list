@@ -315,6 +315,29 @@ function updateViewabilityForCachedRange(
     }
 }
 
+function emitVisibleRange(ctx: StateContext) {
+    const state = ctx.state;
+    const { endBuffered, endNoBuffer, startBuffered, startNoBuffer, viewabilityConfigCallbackPairs } = state;
+
+    maybeEmitFirstVisibleItemChanged(state, startNoBuffer);
+
+    if (
+        viewabilityConfigCallbackPairs &&
+        (state.props.hasExternalScroll || (startNoBuffer !== null && endNoBuffer !== null))
+    ) {
+        updateViewableItems(
+            state,
+            ctx,
+            viewabilityConfigCallbackPairs,
+            state.scrollLength,
+            startNoBuffer ?? 0,
+            endNoBuffer ?? -1,
+            startBuffered ?? startNoBuffer ?? 0,
+            endBuffered ?? endNoBuffer ?? -1,
+        );
+    }
+}
+
 export function calculateItemsInView(
     ctx: StateContext,
     params: {
@@ -415,6 +438,7 @@ export function calculateItemsInView(
             const shouldNotifyStickyHeaderChange =
                 !!onStickyHeaderChange && stickyHeaderIndicesArr.length > 0 && stickyIndexDidChange;
             return {
+                activeStickyIndex: nextActiveStickyIndex,
                 currentStickyIdx,
                 finishCalculateItemsInView: shouldNotifyStickyHeaderChange
                     ? () => {
@@ -957,6 +981,20 @@ export function calculateItemsInView(
 
         if (suppressInitialScrollSideEffects) {
             evaluateBootstrapInitialScroll(ctx);
+            return;
+        }
+
+        if (ctx.renderUpdate.isActive) {
+            // User callbacks cannot run during a render. They run once it commits, from the
+            // ranges that are current by then.
+            const finishStickyState = stickyState?.finishCalculateItemsInView;
+            const activeStickyIndex = stickyState?.activeStickyIndex;
+            ctx.renderUpdate.callbacks.push(() => {
+                emitVisibleRange(ctx);
+                if (finishStickyState && peek$(ctx, "activeStickyIndex") === activeStickyIndex) {
+                    finishStickyState();
+                }
+            });
             return;
         }
 

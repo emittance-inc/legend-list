@@ -13,11 +13,13 @@ export interface ContainerComponentProps<ItemT> {
     recycleItems: boolean;
     ItemSeparatorComponent?: React.ComponentType<{ leadingItem: ItemT }>;
     getRenderedItem: GetRenderedItem;
+    // Changes when a render wrote this container's signals, which it could not announce.
+    renderVersion?: number;
     stickyHeaderConfig?: StickyHeaderConfig;
 }
 
 export interface ContainerSlotProps<ItemT> extends Omit<ContainerComponentProps<ItemT>, "itemKey"> {
-    activeItemKeys: ReadonlySet<string>;
+    activeItemKeys: ReadonlySet<string> | undefined;
     ContainerComponent?: React.ComponentType<ContainerComponentProps<ItemT>>;
 }
 
@@ -28,12 +30,13 @@ export function ContainerSlotBase<ItemT>({
     recycleItems,
     ItemSeparatorComponent,
     getRenderedItem,
+    renderVersion,
     stickyHeaderConfig,
     ContainerComponent = Container,
 }: ContainerSlotProps<ItemT>) {
     const [itemKey] = useArr$([`containerItemKey${id}`]);
 
-    if (itemKey === undefined || !activeItemKeys.has(itemKey)) {
+    if (itemKey === undefined || (activeItemKeys && !activeItemKeys.has(itemKey))) {
         return null;
     }
 
@@ -45,6 +48,7 @@ export function ContainerSlotBase<ItemT>({
             id={id}
             itemKey={itemKey}
             recycleItems={recycleItems}
+            renderVersion={renderVersion}
             stickyHeaderConfig={stickyHeaderConfig}
         />
     );

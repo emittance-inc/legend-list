@@ -15,6 +15,7 @@ import { useDevChecks } from "@/components/useDevChecks";
 import { ENABLE_DEBUG_VIEW } from "@/constants";
 import { IsNewArchitecture } from "@/constants-platform";
 import { resetAdaptiveRender } from "@/core/adaptiveRender";
+import { applyDataChangeInRender, canApplyDataChangeInRender } from "@/core/applyDataChangeInRender";
 import {
     handleBootstrapInitialScrollFooterLayout,
     handleBootstrapInitialScrollLayoutChange,
@@ -54,7 +55,15 @@ import { RefreshControl } from "@/platform/RefreshControl";
 import { StyleSheet } from "@/platform/StyleSheet";
 import type { LooseScrollView, LooseScrollViewProps, LooseView, ViewStyle } from "@/platform/scrollview-types";
 import { useStickyScrollHandler } from "@/platform/useStickyScrollHandler";
-import { listen$, peek$, StateProvider, set$, useStateContext } from "@/state/state";
+import {
+    flushRenderUpdate,
+    listen$,
+    peek$,
+    RenderEpochProvider,
+    StateProvider,
+    set$,
+    useStateContext,
+} from "@/state/state";
 import type { LegendListMetrics, LegendListRef, LegendListRenderItemProps } from "@/types.base";
 import type {
     AnchoredEndSpaceOwner,
@@ -479,7 +488,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         clearPreservedInitialScrollTarget(state);
     }
     if (didDataChangeLocal) {
-        state.activeItemKeys = new Set(dataProp.map((item, index) => keyExtractor(item, index)));
         state.dataChangeEpoch += 1;
         state.dataChangeNeedsScrollUpdate = true;
         state.didDataChange = true;
@@ -641,6 +649,17 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
         }
     }
 
+    if (didDataChangeLocal) {
+        if (!shouldResetFreshDataLayout && canApplyDataChangeInRender(ctx)) {
+            applyDataChangeInRender(ctx);
+            state.activeItemKeys = undefined;
+        } else {
+            // The containers keep their items until the layout effect, so the ones whose item
+            // left the data are hidden for this commit.
+            state.activeItemKeys = new Set(dataProp.map((item, index) => keyExtractor(item, index)));
+        }
+    }
+
     if (IS_DEV) {
         useDevChecks(props);
     }
@@ -768,6 +787,12 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
             useAlignItemsAtEndPadding,
         ],
     );
+
+    // Runs on every commit: a render that applied a data change can be restarted with props
+    // that leave the effects below unchanged.
+    useLayoutEffect(() => {
+        flushRenderUpdate(ctx);
+    });
 
     useLayoutEffect(() => {
         // Get these out of state because react-dom's double render can cause issues when
@@ -909,7 +934,7 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
     const refreshControlElement = refreshControl as React.ReactElement<{ progressViewOffset?: number }> | undefined;
 
     return (
-        <>
+        <RenderEpochProvider value={ctx.renderUpdate.epoch}>
             <ListComponent
                 {...restProps}
                 activeItemKeys={state.activeItemKeys}
@@ -960,6 +985,6 @@ const LegendListInner = typedForwardRef(function LegendListInner<T>(
                 useWindowScroll={useWindowScrollResolved}
             />
             {IS_DEV && ENABLE_DEBUG_VIEW && <DebugView />}
-        </>
+        </RenderEpochProvider>
     );
 });

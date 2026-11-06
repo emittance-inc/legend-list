@@ -26,7 +26,7 @@ import type {
     ViewStyle,
 } from "@/platform/scrollview-types";
 import { View } from "@/platform/ViewComponents";
-import { useArr$, useStateContext } from "@/state/state";
+import { useArr$, useRenderEpoch, useStateContext } from "@/state/state";
 import { type GetRenderedItem, type LegendListPropsBase, typedMemo } from "@/types.internal";
 import { IS_DEV } from "@/utils/devEnvironment";
 import { getComponent } from "@/utils/getComponent";
@@ -46,7 +46,7 @@ interface ListComponentProps<ItemT>
         | "renderScrollComponent"
         | "style"
     > {
-    activeItemKeys: ReadonlySet<string>;
+    activeItemKeys: ReadonlySet<string> | undefined;
     horizontal: boolean;
     initialContentOffset: number | undefined;
     freshDataTransitionEpoch: number;
@@ -71,6 +71,7 @@ interface ListComponentProps<ItemT>
 // biome-ignore lint/nursery/noShadow: const function name shadowing is intentional
 const AlignItemsAtEndSpacer = typedMemo(function AlignItemsAtEndSpacer({ horizontal }: { horizontal: boolean }) {
     const [alignItemsAtEndPadding = 0] = useArr$(["alignItemsAtEndPadding"]);
+    useRenderEpoch();
 
     if (alignItemsAtEndPadding <= 0) {
         return null;

@@ -66,6 +66,31 @@ describe("checkResetContainers", () => {
         expect(state.previousData).toBeUndefined();
     });
 
+    it("does not reassign containers again when the render applied the data change", () => {
+        state.dataChangeEpoch = 3;
+        state.appliedDataChangeEpoch = 3;
+        state.previousData = state.props.data;
+
+        checkResetContainers(ctx, [...state.props.data, { id: "item-3", value: "C" }]);
+
+        expect(calculateItemsInViewSpy).not.toHaveBeenCalled();
+        expect(state.isEndReached).toBe(false);
+        expect(checkThresholdsSpy).toHaveBeenCalledWith(ctx);
+        expect(state.previousData).toBeUndefined();
+    });
+
+    it("reassigns containers for a column change after the render applied a data change", () => {
+        state.dataChangeEpoch = 3;
+        state.appliedDataChangeEpoch = 3;
+
+        checkResetContainers(ctx, state.props.data, { didColumnsChange: true });
+
+        expect(calculateItemsInViewSpy).toHaveBeenCalledWith(ctx, {
+            dataChanged: true,
+            doMVCP: true,
+        });
+    });
+
     it("treats modifier-only object options as all triggers", () => {
         const previousData = state.props.data;
         const newData = previousData.slice();

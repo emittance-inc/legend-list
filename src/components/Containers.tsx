@@ -6,13 +6,13 @@ import { ContainerLayoutCoordinator } from "@/components/ContainerLayoutCoordina
 import { ContainerSlot } from "@/components/ContainerSlot";
 import { useDOMOrder } from "@/hooks/useDOMOrder";
 import { useFreshDataTransitionVisibility } from "@/hooks/useFreshDataTransitionVisibility";
-import { useArr$, useStateContext } from "@/state/state";
+import { useArr$, useRenderEpoch, useStateContext } from "@/state/state";
 import type { StickyHeaderConfig } from "@/types.base";
 import { type GetRenderedItem, typedMemo } from "@/types.internal";
 import { isHorizontalRTL } from "@/utils/rtl";
 
 interface ContainersProps<ItemT> {
-    activeItemKeys: ReadonlySet<string>;
+    activeItemKeys: ReadonlySet<string> | undefined;
     freshDataTransitionEpoch: number;
     horizontal: boolean;
     recycleItems: boolean;
@@ -40,6 +40,7 @@ const ContainersInner = typedMemo(function ContainersInner({
     const columnWrapperStyle = ctx.columnWrapperStyle;
     const isHorizontalRTLList = isHorizontalRTL(ctx.state);
     const [otherAxisSize, readyToRender, totalSize] = useArr$(["otherAxisSize", "readyToRender", "totalSize"]);
+    useRenderEpoch();
     const isVisible = useFreshDataTransitionVisibility(!!readyToRender, freshDataTransitionEpoch);
 
     // Initialize DOM reordering hook - noop in react namtive
@@ -97,7 +98,9 @@ export const Containers = typedMemo(function Containers<ItemT>({
     getRenderedItem,
     stickyHeaderConfig,
 }: ContainersProps<ItemT>) {
+    const { containerVersions } = useStateContext().renderUpdate;
     const [numContainersPooled, numColumns] = useArr$(["numContainersPooled", "numColumns"]);
+    useRenderEpoch();
 
     const containers: React.ReactNode[] = [];
     for (let i = 0; i < numContainersPooled; i++) {
@@ -110,6 +113,7 @@ export const Containers = typedMemo(function Containers<ItemT>({
                 id={i}
                 key={i}
                 recycleItems={recycleItems}
+                renderVersion={containerVersions[i]}
                 // specifying inline separator makes Containers rerender on each data change
                 // should we do memo of ItemSeparatorComponent?
                 stickyHeaderConfig={stickyHeaderConfig}

@@ -6,12 +6,12 @@ import { ContainerLayoutCoordinator } from "@/components/ContainerLayoutCoordina
 import { ContainerSlot } from "@/components/ContainerSlot";
 import { useFreshDataTransitionVisibility } from "@/hooks/useFreshDataTransitionVisibility";
 import { useValue$ } from "@/hooks/useValue$";
-import { useArr$, useStateContext } from "@/state/state";
+import { useArr$, useRenderEpoch, useStateContext } from "@/state/state";
 import type { StickyHeaderConfig } from "@/types.base";
 import { type GetRenderedItem, typedMemo } from "@/types.internal";
 
 interface ContainersProps<ItemT> {
-    activeItemKeys: ReadonlySet<string>;
+    activeItemKeys: ReadonlySet<string> | undefined;
     freshDataTransitionEpoch: number;
     horizontal: boolean;
     recycleItems: boolean;
@@ -87,7 +87,9 @@ export const Containers = typedMemo(function Containers<ItemT>({
     stickyHeaderConfig,
     getRenderedItem,
 }: ContainersProps<ItemT>) {
+    const { containerVersions } = useStateContext().renderUpdate;
     const [numContainersPooled] = useArr$(["numContainersPooled"]);
+    useRenderEpoch();
 
     const containers: React.ReactNode[] = [];
     for (let i = 0; i < numContainersPooled; i++) {
@@ -100,6 +102,7 @@ export const Containers = typedMemo(function Containers<ItemT>({
                 id={i}
                 key={i}
                 recycleItems={recycleItems}
+                renderVersion={containerVersions[i]}
                 // specifying inline separator makes Containers rerender on each data change
                 // should we do memo of ItemSeparatorComponent?
                 stickyHeaderConfig={stickyHeaderConfig}

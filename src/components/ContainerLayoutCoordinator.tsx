@@ -3,7 +3,7 @@ import * as React from "react";
 import { IsNewArchitecture } from "@/constants-platform";
 import { measureContainersInLayoutEffect } from "@/core/measureContainersInLayoutEffect";
 import { getContainerLayoutEffectScope } from "@/core/scheduleContainerLayout";
-import { useArr$, useStateContext } from "@/state/state";
+import { useArr$, useRenderEpoch, useStateContext } from "@/state/state";
 import { typedMemo } from "@/types.internal";
 
 // Keep committed-container measurement scheduling out of the visual container layer.
@@ -16,6 +16,7 @@ export const ContainerLayoutCoordinator = typedMemo(function ContainerLayoutCoor
 }) {
     const ctx = useStateContext();
     const [containerLayoutEpoch] = useArr$(["containerLayoutEpoch"]);
+    useRenderEpoch();
 
     React.useLayoutEffect(() => {
         if (IsNewArchitecture) {

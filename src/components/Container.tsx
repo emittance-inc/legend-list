@@ -92,6 +92,8 @@ export const Container = typedMemo(function Container<ItemT>({
     horizontal: boolean;
     getRenderedItem: GetRenderedItem;
     ItemSeparatorComponent?: React.ComponentType<{ leadingItem: ItemT }>;
+    // Read by memo only: a new value rerenders the container to read signals a render wrote.
+    renderVersion?: number;
     stickyHeaderConfig?: StickyHeaderConfig;
 }) {
     const ctx = useStateContext();
