@@ -1,9 +1,11 @@
 import { cancelScrollCompletionChecks } from "@/core/cancelImperativeScroll";
 import { releaseDeferredPublicOnScroll } from "@/core/deferredPublicOnScroll";
+import { isEndOfContentTarget } from "@/core/endOfContentTarget";
 import { initialScrollCompletion, initialScrollWatchdog, setInitialScrollSession } from "@/core/initialScrollSession";
+import { getObservedScrollOffset } from "@/core/observedScroll";
 import { recalculateSettledScroll } from "@/core/recalculateSettledScroll";
 import { Platform } from "@/platform/Platform";
-import type { StateContext } from "@/state/state";
+import { type StateContext, set$ } from "@/state/state";
 import { setInitialRenderState } from "@/utils/setInitialRenderState";
 
 const PRESERVED_INITIAL_SCROLL_FALLBACK_CLEAR_DELAY_MS = 2000;
@@ -14,14 +16,11 @@ function syncInitialScrollOffset(state: StateContext["state"], offset: number) {
     state.scrollPrev = offset;
 }
 
-function clearPreservedInitialScrollTargetTimeout(state: StateContext["state"]) {
-    state.scheduledWork.cancel("preservedInitialScroll");
-}
-
 export function clearPreservedInitialScrollTarget(state: StateContext["state"]) {
-    clearPreservedInitialScrollTargetTimeout(state);
+    state.scheduledWork.cancel("preservedInitialScroll");
     state.clearPreservedInitialScrollOnNextFinish = undefined;
     state.initialScroll = undefined;
+    state.preservedEndAnchorCorrection = undefined;
     setInitialScrollSession(state);
 }
 
@@ -64,13 +63,16 @@ export function finishInitialScroll(
     if (options?.resolvedOffset !== undefined) {
         syncInitialScrollOffset(state, options.resolvedOffset);
     } else if (options?.syncObservedOffset && state.initialScrollSession?.kind === "offset") {
-        const observedOffset = state.refScroller.current?.getCurrentScrollOffset?.();
-        if (typeof observedOffset === "number" && Number.isFinite(observedOffset)) {
+        const observedOffset = getObservedScrollOffset(ctx);
+        if (Number.isFinite(observedOffset)) {
             syncInitialScrollOffset(state, observedOffset);
         }
     }
 
     const complete = () => {
+        if (state.isUnmounted) {
+            return;
+        }
         // A queued completion belongs to the dataset that scheduled it.
         if (freshDataTransitionEpoch !== state.freshDataTransitionEpoch) {
             options?.onFinished?.();
@@ -78,12 +80,19 @@ export function finishInitialScroll(
         }
         const shouldReleaseDeferredPublicOnScroll =
             Platform.OS === "web" && state.initialScrollSession?.kind === "bootstrap";
-        const finalScrollOffset = options?.resolvedOffset ?? state.scrollPending ?? state.scroll ?? 0;
+        if (
+            isEndOfContentTarget(state.initialScroll, state.props.data.length) &&
+            state.props.maintainScrollAtEnd &&
+            !state.endFollowInterrupted
+        ) {
+            set$(ctx, "isFollowingEnd", true);
+        }
+        const finalScrollOffset = options?.resolvedOffset ?? state.scrollPending;
         initialScrollWatchdog.clear(state);
         if (options?.preserveTarget && state.initialScroll) {
             state.clearPreservedInitialScrollOnNextFinish = undefined;
             setInitialScrollSession(state);
-            clearPreservedInitialScrollTargetTimeout(state);
+            state.scheduledWork.cancel("preservedInitialScroll");
             if (options?.schedulePreservedTargetClear) {
                 // This is only a backstop. The main preservation lifecycle is
                 // event-driven via late layout/data/user-scroll invalidation.

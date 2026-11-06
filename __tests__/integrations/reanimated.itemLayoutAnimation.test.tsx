@@ -67,7 +67,7 @@ const createReanimatedOverrides = () => {
         useAnimatedRef: () => ({ current: null }),
         useAnimatedStyle: (updater: () => unknown) => updater(),
         useScrollViewOffset: () => {},
-        useSharedValue: <T,>(value: T) => ({ value }),
+        useSharedValue: <T,>(value: T) => React.useRef({ value }).current,
         View: ReanimatedViewMock,
     };
 
@@ -112,6 +112,7 @@ function PositionComponentHarness({
 }) {
     const ctx = useStateContext();
     const refView = React.useRef<any>(null);
+    if (!ctx.state) ctx.state = createMockState() as any;
 
     React.useLayoutEffect(() => {
         set$(ctx, `containerItemKey${containerId}` as any, itemKey as any);
@@ -418,7 +419,7 @@ describe("AnimatedLegendList itemLayoutAnimation integration", () => {
         expect(reanimatedViewRenders.at(-1)?.layout).toBe(transition);
     });
 
-    it("does not skip layout transitions on key changes when recycling is disabled", async () => {
+    it("skips layout transitions on item reassignment even when recycling is disabled", async () => {
         const { AnimatedLegendList } = await import("../../src/integrations/reanimated?item-layout-no-recycle");
         const transition = { duration: 280, type: "linear" } as any;
 
@@ -463,6 +464,74 @@ describe("AnimatedLegendList itemLayoutAnimation integration", () => {
                     />
                 </StateProvider>,
             );
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBeUndefined();
+    });
+
+    it("skips layout transitions while scrolling and for one render after a scroll adjustment", async () => {
+        const { AnimatedLegendList } = await import("../../src/integrations/reanimated?item-layout-scroll-active");
+        const transition = { duration: 280, type: "linear" } as any;
+
+        act(() => {
+            TestRenderer.create(
+                <AnimatedLegendList
+                    data={[{ id: "a" }]}
+                    estimatedItemSize={10}
+                    itemLayoutAnimation={transition}
+                    renderItem={() => null}
+                />,
+            );
+        });
+
+        const PositionComponent = legendListPropsRenders.at(-1).positionComponentInternal as React.ComponentType<any>;
+        let context!: ReturnType<typeof useStateContext>;
+        const CaptureContext = () => {
+            context = useStateContext();
+            return null;
+        };
+
+        act(() => {
+            TestRenderer.create(
+                <StateProvider>
+                    <CaptureContext />
+                    <PositionComponentHarness
+                        containerId={9}
+                        itemKey="a"
+                        PositionComponent={PositionComponent}
+                        position={10}
+                    />
+                </StateProvider>,
+            );
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBe(transition);
+
+        act(() => {
+            set$(context, "isScrollActive", true);
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBeUndefined();
+        act(() => {
+            set$(context, "isScrollActive", false);
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBe(transition);
+
+        context.state.layoutAdjustmentEpoch = (context.state.layoutAdjustmentEpoch ?? 0) + 1;
+        act(() => {
+            set$(context, "containerPosition9", 20);
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBeUndefined();
+        act(() => {
+            set$(context, "containerPosition9", 30);
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBe(transition);
+
+        context.state.scrollingTo = { animated: true, offset: 100 } as any;
+        act(() => {
+            set$(context, "containerPosition9", 40);
+        });
+        expect(reanimatedViewRenders.at(-1)?.layout).toBeUndefined();
+        context.state.scrollingTo = undefined;
+        act(() => {
+            set$(context, "containerPosition9", 50);
         });
         expect(reanimatedViewRenders.at(-1)?.layout).toBe(transition);
     });

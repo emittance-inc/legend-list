@@ -78,9 +78,12 @@ export function createMockState(
         scheduledWork: new ScheduledWork(),
         scroll: 0,
         scrollAdjustHandler: {
+            commitPendingAdjust: () => {},
             getAdjust: () => 0,
+            getUnsupersededPendingAdjust: () => 0,
             requestAdjust: () => {}, // Mock scroll adjust handler
             setMounted: () => {},
+            supersedePendingAdjust: () => {},
         },
         scrollForNextCalculateItemsInView: undefined,
         scrollHistory: [],

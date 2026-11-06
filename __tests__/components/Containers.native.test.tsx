@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import "../setup";
 
 import { scheduleContainerLayout } from "@/core/scheduleContainerLayout";
-import { type StateContext, StateProvider, useStateContext } from "@/state/state";
+import { type StateContext, StateProvider, set$, useStateContext } from "@/state/state";
 import { createMockState } from "../__mocks__/createMockState";
 import { act, render } from "../helpers/testingLibrary";
 
@@ -44,6 +44,7 @@ const Setup = ({
     children,
 }: SetupProps) => {
     const ctx = useStateContext();
+    ctx.state ??= createMockState();
     onContext?.(ctx);
     ctx.columnWrapperStyle = columnWrapperStyle;
     ctx.values.set("numColumns", numColumns);
@@ -55,11 +56,135 @@ const Setup = ({
 };
 
 describe("Containers native", () => {
+    it("preserves the old-architecture update path in a fresh process", () => {
+        const proc = Bun.spawnSync(["bun", "test", "./__tests__/components/Containers.oldarch.cases.tsx"], {
+            cwd: process.cwd(),
+            stderr: "pipe",
+            stdout: "pipe",
+        });
+        expect({ exitCode: proc.exitCode, stderr: proc.stderr.toString() }).toEqual({
+            exitCode: 0,
+            stderr: expect.any(String),
+        });
+    });
+
     beforeEach(() => {
         measureCalls.length = 0;
         observeMeasurement = undefined;
         registerContainerMock();
         registerMeasureContainersMock();
+    });
+
+    for (const horizontal of [false, true]) {
+        it(`commits a shrinking content extent with Fabric row positions and grows it at once (horizontal: ${horizontal})`, async () => {
+            const { PositionView } = await import("@/components/PositionView");
+            mock.module("@/components/Container", () => ({
+                Container: ({ id }: { id: number }) => {
+                    const refView = React.useRef<any>(null);
+                    return (
+                        <PositionView
+                            horizontal={horizontal}
+                            id={id}
+                            onLayout={() => {}}
+                            refView={refView}
+                            style={horizontal ? { width: 100 } : { height: 100 }}
+                        >
+                            last row
+                        </PositionView>
+                    );
+                },
+            }));
+            const { Containers } = await import("@/components/Containers");
+            let ctx: StateContext;
+            function GeometrySetup({ children }: { children: React.ReactNode }) {
+                ctx = useStateContext();
+                ctx.state = createMockState();
+                ctx.values.set("numColumns", 1);
+                ctx.values.set("numContainersPooled", 1);
+                ctx.values.set("readyToRender", true);
+                ctx.values.set("totalSize", 1000);
+                ctx.values.set("containerItemKey0", "last");
+                ctx.values.set("containerPosition0", 900);
+                return children;
+            }
+            const { toJSON, unmount } = render(
+                <StateProvider>
+                    <GeometrySetup>
+                        <Containers
+                            freshDataTransitionEpoch={0}
+                            getRenderedItem={() => null}
+                            horizontal={horizontal}
+                            recycleItems={false}
+                        />
+                    </GeometrySetup>
+                </StateProvider>,
+            );
+            const geometry = () => {
+                const tree = toJSON() as any;
+                const axis = horizontal ? ["width", "minWidth"] : ["height", "minHeight"];
+                const sizes = axis.map((key) => tree.props.style[key] ?? 0);
+                return {
+                    // Animated updates change these values outside a React commit.
+                    extent: Math.max(...sizes.map((size) => (typeof size === "number" ? size : size.getValue()))),
+                    rowPosition: tree.children[0].props.style[1][horizontal ? "left" : "top"],
+                };
+            };
+            expect(geometry()).toEqual({ extent: 1000, rowPosition: 900 });
+            let beforeCommit: ReturnType<typeof geometry> | undefined;
+            act(() => {
+                // A row above shrinks by 300px. Both signals change in one batch,
+                // but Fabric cannot move the row until the React commit.
+                set$(ctx!, "containerPosition0", 600);
+                set$(ctx!, "totalSize", 700);
+                beforeCommit = geometry();
+            });
+            expect(beforeCommit).toEqual({ extent: 1000, rowPosition: 900 });
+            expect(geometry()).toEqual({ extent: 700, rowPosition: 600 });
+            act(() => {
+                // The row grows back. End space outside the content (anchored end space)
+                // shrinks at once, so the extent must not wait for the commit either.
+                set$(ctx!, "containerPosition0", 900);
+                set$(ctx!, "totalSize", 1000);
+                beforeCommit = geometry();
+            });
+            expect(beforeCommit).toEqual({ extent: 1000, rowPosition: 600 });
+            expect(geometry()).toEqual({ extent: 1000, rowPosition: 900 });
+            unmount();
+        });
+    }
+
+    it("commits Fabric content extent for every distinct total size", async () => {
+        const { Containers } = await import("../../src/components/Containers.native?extent-commit-count");
+        let ctx: StateContext;
+        let commits = 0;
+        function Content() {
+            ctx = useStateContext();
+            ctx.state = createMockState();
+            ctx.values.set("readyToRender", true);
+            ctx.values.set("numContainersPooled", 0);
+            ctx.values.set("totalSize", 1000);
+            return (
+                <Containers
+                    freshDataTransitionEpoch={0}
+                    getRenderedItem={() => null}
+                    horizontal={false}
+                    recycleItems={false}
+                />
+            );
+        }
+        const list = render(
+            <StateProvider>
+                <React.Profiler id="extent" onRender={() => commits++}>
+                    <Content />
+                </React.Profiler>
+            </StateProvider>,
+        );
+        expect(commits).toBe(1);
+        for (const size of [900, 800, 700]) act(() => set$(ctx!, "totalSize", size));
+        expect(commits).toBe(4);
+        act(() => set$(ctx!, "totalSize", 700));
+        expect(commits).toBe(4);
+        list.unmount();
     });
 
     it("runs coordinated measurement after child layout effects", async () => {

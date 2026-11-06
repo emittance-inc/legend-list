@@ -33,7 +33,7 @@ describe("applyDataChangeInRender", () => {
             expect(canApplyDataChangeInRender(ctx)).toBe(true);
         });
 
-        it("accepts a list during a programmatic scroll, which only data maintenance would act on", () => {
+        it("accepts a list during a programmatic scroll to an offset, which a data change leaves alone", () => {
             state.scrollingTo = { animated: false, offset: 0 } as any;
 
             expect(canApplyDataChangeInRender(ctx)).toBe(true);
@@ -74,6 +74,13 @@ describe("applyDataChangeInRender", () => {
                 },
             ],
             ["without a viewport size", () => ({ scrollLength: 0 })],
+            ["with an explicit visible content anchor", () => ({ visibleContentAnchor: { key: "item-1", offset: 0 } })],
+            ["during a scroll to an index", () => ({ scrollingTo: { animated: true, index: 3, offset: 300 } as any })],
+            [
+                "during a scroll to a key",
+                () => ({ scrollingTo: { animated: true, key: "item-3", offset: 300 } as any }),
+            ],
+            ["during a scroll to the end", () => ({ scrollingTo: { isScrollToEnd: true, offset: 0 } as any })],
             ["with an initial scroll target", () => ({ initialScroll: { index: 3 } as any })],
             [
                 "during an initial scroll session",

@@ -1,3 +1,4 @@
+import { schedulePreservedEndAnchorCorrection } from "@/core/bootstrapInitialScroll";
 import { calculateItemsInView } from "@/core/calculateItemsInView";
 import { resolveContainerItemMetadata } from "@/core/containerItemMetadata";
 import { doMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
@@ -6,13 +7,16 @@ import { maybeUpdateAnchoredEndSpace } from "@/core/updateAnchoredEndSpace";
 import { Platform } from "@/platform/Platform";
 import { peek$, type StateContext, set$ } from "@/state/state";
 import { checkAllSizesKnown } from "@/utils/checkAllSizesKnown";
+import { checkThresholds } from "@/utils/checkThresholds";
+import { getId } from "@/utils/getId";
 import { getItemSize, type ResolvedItemSize } from "@/utils/getItemSize";
 import { roundSize } from "@/utils/helpers";
 import { isNativeLayoutNoise } from "@/utils/layoutMeasurement";
 
-export function runOrScheduleMVCPRecalculate(ctx: StateContext) {
+export function runOrScheduleMVCPRecalculate(ctx: StateContext, isFollowingEnd?: boolean) {
     // Runs the MVCP recalculation pass after item-size changes.
     // On web, an active anchor lock coalesces recalculations to one RAF to reduce oscillating adjustments.
+    // End following scrolls to the already published total, so its positions cannot wait for that RAF.
     const state = ctx.state;
 
     if (state.userScrollAnchorReset !== undefined) {
@@ -20,17 +24,15 @@ export function runOrScheduleMVCPRecalculate(ctx: StateContext) {
         if (state.userScrollAnchorReset?.keys.size === 0) {
             state.userScrollAnchorReset = undefined;
         }
-    } else if (Platform.OS === "web") {
-        if (!state.mvcpAnchorLock) {
-            state.scheduledWork.cancel("mvcpRecalculate");
-            calculateItemsInView(ctx, { doMVCP: true, mvcpAdjustmentSource: "item-size" });
-        } else if (!state.scheduledWork.has("mvcpRecalculate")) {
+    } else if (Platform.OS === "web" && state.mvcpAnchorLock && !isFollowingEnd) {
+        if (!state.scheduledWork.has("mvcpRecalculate")) {
             state.scheduledWork.frame(
                 () => calculateItemsInView(ctx, { doMVCP: true, mvcpAdjustmentSource: "item-size" }),
                 "mvcpRecalculate",
             );
         }
     } else {
+        if (Platform.OS === "web") state.scheduledWork.cancel("mvcpRecalculate");
         calculateItemsInView(ctx, { doMVCP: true, mvcpAdjustmentSource: "item-size" });
     }
 }
@@ -92,17 +94,31 @@ function mergeItemSizeUpdateResult(result: ItemSizeUpdateResult, next: ItemSizeU
 
 function flushItemSizeUpdates(ctx: StateContext, result: ItemSizeUpdateResult) {
     const state = ctx.state;
+    if (result.shouldMaintainScrollAtEnd && Platform.OS === "web") {
+        // Let React commit the geometry, then give maintenance ownership
+        // before the preserved correction (including for animated follows).
+        queueMicrotask(() => doMaintainScrollAtEnd(ctx, { immediate: true }));
+    }
     if (result.needsRecalculate) {
+        if (result.didChange) {
+            // Keep the saved end target through MVCP and ScrollAdjust's temporary padding.
+            schedulePreservedEndAnchorCorrection(ctx);
+        }
         state.scrollForNextCalculateItemsInView = undefined;
-        runOrScheduleMVCPRecalculate(ctx);
+        runOrScheduleMVCPRecalculate(
+            ctx,
+            result.shouldMaintainScrollAtEnd &&
+                (peek$(ctx, "isFollowingEnd") || peek$(ctx, "isWithinMaintainScrollAtEndThreshold")),
+        );
     } else if (result.didMeasureUserScrollAnchorResetItem && state.userScrollAnchorReset?.keys.size === 0) {
         state.userScrollAnchorReset = undefined;
     }
     if (result.didChange) {
         maybeUpdateAnchoredEndSpace(ctx);
+        checkThresholds(ctx);
     }
-    if (result.didChange && result.shouldMaintainScrollAtEnd) {
-        doMaintainScrollAtEnd(ctx);
+    if (result.shouldMaintainScrollAtEnd && Platform.OS !== "web") {
+        doMaintainScrollAtEnd(ctx, { immediate: true });
     }
 }
 
@@ -119,6 +135,21 @@ export function updateItemSizes(ctx: StateContext, measurement: ItemSizeMeasurem
     }
 }
 
+export function isContainerItemCurrent(ctx: StateContext, containerId: number, itemKey: string) {
+    if (peek$(ctx, `containerItemKey${containerId}`) !== itemKey) return false;
+    const state = ctx.state;
+    const index = state.indexByKey.get(itemKey);
+    if (index !== undefined && index < state.props.data.length && getId(state, index) === itemKey) return true;
+
+    // The parent refreshes the index map after child layout effects. Remeasure the
+    // committed slot afterward, including when recycling has changed its assignment.
+    state.scheduledWork.microtask(
+        () => ctx.containerLayoutTriggers.get(containerId)?.(),
+        `containerMeasurementRetry${containerId}`,
+    );
+    return false;
+}
+
 // Applies every measurement from one committed layout pass before recalculating positions once.
 export function updateItemSizesBatch(ctx: StateContext, measurements: ItemSizeMeasurement[]) {
     const state = ctx.state;
@@ -130,7 +161,7 @@ export function updateItemSizesBatch(ctx: StateContext, measurements: ItemSizeMe
         // which have no container id, bypass the current-assignment check.
         const ownsMeasuredItem =
             measurement.containerId === undefined ||
-            peek$(ctx, `containerItemKey${measurement.containerId}`) === measurement.itemKey;
+            isContainerItemCurrent(ctx, measurement.containerId, measurement.itemKey);
         if (ownsMeasuredItem) {
             const index = state.indexByKey.get(measurement.itemKey);
             const itemData = index === undefined ? undefined : state.props.data?.[index];
@@ -159,6 +190,7 @@ function applyItemSize(
     resolvedMeasurementItem?: ResolvedItemSize,
 ) {
     const state = ctx.state;
+    const wasPendingEndMeasurement = !!state.pendingEndMeasurements?.delete(itemKey);
     const userScrollAnchorReset = state.userScrollAnchorReset;
     const didMeasureUserScrollAnchorResetItem = !!userScrollAnchorReset?.keys.delete(itemKey);
     const {
@@ -194,31 +226,18 @@ function applyItemSize(
 
     // Need to calculate if haven't all laid out yet
     let needsRecalculate = !didContainersLayout;
-    let shouldMaintainScrollAtEnd = false;
-    let positionRecalculationStartIndex: number | undefined;
 
     const prevSizeKnown = state.sizesKnown.get(itemKey);
+    const didMeasurePendingEnd = prevSizeKnown === undefined && !!state.pendingMaintainScrollAtEnd;
 
     const diff = updateOneItemSize(ctx, itemKey, sizeObj, resolvedMeasurementItem, false);
     const size = roundSize(horizontal ? sizeObj.width : sizeObj.height);
 
     if (diff !== 0) {
-        positionRecalculationStartIndex =
-            positionRecalculationStartIndex !== undefined ? Math.min(positionRecalculationStartIndex, index) : index;
-
         // Check if item is in view
         const { startBuffered, endBuffered } = state;
         needsRecalculate ||= index >= startBuffered && index <= endBuffered;
-        if (!needsRecalculate && state.containerItemKeys.has(itemKey)) {
-            needsRecalculate = true;
-        }
-
-        // Check if we should maintain scroll at end. A first measurement counts too: rows
-        // inserted by a prepend have no previously known size, so requiring one left their
-        // growth unfollowed and parked the list short of its end.
-        if (prevSizeKnown === undefined || Math.abs(prevSizeKnown - size) > 5) {
-            shouldMaintainScrollAtEnd = true;
-        }
+        needsRecalculate ||= state.containerItemKeys.has(itemKey);
 
         // Call onItemSizeChanged callback
         onItemSizeChanged?.({
@@ -228,20 +247,15 @@ function applyItemSize(
             previous: size - diff,
             size,
         });
-    }
 
-    // Update state with minimum changed index
-    if (positionRecalculationStartIndex !== undefined) {
-        state.positionRecalculationStartIndex =
-            state.positionRecalculationStartIndex !== undefined
-                ? Math.min(state.positionRecalculationStartIndex, positionRecalculationStartIndex)
-                : positionRecalculationStartIndex;
+        state.positionRecalculationStartIndex = Math.min(state.positionRecalculationStartIndex ?? index, index);
     }
-
     updateOtherAxisSizeIfNeeded(ctx, sizeObj, horizontal);
 
     if (didContainersLayout || checkAllSizesKnown(state, state.startBuffered, state.endBuffered)) {
-        const canMaintainScrollAtEnd = shouldMaintainScrollAtEnd && !!maintainScrollAtEnd?.onItemLayout;
+        const canMaintainScrollAtEnd =
+            ((diff !== 0 && prevSizeKnown !== size) || didMeasurePendingEnd) &&
+            (!!maintainScrollAtEnd?.onItemLayout || wasPendingEndMeasurement || !!state.pendingMaintainScrollAtEnd);
         return {
             didChange: diff !== 0,
             didMeasureUserScrollAnchorResetItem,
@@ -300,6 +314,12 @@ export function updateOneItemSize(
         resolvedItemSize,
     );
     const rawSize = horizontal ? sizeObj.width : sizeObj.height;
+    if (fixedItemSize === undefined) {
+        state.fixedItemSizeKeys?.delete(itemKey);
+    } else {
+        state.fixedItemSizeKeys ??= new Set();
+        state.fixedItemSizeKeys.add(itemKey);
+    }
     const prevSizeKnown = sizesKnown.get(itemKey);
     if (Platform.OS !== "web" && prevSizeKnown !== undefined && isNativeLayoutNoise(rawSize - prevSizeKnown)) {
         return 0;

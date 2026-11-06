@@ -12,6 +12,11 @@ import { peek$, type StateContext } from "@/state/state";
 export function canApplyDataChangeInRender(ctx: StateContext) {
     const state = ctx.state;
     const { anchoredEndSpace, maintainScrollAtEnd, maintainVisibleContentPosition } = state.props;
+    const { scrollingTo } = state;
+    // A data change cancels or retargets a scroll that is headed for an item.
+    const isScrollingToItem =
+        !!scrollingTo &&
+        (scrollingTo.index !== undefined || scrollingTo.key !== undefined || !!scrollingTo.isScrollToEnd);
 
     return (
         !state.isFirst &&
@@ -19,6 +24,8 @@ export function canApplyDataChangeInRender(ctx: StateContext) {
         !maintainVisibleContentPosition.data &&
         !maintainScrollAtEnd &&
         !anchoredEndSpace &&
+        !state.visibleContentAnchor &&
+        !isScrollingToItem &&
         !!state.didContainersLayout &&
         !!peek$(ctx, "readyToRender") &&
         peek$(ctx, "numContainers") > 0 &&

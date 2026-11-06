@@ -1,4 +1,4 @@
-import type { StateContext } from "@/state/state";
+import { type StateContext, set$ } from "@/state/state";
 
 type InternalState = StateContext["state"];
 
@@ -9,8 +9,17 @@ export function cancelScrollCompletionChecks({ scheduledWork }: InternalState) {
     scheduledWork.cancel("platformScrollCompletion");
 }
 
+export function syncScrollActive(ctx: StateContext) {
+    const { state } = ctx;
+    set$(
+        ctx,
+        "isScrollActive",
+        !!state.isDragging || !!state.isMomentumScrolling || !!state.scrollingTo || !!state.pendingScrollResolve,
+    );
+}
+
 export function settlePendingImperativeScroll(state: InternalState) {
-    const resolvePendingScroll = state.pendingScrollResolve ?? state.pendingScrollToEnd?.resolve;
+    const resolvePendingScroll = state.pendingScrollResolve;
     state.pendingScrollResolve = undefined;
     state.pendingScrollToEnd = undefined;
     resolvePendingScroll?.();

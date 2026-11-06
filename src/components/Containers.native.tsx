@@ -4,11 +4,18 @@ import { Animated, type ViewStyle } from "react-native";
 
 import { ContainerLayoutCoordinator } from "@/components/ContainerLayoutCoordinator";
 import { ContainerSlot } from "@/components/ContainerSlot";
+import { IsNewArchitecture } from "@/constants-platform";
 import { useFreshDataTransitionVisibility } from "@/hooks/useFreshDataTransitionVisibility";
 import { useValue$ } from "@/hooks/useValue$";
 import { useArr$, useRenderEpoch, useStateContext } from "@/state/state";
 import type { StickyHeaderConfig } from "@/types.base";
 import { type GetRenderedItem, typedMemo } from "@/types.internal";
+
+// Match PositionView: on Fabric the committed minimum holds a shrinking content
+// extent until row positions commit, while the Animated size grows it at once so
+// end space set outside React (anchored end space) never outruns the content.
+// Old architecture keeps both on the Animated update path.
+const useCommittedMinSize = IsNewArchitecture ? () => useArr$(["totalSize"])[0] : () => undefined;
 
 interface ContainersProps<ItemT> {
     activeItemKeys: ReadonlySet<string> | undefined;
@@ -34,18 +41,21 @@ const ContainersLayer = typedMemo(function ContainersLayer({
 }: ContainersLayerProps) {
     const ctx = useStateContext();
     const columnWrapperStyle = ctx.columnWrapperStyle;
-    const animSize = useValue$("totalSize");
+    const size = useValue$("totalSize");
+    const minSize = useCommittedMinSize();
     const [readyToRender, numColumns, otherAxisSize = 0] = useArr$(["readyToRender", "numColumns", "otherAxisSize"]);
+    useRenderEpoch();
     const isVisible = useFreshDataTransitionVisibility(!!readyToRender, freshDataTransitionEpoch);
 
     const style: Animated.WithAnimatedValue<ViewStyle> = horizontal
         ? {
               height: otherAxisSize || "100%",
               minHeight: otherAxisSize,
+              minWidth: minSize,
               opacity: isVisible ? 1 : 0,
-              width: animSize,
+              width: size,
           }
-        : { height: animSize, minWidth: otherAxisSize, opacity: isVisible ? 1 : 0 };
+        : { height: size, minHeight: minSize, minWidth: otherAxisSize, opacity: isVisible ? 1 : 0 };
 
     if (columnWrapperStyle) {
         // Extract gap properties from columnWrapperStyle if available

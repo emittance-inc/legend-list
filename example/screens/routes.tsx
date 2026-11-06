@@ -21,6 +21,7 @@ import { OPTIMIZATION_HOME_ENTRIES, OPTIMIZATION_ROUTE_SLUG } from "~/screens/ex
 import { ProductShelfExample } from "~/screens/examples/ProductShelfExample";
 import { ReanimatedSharedValuesExample } from "~/screens/examples/ReanimatedSharedValuesExample";
 import { SectionedDirectoryExample } from "~/screens/examples/SectionedDirectoryExample";
+import { TranslucentChatExample } from "~/screens/examples/TranslucentChatExample";
 import { VideoFeedExample } from "~/screens/examples/VideoFeedExample";
 import { VisibilityExample } from "~/screens/examples/VisibilityExample";
 import AccurateScrollToFixture from "~/screens/fixtures/accurate-scrollto";
@@ -62,6 +63,7 @@ import InitialScrollIndexFixture from "~/screens/fixtures/initial-scroll-index";
 import InitialScrollIndexFreeHeightFixture from "~/screens/fixtures/initial-scroll-index-free-height";
 import InitialScrollIndexKeyedFixture from "~/screens/fixtures/initial-scroll-index-keyed";
 import InitialScrollStartAtTheEndFixture from "~/screens/fixtures/initial-scroll-start-at-the-end";
+import KeyboardViewabilityFixture from "~/screens/fixtures/keyboard-viewability";
 import LargeListRenderTimeFixture from "~/screens/fixtures/large-list-render-time";
 import LayoutAnimationFixture from "~/screens/fixtures/layout-animation";
 import LazyListFixture from "~/screens/fixtures/lazy-list";
@@ -70,10 +72,13 @@ import MoviesLFixture from "~/screens/fixtures/moviesL";
 import MoviesLRFixture from "~/screens/fixtures/moviesLR";
 import MutableCellsFixture from "~/screens/fixtures/mutable-cells";
 import MvcpTestFixture from "~/screens/fixtures/mvcp-test";
+import NativeContentShrinkFixture from "~/screens/fixtures/native-content-shrink";
 import ProductShelfFixture from "~/screens/fixtures/product-shelf";
 import RTLHorizontalFixture from "~/screens/fixtures/rtl-horizontal";
 import ScrollRegressionQaFixture from "~/screens/fixtures/scroll-regression-qa";
 import SectionListFixedSizeFixture from "~/screens/fixtures/section-list-fixed-size";
+import StatusBarFollowFixture from "~/screens/fixtures/status-bar-follow";
+import TopInsetFixture from "~/screens/fixtures/top-inset";
 import VideoFeedFixture from "~/screens/fixtures/video-feed";
 import AiChatFixture from "./fixtures/ai-chat";
 
@@ -116,14 +121,25 @@ const exampleComponents = {
     "video-feed": VideoFeedExample,
 } satisfies Record<ExampleSlug, ScreenComponent>;
 
-export const EXAMPLE_ROUTES: ExampleRouteDefinition[] = CURATED_EXAMPLES.map((example) => ({
-    component: exampleComponents[example.slug],
-    description: example.description,
-    group: example.group,
-    kind: "example",
-    slug: example.slug,
-    title: example.title,
-}));
+export const EXAMPLE_ROUTES: ExampleRouteDefinition[] = [
+    ...CURATED_EXAMPLES.map((example) => ({
+        component: exampleComponents[example.slug],
+        description: example.description,
+        group: example.group,
+        kind: "example" as const,
+        slug: example.slug,
+        title: example.title,
+    })),
+    {
+        component: TranslucentChatExample,
+        description:
+            "Streaming AI chat beneath a translucent header, with an overlay composer that follows the keyboard.",
+        group: "Messaging",
+        kind: "example",
+        slug: "translucent-chat",
+        title: "Translucent AI Chat",
+    },
+];
 
 const COMPARISON_ROUTE: RouteDefinition = {
     component: ComparisonsExample,
@@ -162,6 +178,44 @@ const DEBUGGING_ROUTE: RouteDefinition = {
 };
 
 export const FIXTURE_ROUTES: FixtureRouteDefinition[] = [
+    {
+        component: TopInsetFixture,
+        description:
+            "Checks index and region targets under a translucent header; add ?initial=1 for initialScrollIndex.",
+        groupKey: "scroll",
+        groupTitle: "Scroll & Position",
+        kind: "fixture",
+        slug: "top-inset",
+        title: "Top Inset",
+    },
+    {
+        component: StatusBarFollowFixture,
+        description: "Tests end-follow ownership after an iOS status-bar tap scrolls to the top.",
+        groupKey: "scroll",
+        groupTitle: "Scroll & Position",
+        kind: "fixture",
+        slug: "status-bar-follow",
+        title: "Status Bar Follow",
+    },
+    {
+        component: KeyboardViewabilityFixture,
+        description: "Compares reported viewable rows with the area left visible above a real keyboard.",
+        groupKey: "scroll",
+        groupTitle: "Scroll & Position",
+        kind: "fixture",
+        slug: "keyboard-viewability",
+        title: "Keyboard Viewability",
+    },
+    {
+        component: NativeContentShrinkFixture,
+        description:
+            "Shrinks a mounted row above the viewport; compares Fabric layout and native clamping with raw RN.",
+        groupKey: "scroll",
+        groupTitle: "Scroll & Position",
+        kind: "fixture",
+        slug: "native-content-shrink",
+        title: "Native Content Shrink",
+    },
     {
         component: ScrollRegressionQaFixture,
         description: "Runs deterministic end-maintenance, MVCP, and initial-scroll regression scenarios.",

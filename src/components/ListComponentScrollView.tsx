@@ -13,14 +13,18 @@ import {
     useRef,
 } from "react";
 
-import { interruptMaintainScrollAtEnd } from "@/core/doMaintainScrollAtEnd";
+import { interruptUserScroll } from "@/core/cancelScroll";
+import { rearmEndFollowIfSettled } from "@/core/finishMaintainScrollAtEnd";
 import type { LayoutRectangle, NativeSyntheticEvent } from "@/platform/platform-types";
 import { StyleSheet } from "@/platform/StyleSheet";
-import { useArr$, useStateContext } from "@/state/state";
+import { listen$, peek$, useArr$, useStateContext } from "@/state/state";
 import { IS_DEV } from "@/utils/devEnvironment";
+import { hasActiveInitialScroll } from "@/utils/hasActiveInitialScroll";
 import { warnDevOnce } from "@/utils/helpers";
 import { isInMVCPActiveMode } from "@/utils/isInMVCPActiveMode";
+import { getNativeHorizontalRTLScrollType, isHorizontalRTL, peekLogicalHorizontalOffset } from "@/utils/rtl";
 import { useRafCoalescer } from "@/utils/useRafCoalescer";
+import { getWheelGesture, normalizeWheelDelta, type WheelGesture } from "@/utils/wheelGesture";
 import { observeScrollLayout } from "./observeScrollLayout";
 import {
     LEGEND_LIST_CONTENT_CONTAINER_CLASS,
@@ -37,6 +41,7 @@ import {
     getScrollContentSize,
     getScrollPosition,
     isWindowTarget,
+    ownsScrollInput,
     resolveExternalScrollOffset,
     resolveScrollableNode,
     resolveScrollEventTarget,
@@ -77,6 +82,7 @@ export interface ListComponentScrollViewProps {
         };
     }) => void;
     onInternalScrollEnd?: () => void;
+    onMomentumScrollBegin?: (event: unknown) => void;
     onMomentumScrollEnd?: (event: {
         nativeEvent: {
             contentOffset: { x: number; y: number };
@@ -112,11 +118,6 @@ function ensureScrollbarHiddenStyle() {
     styleElement.id = SCROLLBAR_HIDDEN_STYLE_ID;
     styleElement.textContent = SCROLLBAR_HIDDEN_STYLE;
     document.head.appendChild(styleElement);
-}
-
-function getContentInsetEndAdjustmentEnd(ctx: ReturnType<typeof useStateContext>) {
-    const adjustment = ctx.state?.props?.contentInsetEndAdjustment;
-    return Math.max(0, adjustment ?? 0);
 }
 
 function getFiniteSnapOffsets(snapToOffsets: number[] | undefined): number[] {
@@ -159,6 +160,7 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
         maintainVisibleContentPosition,
         onScroll,
         onInternalScrollEnd,
+        onMomentumScrollBegin: _onMomentumScrollBegin,
         onMomentumScrollEnd: _onMomentumScrollEnd,
         showsHorizontalScrollIndicator = true,
         showsVerticalScrollIndicator = true,
@@ -194,60 +196,91 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
         return getMaxOffset(contentSize, layoutMeasurement, horizontal);
     }, [externalTarget, horizontal]);
 
+    const getExternalListPosition = useCallback(
+        () =>
+            getElementScrollPosition(
+                scrollRef.current,
+                externalTarget,
+                horizontal && isHorizontalRTL(ctx.state) && getNativeHorizontalRTLScrollType(ctx.state) === "negative",
+            ),
+        [ctx, externalTarget, horizontal],
+    );
+
     const getRawScrollOffset = useCallback(() => {
         const element = scrollRef.current;
         if (isExternalScroll) {
             const scroll = getScrollPosition(externalTarget);
-            const listPos = getElementScrollPosition(element, externalTarget);
+            const listPos = getExternalListPosition();
             return horizontal ? scroll.x - listPos.left : scroll.y - listPos.top;
         }
         return (horizontal ? element?.scrollLeft : element?.scrollTop) ?? 0;
-    }, [externalTarget, horizontal, isExternalScroll]);
+    }, [externalTarget, getExternalListPosition, horizontal, isExternalScroll]);
+
+    const clampScrollOffset = useCallback(
+        (offset: number) => {
+            const maxOffset = getMaxScrollOffset();
+            return horizontal &&
+                isHorizontalRTL(ctx.state) &&
+                getNativeHorizontalRTLScrollType(ctx.state) === "negative"
+                ? -clampOffset(-offset, maxOffset)
+                : clampOffset(offset, maxOffset);
+        },
+        [ctx, getMaxScrollOffset, horizontal],
+    );
 
     const isScrollInRange = useCallback(() => {
         if (!isExternalScroll) return true;
         const offset = getRawScrollOffset();
-        return offset >= -1 && offset <= getMaxScrollOffset() + 1;
-    }, [getMaxScrollOffset, getRawScrollOffset, isExternalScroll]);
+        return Math.abs(offset - clampScrollOffset(offset)) <= 1;
+    }, [clampScrollOffset, getRawScrollOffset, isExternalScroll]);
 
     const getCurrentScrollOffset = useCallback(() => {
         const offset = getRawScrollOffset();
-        return isExternalScroll ? clampOffset(offset, getMaxScrollOffset()) : offset;
-    }, [getMaxScrollOffset, getRawScrollOffset, isExternalScroll]);
+        return isExternalScroll ? clampScrollOffset(offset) : offset;
+    }, [clampScrollOffset, getRawScrollOffset, isExternalScroll]);
 
     const scrollToLocalOffset = useCallback(
         (offset: number, animated: boolean) => {
-            const scrollElement = scrollRef.current;
             const target = getScrollTarget();
             if (!target || typeof target.scrollTo !== "function") {
                 return;
             }
 
-            const maxOffset = getMaxScrollOffset();
-            const clampedOffset = clampOffset(offset, maxOffset);
-            const behavior = animated ? "smooth" : "auto";
+            const behavior = animated ? "smooth" : "instant";
             const options: ScrollToOptions = { behavior };
 
             if (isExternalScroll) {
                 const scroll = getScrollPosition(externalTarget);
-                const listPos = getElementScrollPosition(scrollElement, externalTarget);
+                const listPos = getExternalListPosition();
                 const { left, top } = resolveExternalScrollOffset({
-                    clampedOffset,
+                    clampedOffset: clampScrollOffset(offset),
                     horizontal,
                     listPos,
                     scroll,
                 });
                 options.left = left;
                 options.top = top;
-            } else if (horizontal) {
-                options.left = clampedOffset;
             } else {
-                options.top = clampedOffset;
+                const maxOffset = getMaxScrollOffset();
+                if (horizontal) {
+                    // RTL scrollers with the negative scrollLeft convention take offsets in [-max, 0].
+                    options.left = offset < 0 ? -clampOffset(-offset, maxOffset) : clampOffset(offset, maxOffset);
+                } else {
+                    options.top = clampOffset(offset, maxOffset);
+                }
             }
 
             target.scrollTo(options);
         },
-        [externalTarget, getMaxScrollOffset, getScrollTarget, horizontal, isExternalScroll],
+        [
+            clampScrollOffset,
+            externalTarget,
+            getExternalListPosition,
+            getMaxScrollOffset,
+            getScrollTarget,
+            horizontal,
+            isExternalScroll,
+        ],
     );
 
     useImperativeHandle(ref, () => {
@@ -349,11 +382,23 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
             }
 
             const state = ctx.state;
+            if (
+                !hasActiveInitialScroll(state) &&
+                !state.scrollingTo &&
+                (state.maintainingScrollAtEnd || state.pendingMaintainScrollAtEnd)
+            ) {
+                const maxOffset = getMaxScrollOffset();
+                if (
+                    peekLogicalHorizontalOffset(state, getCurrentScrollOffset(), maxOffset) <
+                    clampOffset(state.scroll, maxOffset) - 1
+                ) {
+                    interruptUserScroll(ctx);
+                }
+            }
             const shouldFlushImmediately =
-                !!state?.scrollingTo ||
-                (!!state?.initialScrollSession && !state.didFinishInitialScroll) ||
-                (!!state?.initialScroll && !state.didFinishInitialScroll) ||
-                (!!state && isInMVCPActiveMode(state));
+                !!state.scrollingTo ||
+                (!state.didFinishInitialScroll && !!(state.initialScrollSession || state.initialScroll)) ||
+                isInMVCPActiveMode(state);
             if (shouldFlushImmediately) {
                 scrollEventCoalescer.flush();
             } else {
@@ -368,21 +413,25 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
                 scrollEndFallbackRef.current = setTimeout(emitScrollEnd, SCROLL_END_FALLBACK_MS);
             }
         },
-        [ctx.state, emitScrollEnd, onInternalScrollEnd, onScroll, scrollEventCoalescer],
+        [
+            ctx,
+            emitScrollEnd,
+            getCurrentScrollOffset,
+            getMaxScrollOffset,
+            onInternalScrollEnd,
+            onScroll,
+            scrollEventCoalescer,
+        ],
     );
 
     useLayoutEffect(() => {
         const target = getScrollTarget();
         if (!target) return;
         target.addEventListener("scroll", handleScroll, { passive: true });
-        if ("onscrollend" in target) {
-            target.addEventListener("scrollend", emitScrollEnd);
-        }
+        if ("onscrollend" in target) target.addEventListener("scrollend", emitScrollEnd);
         return () => {
             target.removeEventListener("scroll", handleScroll);
-            if ("onscrollend" in target) {
-                target.removeEventListener("scrollend", emitScrollEnd);
-            }
+            target.removeEventListener("scrollend", emitScrollEnd);
             const timeout = scrollEndFallbackRef.current;
             if (timeout !== undefined) {
                 clearTimeout(timeout);
@@ -395,26 +444,202 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
     useEffect(() => {
         const target = getScrollTarget();
         if (!target) return;
+        const isExplicitNavigation = () => {
+            const state = ctx.state;
+            const initial = state.initialScroll;
+            if (hasActiveInitialScroll(state)) {
+                return !(initial?.viewPosition === 1 && initial.index === state.props.data.length - 1);
+            }
+            return !!(
+                (state.scrollingTo &&
+                    !state.scrollingTo.isInitialScroll &&
+                    (!state.scrollingTo.isScrollToEnd ||
+                        (state.pendingScrollResolve && !state.maintainingScrollAtEnd))) ||
+                (state.endFollowInterrupted && state.pendingScrollResolve)
+            );
+        };
+        const acceptInput = (
+            event: Event,
+            direction: number,
+            isNew = true,
+            keepsExplicitOwner = false,
+            isWheel = false,
+        ) => {
+            const state = ctx.state;
+            if (
+                !state.props.onUserScroll &&
+                !state.props.maintainScrollAtEnd &&
+                !state.maintainingScrollAtEnd &&
+                !state.pendingMaintainScrollAtEnd &&
+                !state.scrollingTo &&
+                !state.pendingScrollResolve &&
+                !hasActiveInitialScroll(state)
+            ) {
+                return false;
+            }
+            const explicit = isExplicitNavigation();
+            if (direction > 0 && !explicit && !(isNew && state.props.onUserScroll)) return false;
+            const node = resolveScrollableNode(scrollRef.current, externalTarget);
+            const maxOffset = getMaxScrollOffset();
+            const offset = peekLogicalHorizontalOffset(state, getCurrentScrollOffset(), maxOffset);
+            if (
+                !event.defaultPrevented &&
+                node &&
+                maxOffset > 1 &&
+                (explicit || direction === 0 || (direction > 0 ? offset < maxOffset - 1 : offset > 1)) &&
+                isScrollInRange()
+            ) {
+                if (!ownsScrollInput(event.target, node, horizontal, inputDirection(direction))) {
+                    if (isWheel && !wheelAccepted) wheelStartedNested = true;
+                    return false;
+                }
+                // A wheel tail that predates a command keeps its gesture owner.
+                // Browsers disagree on whether a wheel that interrupts a smooth scroll still applies natively
+                // (Chromium drops it, WebKit and Firefox apply it), so the stop write applies it and the native
+                // scroll is cancelled. A non-cancelable wheel still applies natively, so stop at the observed
+                // offset without adding its delta again.
+                if (
+                    (explicit ? !keepsExplicitOwner : direction <= 0) &&
+                    interruptUserScroll(ctx, isWheel && event.cancelable ? direction : 0) &&
+                    event.cancelable
+                )
+                    event.preventDefault();
+                if (isNew) state.props.onUserScroll?.();
+                return true;
+            }
+            return false;
+        };
+        let wheelGesture: WheelGesture | undefined;
+        let wheelAccepted = false;
+        let wheelStartedNested = false;
+        const inputDirection = (delta: number) =>
+            isHorizontalRTL(ctx.state) && getNativeHorizontalRTLScrollType(ctx.state) !== "normal" ? -delta : delta;
         const onWheel = (nativeEvent: Event) => {
             const event = nativeEvent as WheelEvent;
-            const delta = horizontal ? event.deltaX || (event.shiftKey ? event.deltaY : 0) : event.deltaY;
-            if (
-                delta < 0 &&
-                !event.ctrlKey &&
-                !event.defaultPrevented &&
-                (ctx.state.maintainingScrollAtEnd || ctx.state.pendingMaintainScrollAtEnd)
-            ) {
-                const offset = getCurrentScrollOffset();
-                // A wheel gesture away from the end supersedes queued following.
-                // Stop the browser animation too, without consuming the gesture.
-                if (interruptMaintainScrollAtEnd(ctx) && isScrollInRange()) {
-                    scrollToLocalOffset(offset, false);
+            const delta = normalizeWheelDelta(
+                horizontal ? event.deltaX || (event.shiftKey ? event.deltaY : 0) : event.deltaY,
+                event.deltaMode,
+                ctx.state.scrollLength,
+            );
+            if (delta !== 0 && !event.ctrlKey && !event.defaultPrevented) {
+                wheelGesture = getWheelGesture(
+                    wheelGesture,
+                    delta,
+                    event.timeStamp,
+                    (event as WheelEvent & { momentum?: boolean }).momentum,
+                );
+                if (wheelGesture.isNew) {
+                    wheelAccepted = false;
+                    wheelStartedNested = false;
                 }
+                wheelAccepted =
+                    acceptInput(
+                        event,
+                        inputDirection(delta),
+                        !wheelAccepted,
+                        !wheelGesture.isNew && (!wheelStartedNested || wheelAccepted),
+                        true,
+                    ) || wheelAccepted;
             }
         };
-        target.addEventListener("wheel", onWheel, { passive: true });
-        return () => target.removeEventListener("wheel", onWheel);
-    }, [ctx, getCurrentScrollOffset, getScrollTarget, horizontal, isScrollInRange, scrollToLocalOffset]);
+        let lastTouch: number | undefined;
+        let touchAccepted = false;
+        const onTouchStart = (nativeEvent: Event) => {
+            const touch = (nativeEvent as TouchEvent).touches[0];
+            lastTouch = touch ? (horizontal ? touch.clientX : touch.clientY) : undefined;
+            touchAccepted = false;
+            if (lastTouch !== undefined && isExplicitNavigation()) acceptInput(nativeEvent, 0, false);
+        };
+        const onTouchMove = (nativeEvent: Event) => {
+            const touch = (nativeEvent as TouchEvent).touches[0];
+            if (!touch) return;
+            const position = horizontal ? touch.clientX : touch.clientY;
+            if (lastTouch !== undefined && position !== lastTouch)
+                touchAccepted =
+                    acceptInput(nativeEvent, inputDirection(lastTouch - position), !touchAccepted) || touchAccepted;
+            lastTouch = position;
+        };
+        const onKeyDown = (nativeEvent: Event) => {
+            const event = nativeEvent as KeyboardEvent;
+            const element = event.target as HTMLElement | null;
+            if (
+                event.repeat ||
+                event.defaultPrevented ||
+                element?.isContentEditable ||
+                element?.closest?.(
+                    "input, textarea, select, button, a, summary, [role=button], [role=checkbox], [role=radio], [role=menu], [role=menuitem], [role=listbox], [role=combobox], [role=slider], [role=tab], [role=tree]",
+                )
+            )
+                return;
+            // Page, Home/End and Space keys scroll the block axis, which a horizontal list does not own.
+            // Alt/Cmd+Left/Right navigate history instead of scrolling.
+            if (horizontal) {
+                if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !event.altKey && !event.metaKey)
+                    acceptInput(event, inputDirection(event.key === "ArrowLeft" ? -1 : 1));
+            } else if (
+                event.key === "ArrowUp" ||
+                event.key === "PageUp" ||
+                event.key === "Home" ||
+                (event.key === " " && event.shiftKey)
+            )
+                acceptInput(event, -1);
+            else if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === "End" || event.key === " ")
+                acceptInput(event, 1);
+        };
+        let scrollbarPressOffset: number | undefined;
+        const onPointerDown = (nativeEvent: Event) => {
+            scrollbarPressOffset = undefined;
+            const event = nativeEvent as PointerEvent;
+            const element = resolveScrollableNode(scrollRef.current, externalTarget);
+            if (event.target !== element || !element || event.pointerType === "touch") return;
+            const rect = element.getBoundingClientRect();
+            const border = getComputedStyle(element);
+            const inGutter = horizontal
+                ? event.clientY >= rect.top + element.clientTop + element.clientHeight &&
+                  event.clientY < rect.top + element.offsetHeight - (Number.parseFloat(border.borderBottomWidth) || 0)
+                : (event.clientX >= rect.left + (Number.parseFloat(border.borderLeftWidth) || 0) &&
+                      event.clientX < rect.left + element.clientLeft) ||
+                  (event.clientX >= rect.left + element.clientLeft + element.clientWidth &&
+                      event.clientX <
+                          rect.left + element.offsetWidth - (Number.parseFloat(border.borderRightWidth) || 0));
+            if (inGutter) {
+                const explicit = isExplicitNavigation();
+                const offset = getCurrentScrollOffset();
+                if (acceptInput(event, 0) && !explicit) scrollbarPressOffset = offset;
+            }
+        };
+        const onPointerRelease = () => {
+            const offset = scrollbarPressOffset;
+            scrollbarPressOffset = undefined;
+            if (offset !== undefined && getCurrentScrollOffset() === offset) rearmEndFollowIfSettled(ctx);
+        };
+        // Only an active scroll can need preventDefault, so idle wheel scrolling stays passive.
+        let wheelPassive: boolean | undefined;
+        const setWheelPassive = (passive: boolean) => {
+            if (passive === wheelPassive) return;
+            if (wheelPassive !== undefined) target.removeEventListener("wheel", onWheel);
+            target.addEventListener("wheel", onWheel, { passive });
+            wheelPassive = passive;
+        };
+        setWheelPassive(!peek$(ctx, "isScrollActive"));
+        const unlistenScrollActive = listen$(ctx, "isScrollActive", (active) => setWheelPassive(!active));
+        target.addEventListener("touchstart", onTouchStart, { passive: true });
+        target.addEventListener("touchmove", onTouchMove, { passive: true });
+        target.addEventListener("keydown", onKeyDown);
+        target.addEventListener("pointerdown", onPointerDown);
+        target.addEventListener("pointerup", onPointerRelease);
+        target.addEventListener("pointercancel", onPointerRelease);
+        return () => {
+            unlistenScrollActive();
+            target.removeEventListener("wheel", onWheel);
+            target.removeEventListener("touchstart", onTouchStart);
+            target.removeEventListener("touchmove", onTouchMove);
+            target.removeEventListener("keydown", onKeyDown);
+            target.removeEventListener("pointerdown", onPointerDown);
+            target.removeEventListener("pointerup", onPointerRelease);
+            target.removeEventListener("pointercancel", onPointerRelease);
+        };
+    }, [ctx, externalTarget, getCurrentScrollOffset, getMaxScrollOffset, getScrollTarget, horizontal, isScrollInRange]);
 
     // Set initial scroll offset
     useEffect(() => {
@@ -474,8 +699,8 @@ export const ListComponentScrollView = forwardRef(function ListComponentScrollVi
             : {}),
     };
 
-    const contentInsetEndAdjustment = getContentInsetEndAdjustmentEnd(ctx);
-    const anchoredEndInset = ctx.state?.props?.anchoredEndSpace && anchoredEndSpaceSize ? anchoredEndSpaceSize : 0;
+    const contentInsetEndAdjustment = Math.max(0, ctx.state.props.contentInsetEndAdjustment ?? 0);
+    const anchoredEndInset = ctx.state.props.anchoredEndSpace && anchoredEndSpaceSize ? anchoredEndSpaceSize : 0;
     const renderedContentInsetEndAdjustment = Math.max(0, contentInsetEndAdjustment - anchoredEndInset);
     const contentInsetEndAdjustmentSpacerStyle: CSSProperties | undefined = renderedContentInsetEndAdjustment
         ? horizontal

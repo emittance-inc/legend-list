@@ -172,6 +172,22 @@ describe("LegendList data change commit", () => {
         await list.unmount();
     });
 
+    it("hides removed rows until the layout effect while a scroll to an item is running", async () => {
+        // The data change can remove the scroll target, and cancelling the scroll sends scroll commands.
+        const list = await mountList("data-change-commit-scrolling-to-item");
+        await act(async () => {
+            void list.listRef.current?.scrollToIndex({ animated: true, index: 15 });
+        });
+
+        await list.update(createItems("new", 3));
+
+        expect(list.commits[0]).toEqual([]);
+        await flushFrames();
+        expect(list.getLabels()).toEqual(createItems("new", 3).map((item) => item.label));
+
+        await list.unmount();
+    });
+
     it("renders the remaining and the added rows together when part of the data is replaced", async () => {
         const list = await mountList("data-change-commit-partial");
         const kept = createItems("old", 2);

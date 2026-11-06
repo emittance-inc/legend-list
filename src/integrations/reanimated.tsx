@@ -139,7 +139,6 @@ interface ReanimatedPositionViewProps {
     style: StyleProp<ViewStyle>;
     refView: React.RefObject<View | null>;
     onLayout: (event: LayoutChangeEvent) => void;
-    recycleItems?: boolean;
     layoutTransition?: ReanimatedLayoutAnimation;
     children: React.ReactNode;
 }
@@ -213,17 +212,17 @@ const ReanimatedPositionViewSticky = typedMemo(function ReanimatedPositionViewSt
 
 const ReanimatedPositionView = typedMemo(function ReanimatedPositionViewComponent(props: ReanimatedPositionViewProps) {
     const ctx = useStateContext();
-    const { id, horizontal, style, refView, children, recycleItems, layoutTransition, ...rest } = props;
-    const [positionValue = POSITION_OUT_OF_VIEW, layoutReady = true] = useArr$([
+    const { id, horizontal, style, refView, children, layoutTransition, ...rest } = props;
+    const [positionValue = POSITION_OUT_OF_VIEW, layoutReady = true, isScrollActive] = useArr$([
         `containerPosition${id}`,
         `containerLayoutReady${id}`,
+        "isScrollActive",
     ]);
     const prevItemKeyRef = React.useRef<string | undefined>(undefined);
     let shouldSkipTransitionForRecycleReuse = false;
 
-    if (recycleItems && layoutTransition) {
-        const itemKeySignal = `containerItemKey${id}` as `containerItemKey${number}`;
-        const itemKey = peek$(ctx, itemKeySignal) as string | undefined;
+    if (layoutTransition) {
+        const itemKey = peek$(ctx, `containerItemKey${id}`);
 
         shouldSkipTransitionForRecycleReuse =
             itemKey !== undefined && prevItemKeyRef.current !== undefined && prevItemKeyRef.current !== itemKey;
@@ -233,6 +232,11 @@ const ReanimatedPositionView = typedMemo(function ReanimatedPositionViewComponen
     } else {
         prevItemKeyRef.current = undefined;
     }
+
+    const previousAdjustment = React.useRef(ctx.state.layoutAdjustmentEpoch);
+    const wasAdjusted = previousAdjustment.current !== ctx.state.layoutAdjustmentEpoch;
+    previousAdjustment.current = ctx.state.layoutAdjustmentEpoch;
+    const shouldSkipLayoutTransition = wasAdjusted || isScrollActive || !!ctx.state.scrollingTo;
 
     // Layout transitions require positional layout props instead of transform.
     // An unmeasured row stays laid out but invisible when hideItemsUntilMeasured is on,
@@ -244,7 +248,7 @@ const ReanimatedPositionView = typedMemo(function ReanimatedPositionViewComponen
 
     return (
         <Reanimated.View
-            layout={shouldSkipTransitionForRecycleReuse ? undefined : layoutTransition}
+            layout={shouldSkipTransitionForRecycleReuse || shouldSkipLayoutTransition ? undefined : layoutTransition}
             ref={refView}
             style={viewStyle}
             {...rest}
@@ -353,21 +357,13 @@ const LegendListForwardedRef = typedMemo(
         props: LegendListForwardedRefProps<ItemT>,
         ref: React.Ref<AnimatedScrollView>,
     ) {
-        const { itemLayoutAnimation, recycleItems, refLegendList, renderScrollComponent, sharedValues, ...rest } =
-            props;
+        const { itemLayoutAnimation, refLegendList, renderScrollComponent, sharedValues, ...rest } = props;
 
-        const refFn = useCallback(
-            (r: LegendListRef) => {
-                refLegendList(r);
-            },
-            [refLegendList],
-        );
         const internalScrollOffset = useSharedValue(0);
         const scrollOffset = sharedValues?.scrollOffset ?? internalScrollOffset;
         const trackedScrollOffset =
             sharedValues?.scrollOffset !== undefined || rest.stickyHeaderIndices?.length ? scrollOffset : undefined;
 
-        const shouldUseReanimatedScrollView = true;
         const renderScrollComponentForBridge = React.useMemo<ReanimatedScrollBridgeProps["renderScrollComponent"]>(
             () =>
                 renderScrollComponent
@@ -410,29 +406,18 @@ const LegendListForwardedRef = typedMemo(
             }
 
             return function PositionComponent(positionProps: PositionComponentInternalProps) {
-                return (
-                    <ReanimatedPositionView
-                        {...positionProps}
-                        layoutTransition={itemLayoutAnimationRef.current}
-                        recycleItems={recycleItems}
-                    />
-                );
+                return <ReanimatedPositionView {...positionProps} layoutTransition={itemLayoutAnimationRef.current} />;
             };
-        }, [hasItemLayoutAnimation, recycleItems]);
+        }, [hasItemLayoutAnimation]);
 
         const legendListProps = {
             ...rest,
             positionComponentInternal,
-            recycleItems,
-            ...(shouldUseReanimatedScrollView
-                ? {
-                      renderScrollComponent: renderReanimatedScrollComponent,
-                      ...(IsNewArchitecture ? { stickyPositionComponentInternal } : {}),
-                  }
-                : {}),
+            renderScrollComponent: renderReanimatedScrollComponent,
+            ...(IsNewArchitecture ? { stickyPositionComponentInternal } : {}),
         };
 
-        return <LegendList ref={refFn} refScrollView={ref} {...(legendListProps as LegendListProps<ItemT>)} />;
+        return <LegendList ref={refLegendList} refScrollView={ref} {...(legendListProps as LegendListProps<ItemT>)} />;
     }),
 );
 

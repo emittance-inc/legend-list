@@ -9,6 +9,7 @@ import type {
     Insets,
     LayoutRectangle,
     LegendListPropsBase,
+    LegendListRef,
     LegendListRenderItemProps,
     NativeScrollEvent,
     NativeSyntheticEvent,
@@ -59,23 +60,29 @@ export interface MaintainScrollAtEndNormalized {
     animated: boolean;
     onLayout: boolean;
     onItemLayout: boolean;
-    onDataChange: boolean;
+    onDataChange: boolean | "append";
     onFooterLayout: boolean;
 }
 
 export interface ThresholdSnapshot {
-    scrollPosition: number;
-    contentSize?: number;
+    scroll: number;
+    contentSize: number;
+    data: readonly unknown[];
     dataLength?: number;
-    atThreshold: boolean;
+    didRearmForData?: boolean;
 }
 
 export type MaintainingScrollAtEndState = "pending-instant" | "pending-animated" | "instant" | "animated";
 
+export type ScrollResolve = () => void;
+
 export interface ScrollTarget {
     averageSizeSnapshot?: Record<string, number>;
     animated?: boolean;
+    /** Absolute and end targets include the contentContainerStyle minimum; item targets align to rows. */
+    clampToContentContainerMinSize?: boolean;
     index?: number;
+    key?: string;
     isInitialScroll?: boolean;
     itemSize?: number;
     offset: number;
@@ -98,8 +105,12 @@ type BootstrapInitialScrollSession = {
     visibleIndices?: readonly number[];
 };
 
-type InternalScrollTarget = ScrollTarget & {
+export type InternalScrollTarget = ScrollTarget & {
     isScrollToEnd?: boolean;
+    /** Web retries reissued after an animated scroll settled short of its recomputed target. */
+    landingRetries?: number;
+    /** Offset the latest landing retry started from, used to stop when the scroll makes no progress. */
+    landingRetryFrom?: number;
     waitForInitialScrollCompletionFrame?: boolean;
 };
 
@@ -160,7 +171,16 @@ export type AverageSizes = Record<string, { num: number; avg: number }>;
 
 export type AnchoredEndSpaceOwner = "list" | "scroll";
 
+// Internal bridge for integrations, not part of the public list ref contract.
+// Keyboard integrations report occlusion separately from scroll-range insets.
+export interface LegendListInternalRef extends LegendListRef {
+    reportViewabilityInsetEndInternal?: (inset: number) => void;
+    reportContentInsetForScrollInternal?: LegendListRef["reportContentInset"];
+    retargetAnimatedEndScrollInternal?: () => void;
+}
+
 export interface InternalState {
+    viewabilityInsetEnd?: number;
     // Undefined once a render has reassigned the containers of a data change itself.
     activeItemKeys: ReadonlySet<string> | undefined;
     appliedDataChangeEpoch?: number;
@@ -187,7 +207,8 @@ export interface InternalState {
     didMeasureHeader?: boolean;
     didContainersLayout?: boolean;
     enableScrollForNextCalculateItemsInView: boolean;
-    edgeReachedGate?: "closed" | "prepared";
+    edgeReachedGate?: "closed" | "prepared" | "consumed-start" | "consumed-end";
+    edgeReachedGateScroll?: number;
     endBuffered: number;
     endNoBuffer: number;
     endReachedSnapshot: ThresholdSnapshot | undefined;
@@ -209,14 +230,32 @@ export interface InternalState {
     isEndReached: boolean | null;
     isFirst?: boolean;
     isStartReached: boolean | null;
+    isUnmounted?: boolean;
     lastBatchingAction: number;
     lastLayout: LayoutRectangle | undefined;
     lastFirstVisibleItemCallback?: { index: number; key: string };
     lastNativeScroll?: number;
     lastNativeScrollTime?: number;
+    nativeScrollGeometry?: { content: number; length: number };
+    accessibilityScrollEvent?: {
+        scroll: number;
+        content: number;
+        length: number;
+        adjust: number;
+        time?: number;
+        blocked: boolean;
+        direction: number;
+    };
     lastScrollAdjustForHistory?: number;
     lastScrollDelta: number;
     loadStartTime: number;
+    pendingEndMeasurements?: Set<string>;
+    isMomentumScrolling?: boolean;
+    // Content size at release while a user gesture awaits settlement.
+    userScrollContentSize?: number;
+    layoutAdjustmentEpoch?: number;
+    endFollowInterrupted?: boolean;
+    visibleContentAnchor?: { key: string; offset: number; sizeOnly?: true };
     maintainingScrollAtEnd?: MaintainingScrollAtEndState;
     positionRecalculationStartIndex: number | undefined;
     mvcpAnchorLock?: {
@@ -240,11 +279,10 @@ export interface InternalState {
     pendingDataComparison?: PendingDataComparison;
     pendingScrollToEnd?: {
         options?: ScrollToEndOptions;
-        resolve: () => void;
         token: number;
     };
     pendingTotalSize?: number;
-    pendingScrollResolve?: (() => void) | undefined;
+    pendingScrollResolve?: ScrollResolve | undefined;
     runPendingScrollToEnd?: () => void;
     positions: Array<number | undefined>;
     positionsAreCurrent?: boolean;
@@ -271,6 +309,7 @@ export interface InternalState {
     scheduledWork: ScheduledWork;
     sizes: Map<string, number>;
     sizesKnown: Map<string, number>;
+    fixedItemSizeKeys?: Set<string>;
     startBuffered: number;
     startBufferedId?: string;
     startNoBuffer: number;
@@ -299,6 +338,7 @@ export interface InternalState {
         anchoredEndSpaceOwner: AnchoredEndSpaceOwner;
         alwaysRender: AlwaysRenderConfig | undefined;
         contentContainerAlignItems: ViewStyle["alignItems"] | undefined;
+        contentContainerMinSize?: number;
         alwaysRenderIndicesArr: number[];
         alwaysRenderIndicesSet: Set<number>;
         contentInset: Insets | undefined;
@@ -325,7 +365,10 @@ export interface InternalState {
         onItemSizeChanged: LegendListPropsInternal["onItemSizeChanged"];
         onLoad: LegendListPropsInternal["onLoad"];
         onReady: LegendListPropsInternal["onReady"];
+        onMomentumScrollBegin: LegendListPropsInternal["onMomentumScrollBegin"];
         onMomentumScrollEnd: LegendListPropsInternal["onMomentumScrollEnd"];
+        onMetricsChange: LegendListPropsInternal["onMetricsChange"];
+        onUserScroll: LegendListPropsInternal["onUserScroll"];
         onScroll: LegendListPropsInternal["onScroll"];
         onScrollBeginDrag: LegendListPropsInternal["onScrollBeginDrag"];
         onScrollEndDrag: LegendListPropsInternal["onScrollEndDrag"];

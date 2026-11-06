@@ -1,17 +1,29 @@
-import type { DoScrollToParams } from "@/core/doScrollParams";
+import { EDGE_POSITION_EPSILON } from "@/constants";
+import { calculateOffsetForIndex } from "@/core/calculateOffsetForIndex";
+import { cancelScroll } from "@/core/cancelScroll";
+import { checkFinishedScrollFallback, getCurrentTargetOffset } from "@/core/checkFinishedScroll";
+import { type DoScrollToParams, getNativeScrollPoint } from "@/core/doScrollParams";
 import { finishScrollTo } from "@/core/finishScrollTo";
-import { getContentSize } from "@/state/getContentSize";
 import type { StateContext } from "@/state/state";
-import { toNativeHorizontalOffset } from "@/utils/rtl";
+import type { LegendListScrollerRef } from "@/types.internal";
+import { clampScrollIndex } from "@/utils/clampScrollIndex";
+import { getItemSizeAtIndex } from "@/utils/getItemSize";
+import { peekLogicalHorizontalOffset } from "@/utils/rtl";
 
 const SCROLL_END_IDLE_MS = 80;
 const SCROLL_END_MAX_MS = 1500;
 const SMOOTH_SCROLL_DURATION_MS = 320;
-const SCROLL_END_TARGET_EPSILON = 1;
-type ScrollEventTarget = {
-    addEventListener(type: string, listener: (...args: any[]) => void): void;
-    removeEventListener(type: string, listener: (...args: any[]) => void): void;
-};
+// Reissues allowed when an animated scroll settles short of its target; the last one is instant.
+const SCROLL_LANDING_MAX_RETRIES = 3;
+// Remaining distances at or below this land with an instant scroll instead of another animation.
+const SCROLL_LANDING_SNAP_DISTANCE = 50;
+type ActiveScrollTarget = NonNullable<StateContext["state"]["scrollingTo"]>;
+
+// Adjustments deferred during an animated scroll keep rows rendered that much earlier until it
+// finishes, and the finish recomputes an index target from its row, so compare in native offsets.
+function getPendingIndexAdjust(ctx: StateContext, scrollingTo: ActiveScrollTarget) {
+    return scrollingTo.index === undefined ? 0 : ctx.state.scrollAdjustHandler.getUnsupersededPendingAdjust();
+}
 
 export function doScrollTo(ctx: StateContext, params: DoScrollToParams) {
     const state = ctx.state;
@@ -26,66 +38,127 @@ export function doScrollTo(ctx: StateContext, params: DoScrollToParams) {
 
     const isAnimated = !!animated;
     const isHorizontal = !!horizontal;
-    const contentSize = isHorizontal ? getContentSize(ctx) : undefined;
-    const left = isHorizontal ? toNativeHorizontalOffset(state, offset, contentSize) : 0;
-    const top = isHorizontal ? 0 : offset;
-    scroller.scrollTo({ animated: isAnimated, x: left, y: top });
+    scroller.scrollTo({ animated: isAnimated, ...getNativeScrollPoint(ctx, offset, isHorizontal) });
+
+    const readOffset = () => {
+        const observed = scroller.getCurrentScrollOffset?.() ?? Number.NaN;
+        return isHorizontal ? peekLogicalHorizontalOffset(state, observed, scroller.getMaxScrollOffset?.()) : observed;
+    };
 
     if (isAnimated) {
         // The DOM clamps the request to its current content size. An already
-        // aligned request emits no scroll/scrollend events, so finish it on the
-        // next frame rather than keeping end-follow work blocked until timeout.
+        // aligned request emits no scroll/scrollend events.
         const targetOffset = Math.max(0, Math.min(offset, scroller.getMaxScrollOffset?.() ?? offset));
-        if (Math.abs((scroller.getCurrentScrollOffset?.() ?? Number.NaN) - targetOffset) <= SCROLL_END_TARGET_EPSILON) {
-            const targetToken = state.scrollingTo;
-            state.scheduledWork.frame(() => {
-                if (targetToken === state.scrollingTo) finishScrollTo(ctx);
-            }, "platformScrollCompletion");
+        if (!(Math.abs(readOffset() - targetOffset) <= EDGE_POSITION_EPSILON)) {
+            listenForScrollEnd(ctx, scroller, readOffset, targetOffset);
             return;
         }
-        const target = scroller.getScrollEventTarget?.() ?? null;
-        listenForScrollEnd(ctx, {
-            readOffset: () => scroller.getCurrentScrollOffset!(),
-            target,
-            targetOffset,
-        });
     } else {
         state.scroll = offset;
-        const targetToken = state.scrollingTo;
-        state.scheduledWork.timeout(
-            () => {
-                if (targetToken === state.scrollingTo) {
-                    finishScrollTo(ctx);
-                }
-            },
-            100,
-            "platformScrollCompletion",
-        );
     }
+
+    const offsetAfterInstantScroll = isAnimated ? undefined : readOffset();
+    // Verify the landing after queued layout measurements.
+    const targetToken = state.scrollingTo;
+    state.scheduledWork.frame(() => {
+        if (targetToken === state.scrollingTo) {
+            const currentOffset = readOffset();
+            const targetOffset = targetToken ? getCurrentTargetOffset(ctx, targetToken) : offset;
+            const landingOffset = Math.max(
+                0,
+                Math.min(
+                    targetOffset - (targetToken ? getPendingIndexAdjust(ctx, targetToken) : 0),
+                    scroller.getMaxScrollOffset?.() ?? Number.POSITIVE_INFINITY,
+                ),
+            );
+            if (targetToken?.isInitialScroll && Math.abs(currentOffset - targetOffset) > EDGE_POSITION_EPSILON) {
+                checkFinishedScrollFallback(ctx);
+            } else if (
+                targetToken &&
+                !targetToken.isInitialScroll &&
+                Math.abs(currentOffset - landingOffset) > EDGE_POSITION_EPSILON
+            ) {
+                // Mandatory snapping can reject even an instant correction. Cancel an unchanged,
+                // unreachable target rather than retrying forever or claiming it landed.
+                if (
+                    offsetAfterInstantScroll !== undefined &&
+                    Math.abs(offsetAfterInstantScroll - landingOffset) > EDGE_POSITION_EPSILON &&
+                    targetToken.landingRetryFrom !== undefined &&
+                    Math.abs(currentOffset - targetToken.landingRetryFrom) <= EDGE_POSITION_EPSILON &&
+                    Math.abs(landingOffset - (targetToken.targetOffset ?? offset)) <= EDGE_POSITION_EPSILON
+                ) {
+                    if (ctx.scrollRequestTracker?.isWaitingToRun()) {
+                        finishScrollTo(ctx);
+                    } else {
+                        cancelScroll(ctx, false);
+                    }
+                } else {
+                    retryLanding(ctx, targetToken, currentOffset, landingOffset);
+                }
+            } else {
+                finishScrollTo(ctx);
+            }
+        }
+    }, "platformScrollCompletion");
+}
+
+function retryLanding(
+    ctx: StateContext,
+    scrollingTo: ActiveScrollTarget,
+    currentOffset: number,
+    landingOffset: number,
+) {
+    const retries = (scrollingTo.landingRetries ?? 0) + 1;
+    const madeProgress =
+        scrollingTo.landingRetryFrom === undefined ||
+        Math.abs(currentOffset - scrollingTo.landingRetryFrom) > EDGE_POSITION_EPSILON;
+    // Bound animated retries; instant corrections still verify the current target next frame.
+    const isLastRetry = retries >= SCROLL_LANDING_MAX_RETRIES || !madeProgress;
+    const { averageSizeSnapshot: _averageSizeSnapshot, ...target } = scrollingTo;
+    const index = target.index === undefined ? undefined : clampScrollIndex(target.index, ctx.state.props.data.length);
+
+    ctx.scrollTo!({
+        ...target,
+        animated:
+            !!scrollingTo.animated &&
+            !isLastRetry &&
+            Math.abs(landingOffset - currentOffset) > SCROLL_LANDING_SNAP_DISTANCE,
+        landingRetries: retries,
+        landingRetryFrom: currentOffset,
+        ...(index !== undefined
+            ? {
+                  index,
+                  itemSize: getItemSizeAtIndex(ctx, index),
+                  offset: calculateOffsetForIndex(ctx, index) - getPendingIndexAdjust(ctx, scrollingTo),
+                  precomputedWithViewOffset: false,
+              }
+            : {}),
+    });
 }
 
 function listenForScrollEnd(
     ctx: StateContext,
-    params: {
-        target: ScrollEventTarget | null | undefined;
-        readOffset: () => number;
-        targetOffset: number;
-    },
+    scroller: LegendListScrollerRef,
+    readOffset: () => number,
+    targetOffset: number,
 ): void {
-    const { readOffset, target, targetOffset } = params;
-    if (!target) {
+    const target = scroller.getScrollEventTarget?.();
+    // Bind completion to the current scroll target so stale listeners cannot finish a newer scrollTo.
+    const { scheduledWork, scrollingTo: targetToken } = ctx.state;
+    // Scrolls without a target (noScrollingTo) have nothing to land or resolve.
+    if (!target || !targetToken) {
         finishScrollTo(ctx);
         return;
     }
     const supportsScrollEnd = "onscrollend" in target;
     let idleTimeout: ReturnType<typeof setTimeout> | undefined;
     let settled = false;
-    // Bind completion to the current scroll target so stale listeners cannot finish a newer scrollTo.
-    const { scheduledWork, scrollingTo: targetToken } = ctx.state;
     // Fallback in case scrollend fires late or never fires in this browser.
     const maxTimeout = setTimeout(() => finish("max"), SCROLL_END_MAX_MS);
 
-    const cleanup = () => {
+    const cancel = () => {
+        if (settled) return;
+        settled = true;
         target.removeEventListener("scroll", onScroll);
 
         if (supportsScrollEnd) {
@@ -98,13 +171,6 @@ function listenForScrollEnd(
         clearTimeout(maxTimeout);
     };
 
-    const cancel = () => {
-        if (!settled) {
-            settled = true;
-            cleanup();
-        }
-    };
-
     const finish = (reason: "scrollend" | "idle" | "max") => {
         if (settled) return;
         if (targetToken !== ctx.state.scrollingTo) {
@@ -112,15 +178,31 @@ function listenForScrollEnd(
             return;
         }
         const currentOffset = readOffset();
-        const isNearTarget = Math.abs(currentOffset - targetOffset) <= SCROLL_END_TARGET_EPSILON;
+        // Measurements can move the target during scrolling, so compare against where it is now.
+        const landingOffset = Math.max(
+            0,
+            Math.min(
+                getCurrentTargetOffset(ctx, targetToken) - getPendingIndexAdjust(ctx, targetToken),
+                scroller.getMaxScrollOffset?.() ?? Number.POSITIVE_INFINITY,
+            ),
+        );
+        const isNearTarget = Math.abs(currentOffset - landingOffset) <= EDGE_POSITION_EPSILON;
+        // Initial scrolls keep their own completion path; scrollTo does not dispatch them on web.
+        if (
+            (isNearTarget && Math.abs(targetOffset - landingOffset) <= EDGE_POSITION_EPSILON) ||
+            targetToken.isInitialScroll
+        ) {
+            finishScrollTo(ctx);
+            return;
+        }
         // Some browsers emit scrollend before smooth scrolling actually settles.
         // Ignore early scrollend and rely on subsequent scroll/idle events.
-        if (reason === "scrollend" && !isNearTarget) {
+        if (reason === "scrollend" && !isNearTarget && Math.abs(currentOffset - targetOffset) > EDGE_POSITION_EPSILON) {
             return;
         }
 
-        scheduledWork.cancel("platformScrollCompletion");
-        finishScrollTo(ctx);
+        // Settled or stalled short of the target: reissue toward the recomputed offset.
+        retryLanding(ctx, targetToken, currentOffset, landingOffset);
     };
 
     const onScroll = () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import "../setup";
 
 import * as React from "react";
@@ -42,6 +42,7 @@ mock.module("react-native-keyboard-controller", () => ({
     KeyboardChatScrollView: (props: any) => React.createElement("keyboard-chat-scroll-view", props),
     KeyboardController: {
         dismiss: () => Promise.resolve(),
+        state: () => ({ height: 0 }),
     },
     useKeyboardHandler: () => {},
 }));
@@ -218,6 +219,48 @@ describe("KeyboardAwareLegendList", () => {
         expect(lastAnimatedLegendListProps.onContentInsetChange).toBeUndefined();
     });
 
+    it("keeps the static contentInset out of the reported inset on android", async () => {
+        // The controller reports effective = keyboard padding + the static
+        // contentInset prop. iOS applies that whole value; Android applies only
+        // the keyboard padding, so the static part must not be inherited twice.
+        const { Platform } = await import("react-native");
+        const previousOS = (Platform as any).OS;
+        (Platform as any).OS = "android";
+
+        try {
+            await renderKeyboardAwareLegendList({ contentInset: { bottom: 100, left: 0, right: 0, top: 0 } });
+
+            const scrollElement = lastAnimatedLegendListProps.renderScrollComponent({});
+            scrollElement.props.onContentInsetChange({ bottom: 150, left: 0, right: 0, top: 0 });
+
+            expect(reportContentInsetMock).toHaveBeenLastCalledWith({
+                bottom: 50,
+                left: 0,
+                right: 0,
+                top: 0,
+            });
+        } finally {
+            (Platform as any).OS = previousOS;
+        }
+    });
+
+    it("applies the static contentInset on ios without subtracting it", async () => {
+        const { Platform } = await import("react-native");
+        const previousOS = (Platform as any).OS;
+        (Platform as any).OS = "ios";
+
+        try {
+            await renderKeyboardAwareLegendList({ contentInset: { bottom: 100, left: 0, right: 0, top: 0 } });
+
+            const scrollElement = lastAnimatedLegendListProps.renderScrollComponent({});
+            scrollElement.props.onContentInsetChange({ bottom: 150, left: 0, right: 0, top: 0 });
+
+            expect(reportContentInsetMock).toHaveBeenLastCalledWith({ bottom: 150, left: 0, right: 0, top: 0 });
+        } finally {
+            (Platform as any).OS = previousOS;
+        }
+    });
+
     it("updates composer padding without overwriting the controller-reported content inset", async () => {
         const { useKeyboardChatComposerInset } = await import("../../src/integrations/keyboard?composer-inset-test");
         let hookResult: ReturnType<typeof useKeyboardChatComposerInset> | undefined;
@@ -274,5 +317,263 @@ describe("KeyboardAwareLegendList", () => {
 
         expect(hookResult?.contentInsetEndAdjustment.value).toBe(42);
         expect(reportContentInsetMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("useKeyboardScrollToEnd", () => {
+    for (const closeKeyboard of [false, true]) {
+        it(`scrolls with a scrollToEnd-only adapter (close keyboard: ${closeKeyboard})`, async () => {
+            const { useKeyboardScrollToEnd } = await import("../../src/integrations/keyboard?legacy-end-adapter");
+            const scrollToEnd = mock(() => Promise.resolve());
+            const listRef = { current: { scrollToEnd } };
+            const freeze = createSharedValue(false);
+            let scroll!: ReturnType<typeof useKeyboardScrollToEnd>["scrollMessageToEnd"];
+            function Probe() {
+                scroll = useKeyboardScrollToEnd({ freeze: freeze as any, listRef }).scrollMessageToEnd;
+                return null;
+            }
+            let renderer!: TestRenderer.ReactTestRenderer;
+            act(() => {
+                renderer = TestRenderer.create(<Probe />);
+            });
+            try {
+                await scroll({ animated: true, closeKeyboard });
+                expect(scrollToEnd).toHaveBeenCalledTimes(1);
+                expect(scrollToEnd).toHaveBeenCalledWith({ animated: true });
+                expect(freeze.value).toBe(false);
+            } finally {
+                act(() => renderer.unmount());
+            }
+        });
+    }
+
+    it("starts the scroll immediately and the keyboard close once the UI runtime is frozen", async () => {
+        const { KeyboardController } = await import("react-native-keyboard-controller");
+        const { useKeyboardScrollToEnd } = await import("../../src/integrations/keyboard?scroll-with-dismiss");
+        // JS-thread set() reaches the UI runtime later; worklet writes apply immediately.
+        // The mock runs UI jobs inline, so this cannot model derived values updating after the job.
+        let uiFreeze = false;
+        const freeze = {
+            set: (value: boolean) =>
+                queueMicrotask(() => {
+                    uiFreeze = value;
+                }),
+            get value() {
+                return uiFreeze;
+            },
+            set value(value: boolean) {
+                uiFreeze = value;
+            },
+        };
+        let dismiss!: () => void;
+        const order: string[] = [];
+        const dismissSpy = spyOn(KeyboardController, "dismiss").mockImplementation(() => {
+            order.push(`dismiss freeze=${uiFreeze}`);
+            return new Promise<void>((resolve) => {
+                dismiss = resolve;
+            });
+        });
+        const scrollToEnd = mock(() => {
+            order.push(`scroll freeze=${uiFreeze}`);
+            return Promise.reject(new Error("scroll canceled"));
+        });
+        const listRef = { current: { scrollToEnd } };
+        let scroll!: ReturnType<typeof useKeyboardScrollToEnd>["scrollMessageToEnd"];
+        function Probe() {
+            scroll = useKeyboardScrollToEnd({ freeze: freeze as any, listRef }).scrollMessageToEnd;
+            return null;
+        }
+        let renderer!: TestRenderer.ReactTestRenderer;
+        try {
+            act(() => {
+                renderer = TestRenderer.create(<Probe />);
+            });
+            const request = scroll({ animated: true, closeKeyboard: true });
+            await Promise.resolve();
+            expect(order).toEqual(["scroll freeze=false", "dismiss freeze=true"]);
+            dismiss();
+            await expect(request).rejects.toThrow("scroll canceled");
+            expect(uiFreeze).toBe(false);
+        } finally {
+            dismissSpy.mockRestore();
+            act(() => renderer.unmount());
+        }
+    });
+
+    it("releases freeze when the keyboard close never settles", async () => {
+        const { KeyboardController } = await import("react-native-keyboard-controller");
+        const { useKeyboardScrollToEnd } = await import("../../src/integrations/keyboard?dismiss-never-settles");
+        const dismissSpy = spyOn(KeyboardController, "dismiss").mockImplementation(() => new Promise<void>(() => {}));
+        const timers: Array<() => void> = [];
+        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void) => {
+            timers.push(callback);
+            return 0;
+        }) as any);
+        const scrollToEnd = mock(() => Promise.resolve());
+        const listRef = { current: { scrollToEnd } };
+        const freeze = createSharedValue(false);
+        let scroll!: ReturnType<typeof useKeyboardScrollToEnd>["scrollMessageToEnd"];
+        function Probe() {
+            scroll = useKeyboardScrollToEnd({ freeze: freeze as any, listRef }).scrollMessageToEnd;
+            return null;
+        }
+        let renderer!: TestRenderer.ReactTestRenderer;
+        try {
+            act(() => {
+                renderer = TestRenderer.create(<Probe />);
+            });
+            const request = scroll({ animated: true, closeKeyboard: true });
+            await Promise.resolve();
+            expect(freeze.value).toBe(true);
+            expect(timers).toHaveLength(1);
+            timers[0]!();
+            await request;
+            expect(freeze.value).toBe(false);
+        } finally {
+            setTimeoutSpy.mockRestore();
+            dismissSpy.mockRestore();
+            act(() => renderer.unmount());
+        }
+    });
+
+    it("keeps freeze until an earlier keyboard close settles", async () => {
+        const { KeyboardController } = await import("react-native-keyboard-controller");
+        const { useKeyboardScrollToEnd } = await import("../../src/integrations/keyboard?freeze-until-closed");
+        let dismiss!: () => void;
+        const dismissSpy = spyOn(KeyboardController, "dismiss").mockImplementation(
+            () =>
+                new Promise<void>((resolve) => {
+                    dismiss = resolve;
+                }),
+        );
+        const listRef = { current: { scrollToEnd: mock(() => Promise.resolve()) } };
+        const freeze = createSharedValue(false);
+        let scroll!: ReturnType<typeof useKeyboardScrollToEnd>["scrollMessageToEnd"];
+        function Probe() {
+            scroll = useKeyboardScrollToEnd({ freeze: freeze as any, listRef }).scrollMessageToEnd;
+            return null;
+        }
+        let renderer!: TestRenderer.ReactTestRenderer;
+        act(() => {
+            renderer = TestRenderer.create(<Probe />);
+        });
+        try {
+            const closing = scroll({ animated: true, closeKeyboard: true });
+            const newer = scroll({ animated: false, closeKeyboard: false });
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(freeze.value).toBe(true);
+            dismiss();
+            await Promise.all([closing, newer]);
+            expect(freeze.value).toBe(false);
+        } finally {
+            dismissSpy.mockRestore();
+            act(() => renderer.unmount());
+        }
+    });
+
+    for (const outcome of ["resolves", "rejects"] as const) {
+        it(`dismisses once per close and releases freeze once when dismiss ${outcome}`, async () => {
+            const { KeyboardController } = await import("react-native-keyboard-controller");
+            const { useKeyboardScrollToEnd } = await import(`../../src/integrations/keyboard?dismiss-once-${outcome}`);
+            let settle!: () => void;
+            const dismissSpy = spyOn(KeyboardController, "dismiss").mockImplementation(
+                () =>
+                    new Promise<void>((resolve, reject) => {
+                        settle = outcome === "resolves" ? resolve : () => reject(new Error("dismiss failed"));
+                    }),
+            );
+            const timers = new Set<number>();
+            const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation((() => {
+                timers.add(timers.size + 1);
+                return timers.size;
+            }) as any);
+            const clearTimeoutSpy = spyOn(globalThis, "clearTimeout").mockImplementation(((id: number) => {
+                timers.delete(id);
+            }) as any);
+            const listRef = { current: { scrollToEnd: mock(() => Promise.resolve()) } };
+            let frozen = false;
+            let releases = 0;
+            const freeze = {
+                get value() {
+                    return frozen;
+                },
+                set value(value: boolean) {
+                    if (frozen && !value) releases++;
+                    frozen = value;
+                },
+            };
+            let scroll!: ReturnType<typeof useKeyboardScrollToEnd>["scrollMessageToEnd"];
+            function Probe() {
+                scroll = useKeyboardScrollToEnd({ freeze: freeze as any, listRef }).scrollMessageToEnd;
+                return null;
+            }
+            let renderer!: TestRenderer.ReactTestRenderer;
+            act(() => {
+                renderer = TestRenderer.create(<Probe />);
+            });
+            try {
+                const first = scroll({ animated: true, closeKeyboard: true });
+                await Promise.resolve();
+                const second = scroll({ animated: true, closeKeyboard: true });
+                await Promise.resolve();
+                await Promise.resolve();
+                expect(dismissSpy).toHaveBeenCalledTimes(1);
+                expect(timers.size).toBe(1);
+                settle();
+                await Promise.all([first, second]);
+                expect(freeze.value).toBe(false);
+                expect(releases).toBe(1);
+                expect(timers.size).toBe(0);
+                // The next close dismisses again.
+                const third = scroll({ animated: true, closeKeyboard: true });
+                await Promise.resolve();
+                await Promise.resolve();
+                expect(dismissSpy).toHaveBeenCalledTimes(2);
+                settle();
+                await third;
+                expect(releases).toBe(2);
+                expect(timers.size).toBe(0);
+            } finally {
+                clearTimeoutSpy.mockRestore();
+                setTimeoutSpy.mockRestore();
+                dismissSpy.mockRestore();
+                act(() => renderer.unmount());
+            }
+        });
+    }
+
+    it("keeps the newer scroll frozen when an older superseded promise settles", async () => {
+        const { useKeyboardScrollToEnd } = await import("../../src/integrations/keyboard?freeze-request-owner");
+        const completions: Array<() => void> = [];
+        const scrollToEnd = mock(
+            () =>
+                new Promise<void>((resolve) => {
+                    completions.push(resolve);
+                }),
+        );
+        const listRef = { current: { getState: () => ({ dataKey: "a" }), scrollToEnd } } as any;
+        const freeze = createSharedValue(false);
+        let scroll!: ReturnType<typeof useKeyboardScrollToEnd>["scrollMessageToEnd"];
+        function Probe() {
+            scroll = useKeyboardScrollToEnd({ freeze: freeze as any, listRef }).scrollMessageToEnd;
+            return null;
+        }
+        let renderer!: TestRenderer.ReactTestRenderer;
+        act(() => {
+            renderer = TestRenderer.create(<Probe />);
+        });
+        try {
+            const old = scroll({ animated: true, closeKeyboard: false });
+            const newer = scroll({ animated: true, closeKeyboard: false });
+            completions[0]?.();
+            await old;
+            expect(freeze.value).toBe(true);
+            completions[1]?.();
+            await newer;
+            expect(freeze.value).toBe(false);
+        } finally {
+            act(() => renderer.unmount());
+        }
     });
 });

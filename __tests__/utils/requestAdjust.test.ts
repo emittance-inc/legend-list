@@ -116,6 +116,19 @@ describe("requestAdjust", () => {
             expect(scrollAdjustHandlerCalls[0]).toBe(50);
             expect(mockState.scroll).toBe(150);
         });
+
+        it("should bump the layout adjustment epoch only for applied adjustments", () => {
+            mockState.layoutAdjustmentEpoch = undefined;
+
+            requestAdjust(mockCtx, 0.1);
+            expect(mockState.layoutAdjustmentEpoch).toBeUndefined();
+
+            requestAdjust(mockCtx, 10);
+            expect(mockState.layoutAdjustmentEpoch).toBe(1);
+
+            requestAdjust(mockCtx, -0.2);
+            expect(mockState.layoutAdjustmentEpoch).toBe(2);
+        });
     });
 
     describe("state updates", () => {
@@ -553,6 +566,32 @@ describe("requestAdjust", () => {
             timeoutCallback();
 
             expect(mockState.ignoreScrollFromMVCP).toBeUndefined();
+        });
+    });
+
+    describe("growth compensation while end following is suspended", () => {
+        it("shifts the release baseline by positive compensation", () => {
+            mockState.userScrollContentSize = 1000;
+
+            requestAdjust(mockCtx, 200);
+
+            expect(mockState.userScrollContentSize).toBe(1200);
+        });
+
+        it("ignores adjustments outside the suspended window", () => {
+            mockState.userScrollContentSize = undefined;
+
+            requestAdjust(mockCtx, 200);
+
+            expect(mockState.userScrollContentSize).toBeUndefined();
+        });
+
+        it("shifts the release baseline by negative compensation", () => {
+            mockState.userScrollContentSize = 1000;
+
+            requestAdjust(mockCtx, -200);
+
+            expect(mockState.userScrollContentSize).toBe(800);
         });
     });
 });
